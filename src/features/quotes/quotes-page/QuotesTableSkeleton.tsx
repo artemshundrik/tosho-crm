@@ -36,7 +36,7 @@ export function QuotesTableSkeleton() {
         </TableHeader>
         <TableBody>
           {Array.from({ length: ROWS }).map((_, index) => (
-            <TableRow key={index} className="border-b border-border/50 hover:bg-transparent">
+            <TableRow key={index} className="border-b border-line-subtle hover:bg-transparent">
               <TableCell>
                 <Skeleton className="h-4 w-4 rounded-sm" />
               </TableCell>

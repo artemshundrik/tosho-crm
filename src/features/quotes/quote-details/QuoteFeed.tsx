@@ -95,7 +95,7 @@ function FeedRow({
   const attachmentExtension = getFileExtension(attachmentName);
   const attachmentThumb =
     canPreviewImage(attachmentExtension) || canPreviewDocumentThumb(attachmentExtension);
-  const accent = event.accentClass ?? "border-border bg-muted/20 text-muted-foreground";
+  const accent = event.accentClass ?? "border-line bg-muted/20 text-muted-foreground";
 
   return (
     <div className="flex items-start gap-3 px-3 py-3 sm:px-4">
@@ -132,7 +132,7 @@ function FeedRow({
           </span>
         </div>
         {isTalk && event.body ? (
-          <p className="mt-1.5 max-w-[640px] whitespace-pre-wrap rounded-[4px_12px_12px_12px] border border-border/50 bg-muted/30 px-3 py-2 text-sm leading-relaxed text-foreground">
+          <p className="mt-1.5 max-w-[640px] whitespace-pre-wrap rounded-[4px_12px_12px_12px] border border-line bg-muted/30 px-3 py-2 text-sm leading-relaxed text-foreground">
             {event.body}
           </p>
         ) : null}
@@ -151,7 +151,7 @@ function FeedRow({
         ) : null}
         {event.meta ? <p className="mt-1 text-xs text-muted-foreground">{event.meta}</p> : null}
         {event.attachment && event.attachment.storageBucket && event.attachment.storagePath ? (
-          <div className="mt-2 flex max-w-sm items-center gap-2.5 rounded-lg border border-border/50 p-1.5 pr-2">
+          <div className="mt-2 flex max-w-sm items-center gap-2.5 rounded-lg border border-line p-1.5 pr-2">
             {attachmentThumb ? (
               <StorageObjectImage
                 bucket={event.attachment.storageBucket}
@@ -159,7 +159,7 @@ function FeedRow({
                 alt={attachmentName}
                 variant="thumb"
                 hoverPreview
-                className="h-9 w-9 shrink-0 rounded-md border border-border/60 bg-muted/30"
+                className="h-9 w-9 shrink-0 rounded-md border border-line bg-muted/30"
               />
             ) : (
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted/40 text-3xs font-bold uppercase text-muted-foreground">
@@ -208,7 +208,7 @@ function FilesRegister({
   const designCount = files.filter((file) => file.audience === "design").length;
 
   return (
-    <div className="rounded-xl border border-border/50 bg-card">
+    <div className="rounded-xl border border-line bg-card">
       <div className="flex flex-wrap items-center gap-3 px-3.5 py-2.5">
         <button
           type="button"
@@ -243,7 +243,7 @@ function FilesRegister({
         ) : null}
         <label
           className={cn(
-            "inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-lg border border-border/60 px-2.5 text-2xs font-semibold text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground",
+            "inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-lg border border-line px-2.5 text-2xs font-semibold text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground",
             uploading && "pointer-events-none opacity-60"
           )}
         >
@@ -262,7 +262,7 @@ function FilesRegister({
       </div>
 
       {open ? (
-        <div className="border-t border-border/40 px-3.5 py-1">
+        <div className="border-t border-line-subtle px-3.5 py-1">
           {files.length === 0 ? (
             <p className="py-3 text-sm text-muted-foreground">Файлів у справі ще немає</p>
           ) : (
@@ -278,7 +278,7 @@ function FilesRegister({
               return (
                 <div
                   key={file.id}
-                  className="flex items-center gap-3 border-b border-border/40 py-2.5 last:border-b-0"
+                  className="flex items-center gap-3 border-b border-line-subtle py-2.5 last:border-b-0"
                 >
                   {previewable ? (
                     <StorageObjectImage
@@ -287,7 +287,7 @@ function FilesRegister({
                       alt={displayName}
                       variant="thumb"
                       hoverPreview
-                      className="h-9 w-9 shrink-0 rounded-lg border border-border/60 bg-muted/30"
+                      className="h-9 w-9 shrink-0 rounded-lg border border-line bg-muted/30"
                     />
                   ) : (
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted/30 text-3xs font-bold uppercase text-muted-foreground">
@@ -444,7 +444,7 @@ export function QuoteFeed({
                 className={cn(
                   "inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
                   on
-                    ? "border-border bg-card text-foreground shadow-none"
+                    ? "border-line-strong bg-card text-foreground shadow-none"
                     : "border-transparent text-muted-foreground hover:text-foreground"
                 )}
               >
@@ -462,7 +462,7 @@ export function QuoteFeed({
             "ml-auto inline-flex h-7 items-center rounded-full border px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
             onlyImportant
               ? "border-foreground bg-foreground text-background"
-              : "border-border/60 text-muted-foreground hover:bg-muted/40"
+              : "border-line-strong text-muted-foreground hover:bg-muted/40"
           )}
         >
           лише головне
@@ -493,7 +493,7 @@ export function QuoteFeed({
           <p className="text-xs text-muted-foreground">Завантаження...</p>
         </div>
       ) : shown.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border/40 py-8 text-center">
+        <div className="rounded-xl border border-dashed border-line py-8 text-center">
           <Clock className="mx-auto mb-2 h-9 w-9 text-muted-foreground/30" />
           <p className="text-sm text-muted-foreground">
             {events.length === 0
@@ -511,7 +511,7 @@ export function QuoteFeed({
                 <span className="text-sm font-semibold text-foreground">{group.label}</span>
                 {group.date ? <span className="text-xs text-muted-foreground">{group.date}</span> : null}
               </div>
-              <div className="divide-y divide-border/40 overflow-hidden rounded-xl border border-border/50 bg-card">
+              <div className="divide-y divide-line-subtle overflow-hidden rounded-xl border border-line bg-card">
                 {group.items.map((event) => (
                   <FeedRow key={event.id} event={event} avatarOf={avatarOf} onDownload={onDownloadFile} />
                 ))}
@@ -530,7 +530,7 @@ export function QuoteFeed({
         </div>
       ) : null}
 
-      <div className="flex flex-wrap gap-x-5 gap-y-1 border-t border-border/40 pt-3 text-2xs text-muted-foreground">
+      <div className="flex flex-wrap gap-x-5 gap-y-1 border-t border-line-subtle pt-3 text-2xs text-muted-foreground">
         <span className="record-stack:hidden">
           Писати — у панелі праворуч: тут розмова показана як частина історії
         </span>

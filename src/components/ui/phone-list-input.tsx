@@ -55,7 +55,7 @@ export function PhoneListInput({
           {value.map((phone) => (
             <span
               key={phone}
-              className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-muted/40 py-1 pl-2.5 pr-1 text-xs font-medium tabular-nums text-foreground"
+              className="inline-flex items-center gap-1 rounded-full border border-line bg-muted/40 py-1 pl-2.5 pr-1 text-xs font-medium tabular-nums text-foreground"
             >
               <a href={`tel:${phone}`} className="hover:underline" onClick={(event) => event.stopPropagation()}>
                 {formatForDisplay(phone)}

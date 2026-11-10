@@ -243,7 +243,7 @@ function DocumentRequisitesFields({
   const requisites = form.requisites ?? {};
   const value = (key: string) => (typeof requisites[key] === "string" ? (requisites[key] as string) : "");
   return (
-    <div className="space-y-3 border-t border-border/40 pt-3">
+    <div className="space-y-3 border-t border-line-subtle pt-3">
       <p className="text-xs text-muted-foreground">Для документів замовлення — договору, СП, рахунку й акта.</p>
       <div className="grid grid-cols-2 gap-3">
         {DOCUMENT_REQUISITE_FIELDS.filter((field) => !field.kinds || field.kinds.includes(form.kind)).map((field) => (
@@ -363,7 +363,7 @@ function LegalEntitiesPanel({
           {entities.map((entity) => (
             <div
               key={entity.id}
-              className="flex items-start justify-between gap-3 rounded-xl border border-border/40 bg-card px-4 py-3"
+              className="flex items-start justify-between gap-3 rounded-xl border border-line bg-card px-4 py-3"
             >
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
@@ -603,7 +603,7 @@ function AccountsPanel({
           {accounts.map((account) => (
             <div
               key={account.id}
-              className="flex items-start justify-between gap-3 rounded-xl border border-border/40 bg-card px-4 py-3"
+              className="flex items-start justify-between gap-3 rounded-xl border border-line bg-card px-4 py-3"
             >
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
@@ -800,7 +800,7 @@ function CategoriesPanel({
         Статті витрат для класифікації: сталі, змінні, податки, виплати команді.
       </p>
 
-      <div className="flex flex-wrap items-end gap-2 rounded-xl border border-border/60 bg-muted/10 p-3">
+      <div className="flex flex-wrap items-end gap-2 rounded-xl border border-line bg-muted/10 p-3">
         <div className="grid min-w-[180px] flex-1 gap-1.5">
           <Label className="text-xs">Назва статті</Label>
           <Input controlSize="md"
@@ -847,7 +847,7 @@ function CategoriesPanel({
                   return (
                     <div
                       key={category.id}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-card px-3 py-1 text-sm"
+                      className="inline-flex items-center gap-1.5 rounded-full border border-line bg-card px-3 py-1 text-sm"
                     >
                       <Icon className="h-3.5 w-3.5 text-muted-foreground" />
                       <span>{category.name}</span>
@@ -932,7 +932,7 @@ function RequisitesPanel({ entities }: { entities: FinanceLegalEntity[] }) {
             { label: "IBAN", value: entity.iban },
           ];
           return (
-            <div key={entity.id} className="rounded-xl border border-border/40 bg-card p-4">
+            <div key={entity.id} className="rounded-xl border border-line bg-card p-4">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <Badge variant="outline" className="text-3xs">
@@ -953,7 +953,7 @@ function RequisitesPanel({ entities }: { entities: FinanceLegalEntity[] }) {
                       <button
                         type="button"
                         onClick={() => void copyField(c.label, c.value as string)}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/20 px-3 py-1 text-xs text-foreground transition-colors hover:bg-muted/40"
+                        className="inline-flex items-center gap-1.5 rounded-full border border-line-strong bg-muted/20 px-3 py-1 text-xs text-foreground transition-colors hover:bg-muted/40"
                         aria-label={`Скопіювати ${c.label}`}
                       >
                         <span className="text-muted-foreground">{c.label}:</span>
@@ -976,8 +976,8 @@ function RequisitesPanel({ entities }: { entities: FinanceLegalEntity[] }) {
 
 function EmptyState({ icon: Icon, text }: { icon: typeof Banknote; text: string }) {
   return (
-    <div className="rounded-xl border border-dashed border-border/60 bg-muted/10 p-8 text-center">
-      <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-background">
+    <div className="rounded-xl border border-dashed border-line bg-muted/10 p-8 text-center">
+      <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-background">
         <Icon className="h-5 w-5 text-muted-foreground" />
       </div>
       <p className="text-sm text-muted-foreground">{text}</p>
@@ -1127,7 +1127,7 @@ function PricingRatesPanel() {
   return (
     <div className="space-y-3">
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="space-y-4 rounded-xl border border-border/60 bg-card p-4">
+        <div className="space-y-4 rounded-xl border border-line bg-card p-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="pricing-fixed">Постійні витрати</Label>
@@ -1201,7 +1201,7 @@ function PricingRatesPanel() {
         </div>
 
         <div className="space-y-3">
-          <div className="rounded-xl border border-border/60 bg-muted/20 p-4">
+          <div className="rounded-xl border border-line bg-muted/20 p-4">
             <div className="text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
               Що це змінить
             </div>
@@ -1221,7 +1221,7 @@ function PricingRatesPanel() {
                   {money(preview.now.requiredGrossProfit)}
                 </span>
               </div>
-              <div className="flex justify-between gap-3 border-t border-border/60 pt-1.5">
+              <div className="flex justify-between gap-3 border-t border-line-subtle pt-1.5">
                 <span className="text-muted-foreground">Ціна / од.</span>
                 <span className="font-mono font-semibold tabular-nums">
                   {preview.now.saleUnitPrice === null ? "—" : `${preview.now.saleUnitPrice.toFixed(2)} ₴`}
@@ -1240,7 +1240,7 @@ function PricingRatesPanel() {
             ) : null}
           </div>
 
-          <div className="rounded-xl border border-border/60 bg-muted/20 p-4">
+          <div className="rounded-xl border border-line bg-muted/20 p-4">
             <div className="text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
               Ставка менеджера
             </div>
@@ -1252,7 +1252,7 @@ function PricingRatesPanel() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-border/60 bg-card p-4">
+      <div className="rounded-xl border border-line bg-card p-4">
         <div className="text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
           Історія змін
         </div>
@@ -1263,7 +1263,7 @@ function PricingRatesPanel() {
             {history.map((change) => (
               <div
                 key={change.id}
-                className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-border/40 pb-2 last:border-none last:pb-0"
+                className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-line-subtle pb-2 last:border-none last:pb-0"
               >
                 <div className="min-w-0">
                   <span className="text-xs font-medium">
@@ -1297,7 +1297,7 @@ function PricingRatesPanel() {
       {/* Персональні ставки. CEO просив бачити не лише поточну цифру, а «хто
           коли яку ставку мав» — до появи цієї історії стара ставка затиралась
           назавжди. */}
-      <div className="rounded-xl border border-border/60 bg-card p-4">
+      <div className="rounded-xl border border-line bg-card p-4">
         <div className="text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
           Ставки менеджерів — історія
         </div>
@@ -1308,7 +1308,7 @@ function PricingRatesPanel() {
             {managerHistory.map((change) => (
               <div
                 key={change.id}
-                className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-border/40 pb-2 last:border-none last:pb-0"
+                className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-line-subtle pb-2 last:border-none last:pb-0"
               >
                 <div className="min-w-0">
                   <span className="text-xs font-medium">
@@ -1346,7 +1346,7 @@ function PricingRatesPanel() {
       {/* Заробіток у тиражах. Це поле визначає всю націнку, тож одна правка
           міняє ціну для клієнта — CEO просив бачити, «хто щось змінював по
           заробітку». Правки однієї сесії тригер схлопує в один рядок. */}
-      <div className="rounded-xl border border-border/60 bg-card p-4">
+      <div className="rounded-xl border border-line bg-card p-4">
         <div className="text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
           Заробіток у прорахунках — хто міняв
         </div>
@@ -1359,7 +1359,7 @@ function PricingRatesPanel() {
             {incomeHistory.map((change) => (
               <div
                 key={change.id}
-                className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-border/40 pb-2 last:border-none last:pb-0"
+                className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-line-subtle pb-2 last:border-none last:pb-0"
               >
                 <div className="min-w-0">
                   <span className="text-xs font-medium">

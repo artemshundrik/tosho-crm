@@ -34,7 +34,7 @@ type EntityLockBannerProps = {
 };
 
 const SHELL = "rounded-xl border px-3.5 py-2.5 text-sm";
-const CALM = "border-border bg-card";
+const CALM = "border-line bg-card";
 
 /**
  * Рядок банера: на телефоні — стовпчик, на sm+ — рядок.
@@ -89,7 +89,7 @@ export function EntityLockBanner({
       <div className={cn(SHELL, CALM, className)}>
         <div className={ROW}>
           <span
-            className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-border/70 bg-muted text-muted-foreground"
+            className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-line bg-muted text-muted-foreground"
             aria-hidden
           >
             <TimerReset className="h-3.5 w-3.5" />

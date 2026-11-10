@@ -31,10 +31,10 @@ export function QuoteRequiredValue({
         className={cn(
           "rounded-xl border px-3 py-2 text-sm",
           value
-            ? "border-border/50 bg-muted/20 font-medium text-foreground"
+            ? "border-line bg-muted/20 font-medium text-foreground"
             : invalid
               ? "border-destructive/40 bg-destructive/5 text-destructive"
-              : "border-border/50 bg-muted/20 text-muted-foreground"
+              : "border-line bg-muted/20 text-muted-foreground"
         )}
       >
         {value || emptyHint}

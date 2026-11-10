@@ -1074,7 +1074,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
           name={managerLabel}
           fallback={managerLabel.slice(0, 2).toUpperCase()}
           size={20}
-          className="border-border/60 shrink-0"
+          className="border-line shrink-0"
           fallbackClassName="text-3xs font-semibold"
           inactive={member ? isInactiveEmployment(member.employmentStatus) : false}
         />
@@ -1094,7 +1094,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
             name={value}
             fallback={value.slice(0, 2).toUpperCase()}
             size={18}
-            className="border-border/60 shrink-0"
+            className="border-line shrink-0"
             fallbackClassName="text-3xs font-semibold"
             inactive={member ? isInactiveEmployment(member.employmentStatus) : false}
           />
@@ -2053,7 +2053,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
               name={currentManagerLabel || defaultManagerName || "Менеджер"}
               fallback={(currentManagerLabel || defaultManagerName || "ME").slice(0, 2).toUpperCase()}
               size={20}
-              className="shrink-0 border-border/60"
+              className="shrink-0 border-line"
               fallbackClassName="text-3xs font-semibold"
               inactive={isInactiveEmployment(memberById.get(userId ?? "")?.employmentStatus)}
             />
@@ -2196,7 +2196,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                       return (
                         <div
                           key={row.id}
-                          className="rounded-inner border border-border bg-card p-4"
+                          className="rounded-inner border border-line bg-card p-4"
                           onClick={() => openEdit(row)}
                         >
                           <div className="flex items-start justify-between gap-3">
@@ -2380,7 +2380,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                           <TableRow
                             key={row.id}
                             className={cn(
-                              "group cursor-pointer border-b border-border/30 last:border-0 transition-colors",
+                              "group cursor-pointer border-b border-line last:border-0 transition-colors",
                               "hover:bg-muted/30"
                             )}
                             onClick={() => openEdit(row)}
@@ -2556,7 +2556,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                   {filteredLeads.map((lead) => (
                     <div
                       key={lead.id}
-                      className="rounded-inner border border-border bg-card p-4"
+                      className="rounded-inner border border-line bg-card p-4"
                       onClick={() => openEditLead(lead)}
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -2619,7 +2619,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                       {filteredLeads.map((lead) => (
                         <TableRow
                           key={lead.id}
-                          className="group hover:bg-muted/30 cursor-pointer border-b border-border/30 last:border-0 transition-colors"
+                          className="group hover:bg-muted/30 cursor-pointer border-b border-line last:border-0 transition-colors"
                           onClick={() => openEditLead(lead)}
                         >
                           <TableCell className="pl-6">
@@ -2742,7 +2742,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
               Вкажіть тільки назву папки клієнта{attachDropboxTarget?.clientName ? ` для ${attachDropboxTarget.clientName}` : ""}. Шлях `Tosho Team Folder/Замовники/` підставиться автоматично.
             </div>
             <div className="grid gap-2">
-              <div className="flex h-10 items-center rounded-md border border-border bg-muted/30 px-3 text-sm text-muted-foreground">
+              <div className="flex h-10 items-center rounded-md border border-line bg-muted/30 px-3 text-sm text-muted-foreground">
                 Tosho Team Folder/Замовники/
               </div>
               <Input
@@ -2755,7 +2755,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
               </div>
             </div>
           </div>
-          <DialogFooter className="pt-2 border-t border-border/50">
+          <DialogFooter className="pt-2 border-t border-line-subtle">
             <Button
               variant="outline"
               onClick={() => {

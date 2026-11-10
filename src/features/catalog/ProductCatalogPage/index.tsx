@@ -375,7 +375,7 @@ export default function ProductCatalogPage() {
 
   return (
     <div className="mx-auto flex h-[calc(100dvh-7rem)] w-full max-w-[1400px] flex-col pb-20 md:pb-0">
-      <div className="min-h-0 flex-1 overflow-hidden rounded-section border border-border bg-card/60">
+      <div className="min-h-0 flex-1 overflow-hidden rounded-section border border-line bg-card/60">
         {/* Main Layout: Sidebar + Content */}
         <div className="flex h-full min-h-0">
           {/* Compact Sidebar */}
@@ -409,7 +409,7 @@ export default function ProductCatalogPage() {
                 filters.setSelectedKindId("");
                 filters.setGlobalSearch("");
               }}
-              className="flex shrink-0 items-center gap-2 border-b border-border/40 px-4 py-3 text-sm font-medium text-muted-foreground md:hidden"
+              className="flex shrink-0 items-center gap-2 border-b border-line-subtle px-4 py-3 text-sm font-medium text-muted-foreground md:hidden"
             >
               <ArrowLeft className="h-4 w-4" />
               Категорії

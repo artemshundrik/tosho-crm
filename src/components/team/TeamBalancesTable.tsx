@@ -112,11 +112,11 @@ function Cell({
             </span>
           </div>
           {list.length === 0 ? (
-            <div className="mt-2 border-t border-border/40 pt-2 text-2xs text-muted-foreground">
+            <div className="mt-2 border-t border-line-subtle pt-2 text-2xs text-muted-foreground">
               За {year} рік не було.
             </div>
           ) : (
-            <div className="mt-2 space-y-1 border-t border-border/40 pt-2">
+            <div className="mt-2 space-y-1 border-t border-line-subtle pt-2">
               {list.slice(0, 5).map((entry) => (
                 <div key={entry.id} className={cn("flex items-center gap-2 text-2xs", entry.pending && "opacity-75")}>
                   <span className="flex-1 tabular-nums text-foreground">

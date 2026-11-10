@@ -158,7 +158,7 @@ function PaymentLedger({ record, ledger }: { record: DerivedOrderRecord; ledger:
   const dueLabel = paid < pre ? `передоплата ${formatUah(pre - paid)}` : `доплата ${formatUah(Math.max(total - paid, 0))}`;
 
   return (
-    <div className="mt-3 border-t border-border/60 pt-3">
+    <div className="mt-3 border-t border-line-subtle pt-3">
       <div className="flex items-baseline justify-between gap-2 text-sm">
         <span className="text-muted-foreground">Надійшло</span>
         <span className="tabular-nums">
@@ -171,7 +171,7 @@ function PaymentLedger({ record, ledger }: { record: DerivedOrderRecord; ledger:
       </div>
       <p className="mt-1.5 text-xs text-muted-foreground">{paymentHint(paid, total, pre)}</p>
       {sorted.length > 0 ? (
-        <ul className="mt-2 divide-y divide-border/60">
+        <ul className="mt-2 divide-y divide-line-subtle">
           {sorted.map((payment) => (
             <PaymentRow key={payment.id} payment={payment} canEnter={canEnter} onCancel={() => ledger.onCancel(payment)} />
           ))}

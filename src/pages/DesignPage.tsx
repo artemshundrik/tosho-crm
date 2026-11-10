@@ -2456,7 +2456,7 @@ export default function DesignPage() {
           name={label}
           fallback={getInitials(label)}
           size={18}
-          className="shrink-0 border-border/60"
+          className="shrink-0 border-line"
           fallbackClassName="text-3xs font-semibold"
           availability={getMemberAvailability(value)}
           presence={onlineMemberIds.has(value) ? "online" : "offline"}
@@ -2510,7 +2510,7 @@ export default function DesignPage() {
           name={label}
           fallback={getInitials(label)}
           size={18}
-          className="shrink-0 border-border/60"
+          className="shrink-0 border-line"
           fallbackClassName="text-3xs font-semibold"
           inactive={memberInactiveById[value] ?? false}
         />
@@ -4562,7 +4562,7 @@ export default function DesignPage() {
               })()
             ) : (
               <span
-                className="grid h-5 w-5 shrink-0 place-items-center rounded-full border border-dashed border-border text-muted-foreground"
+                className="grid h-5 w-5 shrink-0 place-items-center rounded-full border border-dashed border-line text-muted-foreground"
                 title="Без виконавця"
               >
                 <User className="h-3 w-3" />
@@ -4742,7 +4742,7 @@ export default function DesignPage() {
                 loadStrategy="visible"
               />
             ) : (
-              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-border/60 bg-secondary text-muted-foreground/60">
+              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-line bg-secondary text-muted-foreground/60">
                 <Package className="h-3.5 w-3.5" />
               </div>
             )}
@@ -4903,7 +4903,7 @@ export default function DesignPage() {
                     name={currentUserDisplayName || "Менеджер"}
                     fallback={getInitials(currentUserDisplayName || "Менеджер")}
                     size={20}
-                    className="border-border/60 shrink-0"
+                    className="border-line shrink-0"
                     fallbackClassName="text-3xs font-semibold"
                   />
                   <span className="truncate leading-none">
@@ -5021,8 +5021,8 @@ export default function DesignPage() {
                 {DESIGN_COLUMNS.map((col) => {
                   const Icon = DESIGN_STATUS_ICON_BY_STATUS[col.id];
                   return (
-                    <section key={col.id} className="rounded-inner border border-border/60 bg-card/60">
-                      <div className="flex items-center justify-between gap-2 border-b border-border/50 px-3 py-2.5">
+                    <section key={col.id} className="rounded-inner border border-line bg-card/60">
+                      <div className="flex items-center justify-between gap-2 border-b border-line-subtle px-3 py-2.5">
                         <div className="flex min-w-0 items-center gap-2">
                           <Icon className={cn("h-3.5 w-3.5 shrink-0", DESIGN_STATUS_ICON_COLOR_BY_STATUS[col.id])} />
                           <span className="truncate text-2xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -5033,7 +5033,7 @@ export default function DesignPage() {
                       </div>
                       <div className="space-y-2 p-2.5">
                         {Array.from({ length: 2 }).map((_, index) => (
-                          <div key={`${col.id}:mobile-skeleton:${index}`} className="rounded-md border border-border/50 bg-card/82 p-3">
+                          <div key={`${col.id}:mobile-skeleton:${index}`} className="rounded-md border border-line bg-card/82 p-3">
                             <div className="flex items-center gap-3">
                               <Skeleton className="h-9 w-9 shrink-0 rounded-xl" />
                               <div className="min-w-0 flex-1 space-y-2">
@@ -5172,7 +5172,7 @@ export default function DesignPage() {
                       renderItem={(task) => renderTaskCard(task, { draggable: true })}
                       virtualize
                       emptyState={
-                        <div className="text-xs text-muted-foreground border border-dashed border-border/60 rounded-lg p-3 text-center">
+                        <div className="text-xs text-muted-foreground border border-dashed border-line rounded-lg p-3 text-center">
                           Немає задач
                         </div>
                       }
@@ -5486,7 +5486,7 @@ export default function DesignPage() {
                           name={selectedManager.label}
                           fallback={getInitials(selectedManager.label)}
                           size={20}
-                          className="border-border/60"
+                          className="border-line"
                           fallbackClassName="text-3xs font-semibold"
                           inactive={memberInactiveById[selectedManager.id] ?? false}
                         />
@@ -5519,7 +5519,7 @@ export default function DesignPage() {
                               name={member.label}
                               fallback={getInitials(member.label)}
                               size={20}
-                              className="border-border/60 shrink-0"
+                              className="border-line shrink-0"
                               fallbackClassName="text-3xs font-semibold"
                             />
                             <span className="truncate">{member.label}</span>
@@ -5551,7 +5551,7 @@ export default function DesignPage() {
                         name={getMemberLabel(userId)}
                         fallback={getInitials(getMemberLabel(userId))}
                         size={20}
-                        className="border-border/60"
+                        className="border-line"
                         fallbackClassName="text-3xs font-semibold"
                       />
                     ) : (
@@ -5574,7 +5574,7 @@ export default function DesignPage() {
                             name={selectedAssignee.label}
                             fallback={getInitials(selectedAssignee.label)}
                             size={20}
-                            className="border-border/60"
+                            className="border-line"
                             fallbackClassName="text-3xs font-semibold"
                             inactive={memberInactiveById[selectedAssignee.id] ?? false}
                           />
@@ -5639,7 +5639,7 @@ export default function DesignPage() {
                                 name={member.label}
                                 fallback={getInitials(member.label)}
                                 size={20}
-                                className="border-border/60 shrink-0"
+                                className="border-line shrink-0"
                                 fallbackClassName="text-3xs font-semibold"
                               />
                               <div className="min-w-0 flex-1 text-left">
@@ -5715,7 +5715,7 @@ export default function DesignPage() {
                                 name={member.label}
                                 fallback={getInitials(member.label)}
                                 size={20}
-                                className="border-border/60 shrink-0"
+                                className="border-line shrink-0"
                                 fallbackClassName="text-3xs font-semibold"
                               />
                               <div className="min-w-0 flex-1 text-left">
@@ -5770,7 +5770,7 @@ export default function DesignPage() {
                   читався як значок-прикраса й губився, а тут це кнопка при
                   самому тексті — і смуга запису виїжджає з-під неї, у тій самій
                   рамці. */}
-              <div className="overflow-hidden rounded-xl border border-border bg-card transition-colors focus-within:border-foreground/40">
+              <div className="overflow-hidden rounded-xl border border-line bg-card transition-colors focus-within:border-foreground/40">
                 <AutoTextarea
                   ref={createBriefTextareaRef}
                   id="standalone-design-brief"
@@ -5806,7 +5806,7 @@ export default function DesignPage() {
                   {createFiles.map((file, index) => (
                     <div
                       key={`${file.name}-${index}`}
-                      className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/20 border border-border/30 text-sm"
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/20 border border-line text-sm"
                     >
                       <Paperclip className="h-3 w-3" />
                       <span className="text-xs">{file.name}</span>

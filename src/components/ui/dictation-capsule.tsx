@@ -80,7 +80,7 @@ export function DictationCapsule({ dictation, className }: { dictation: Dictatio
       className={cn(
         // Рамка й тло — рівно як у звичайного поля вводу: сама капсула не має
         // «червоніти», червоними лишаються тільки крапка, час і пульсація.
-        "flex min-h-[38px] items-center gap-1 rounded-3xl border border-border/60 bg-card p-1 pl-1.5",
+        "flex min-h-[38px] items-center gap-1 rounded-3xl border border-line bg-card p-1 pl-1.5",
         className
       )}
     >
@@ -169,7 +169,7 @@ export function DictationStrip({
   return (
     <div
       className={cn(
-        "flex items-center gap-2.5 border-t border-border/70 bg-destructive/5 px-3 py-2.5",
+        "flex items-center gap-2.5 border-t border-line-subtle bg-destructive/5 px-3 py-2.5",
         className
       )}
     >

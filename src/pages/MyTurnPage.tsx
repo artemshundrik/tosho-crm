@@ -243,7 +243,7 @@ export default function MyTurnPage() {
           className="md:flex md:h-[var(--turn-height)] md:overflow-hidden"
           style={{ "--turn-height": `calc(100dvh - ${frameTop}px)` } as CSSProperties}
         >
-          <div className="min-w-0 md:w-[440px] md:shrink-0 md:overflow-y-auto md:overscroll-contain md:border-r md:border-border">
+          <div className="min-w-0 md:w-[440px] md:shrink-0 md:overflow-y-auto md:overscroll-contain md:border-r md:border-line-subtle">
             {canSeeOthers ? (
               <div className="flex items-center gap-2 px-3 pt-3">
                 <span className="text-xs text-muted-foreground">Чий хід</span>

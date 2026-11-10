@@ -231,8 +231,8 @@ export function FinanceCalendar({ teamId, userId }: FinanceCalendarProps) {
       />
 
       {buckets.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border/60 bg-muted/10 p-8 text-center">
-          <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-background">
+        <div className="rounded-xl border border-dashed border-line bg-muted/10 p-8 text-center">
+          <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-background">
             <CalendarClock className="h-5 w-5 text-muted-foreground" />
           </div>
           <p className="text-sm text-muted-foreground">
@@ -263,7 +263,7 @@ export function FinanceCalendar({ teamId, userId }: FinanceCalendarProps) {
                   <div
                     key={item.id}
                     className={cn(
-                      "flex items-center justify-between gap-3 rounded-xl border border-border/40 bg-card px-4 py-3",
+                      "flex items-center justify-between gap-3 rounded-xl border border-line bg-card px-4 py-3",
                       bucket.tone === "danger" && "flag-danger"
                     )}
                   >
@@ -271,7 +271,7 @@ export function FinanceCalendar({ teamId, userId }: FinanceCalendarProps) {
                       {item.kind === "subscription" ? (
                         <SubscriptionLogo logoUrl={item.logoUrl} name={item.title} size={32} />
                       ) : (
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-muted/30">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-line bg-muted/30">
                           <Icon className="h-4 w-4 text-muted-foreground" />
                         </div>
                       )}

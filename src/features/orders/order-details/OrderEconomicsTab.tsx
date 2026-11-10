@@ -107,7 +107,7 @@ function EconomicsSummary({
     if (s.total === 0) return null;
     const pct = Math.round((s.received / s.total) * 100);
     return (
-      <div className="rounded-xl border border-border/60 px-4 py-3">
+      <div className="rounded-xl border border-line px-4 py-3">
         <div className="flex items-baseline justify-between gap-2 text-sm">
           <span className="font-medium">{receivedLine}</span>
           {s.received < s.total ? <span className="text-xs text-muted-foreground">склад ще чекає документів</span> : null}
@@ -354,7 +354,7 @@ export function OrderEconomicsTab({
       </div>
 
       {purchasesNone ? (
-        <div className="flex items-center justify-between gap-2 rounded-xl border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
+        <div className="flex items-center justify-between gap-2 rounded-xl border border-dashed border-line px-4 py-3 text-sm text-muted-foreground">
           <span>{["Закупок немає", purchasesNone.byName].filter(Boolean).join(" · ")}</span>
           {access.markNone ? (
             <Button type="button" size="xs" variant="textPrimary" disabled={saving} onClick={() => onToggleNone(false)}>
@@ -363,15 +363,15 @@ export function OrderEconomicsTab({
           ) : null}
         </div>
       ) : groups.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
+        <div className="rounded-xl border border-dashed border-line px-4 py-3 text-sm text-muted-foreground">
           Закупок ще не внесено.{access.edit ? " Рахунки постачальників вносить бухгалтерія — по ходу, до відвантаження." : ""}
         </div>
       ) : (
         groups.map((group) => {
           const groupCost = summarizeOrderEconomics(group.purchases, 0, currency).costAll; // до копійок
           return (
-            <section key={group.itemId ?? "whole"} className="rounded-xl border border-border/60 px-4 py-2">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2 pt-1">
+            <section key={group.itemId ?? "whole"} className="rounded-xl border border-line px-4 py-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line-subtle pb-2 pt-1">
                 <h3 className="text-sm font-semibold">
                   {group.title}
                   {group.qtyLabel ? ` - ${group.qtyLabel}` : ""}
@@ -385,7 +385,7 @@ export function OrderEconomicsTab({
                   ) : null}
                 </div>
               </div>
-              <ul className="divide-y divide-border/60">
+              <ul className="divide-y divide-line-subtle">
                 {group.purchases.map((p) => (
                   <PurchaseRow key={p.id} purchase={p} access={access} handlers={handlers} />
                 ))}

@@ -120,7 +120,7 @@ export function HoldButton({
         "disabled:pointer-events-none disabled:opacity-50",
         danger
           ? "border border-destructive/40 text-destructive"
-          : "border border-border text-foreground",
+          : "border border-line-strong text-foreground",
         className
       )}
     >

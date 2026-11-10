@@ -34,7 +34,7 @@ export function ThreadHistory({ events }: { events: ThreadEntry[] }) {
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         className={cn(
-          "flex w-full items-center gap-2 rounded-lg border border-dashed border-border/60 px-2.5 py-1.5",
+          "flex w-full items-center gap-2 rounded-lg border border-dashed border-line-strong px-2.5 py-1.5",
           "text-2xs text-muted-foreground transition-colors hover:bg-muted/40",
           open && "border-solid text-foreground/80"
         )}
@@ -86,7 +86,7 @@ export function ThreadHistory({ events }: { events: ThreadEntry[] }) {
                 </button>
 
                 {expanded ? (
-                  <div className="mb-1 ml-[52px] flex flex-col gap-1 border-l-2 border-border/40 pl-2.5">
+                  <div className="mb-1 ml-[52px] flex flex-col gap-1 border-l-2 border-line-subtle pl-2.5">
                     {digest.entries.map((item) => (
                       <span key={item.id} className="flex gap-2 text-2xs text-muted-foreground">
                         <span className="shrink-0 tabular-nums opacity-70">{timeOf(item.createdAt)}</span>

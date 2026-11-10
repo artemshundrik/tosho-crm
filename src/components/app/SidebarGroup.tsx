@@ -232,10 +232,10 @@ export function SidebarGroup({
                       "h-7 rounded-md pr-7",
                 active
                   ? collapsed
-                    ? "bg-foreground/5 text-foreground ring-1 ring-border/20"
+                    ? "bg-foreground/5 text-foreground ring-1 ring-line-strong"
                     : isMobileDrawer
-                      ? "bg-foreground/5 text-foreground ring-1 ring-border/20"
-                      : "bg-foreground/5 text-foreground ring-1 ring-border/20 font-medium"
+                      ? "bg-foreground/5 text-foreground ring-1 ring-line-strong"
+                      : "bg-foreground/5 text-foreground ring-1 ring-line-strong font-medium"
                   : isMobileDrawer
                     ? "text-muted-foreground hover:bg-background hover:text-foreground"
                     : "text-muted-foreground hover:bg-background hover:text-foreground"

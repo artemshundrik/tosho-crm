@@ -196,7 +196,7 @@ export function OrderPaymentDialog({
             </div>
           ) : null}
 
-          <div className="flex flex-wrap items-center gap-3 border-t border-border/60 pt-3">
+          <div className="flex flex-wrap items-center gap-3 border-t border-line-subtle pt-3">
             <span className="min-w-[160px] flex-1 text-sm text-muted-foreground">{afterLine}</span>
             <Button type="button" disabled={!canSubmit} onClick={() => void submit()}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}

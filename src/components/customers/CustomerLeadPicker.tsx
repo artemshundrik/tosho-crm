@@ -147,7 +147,7 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
                 src={chipLogoUrl}
                 name={chipLabelText}
                 size={22}
-                className="border-border/50"
+                className="border-line"
                 fallbackClassName="text-3xs font-semibold"
               />
             ) : (
@@ -207,7 +207,7 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
                           src={option.logoUrl ?? null}
                           name={option.label}
                           size={36}
-                          className="shrink-0 border-border/50"
+                          className="shrink-0 border-line"
                           fallbackClassName="text-3xs font-semibold"
                         />
                         <span className="min-w-0 flex-1 leading-tight">
@@ -294,7 +294,7 @@ export const CustomerLeadPicker: React.FC<CustomerLeadPickerProps> = ({
             ) : null}
           </div>
           {showFooter ? (
-          <div className="grid grid-cols-2 gap-2 border-t border-border/50 pt-1">
+          <div className="grid grid-cols-2 gap-2 border-t border-line-subtle pt-1">
             {onCreateCustomer && !offerCreateInstead ? (
               <Button
                 type="button"

@@ -64,7 +64,7 @@ export function NameInput(props: { value: string; size?: "page" | "panel"; label
       aria-invalid={!field.value.trim() || undefined}
       className={cn(
         "-ml-2 w-full min-w-0 rounded-lg border border-transparent bg-transparent px-2 font-semibold tracking-tight text-foreground outline-none",
-        "hover:border-border hover:bg-card focus-visible:border-foreground/50 focus-visible:bg-card aria-invalid:border-danger-soft-border",
+        "hover:border-line-strong hover:bg-card focus-visible:border-foreground/50 focus-visible:bg-card aria-invalid:border-danger-soft-border",
         props.size === "panel" ? "h-9 text-lg" : "h-11 max-w-[560px] text-2xl",
       )}
     />
@@ -170,7 +170,7 @@ export function SourceChip(props: {
 
 export function PaymentSeg(props: { value: "cash" | "invoice" | null; onChange: (value: "cash" | "invoice") => void }) {
   return (
-    <div role="group" aria-label="Форма оплати" className="inline-flex h-8 items-center rounded-full border border-border bg-card p-0.5">
+    <div role="group" aria-label="Форма оплати" className="inline-flex h-8 items-center rounded-full border border-line bg-card p-0.5">
       {(
         [
           ["invoice", "Рахунок"],
@@ -197,7 +197,7 @@ export function PaymentSeg(props: { value: "cash" | "invoice" | null; onChange: 
 export function WebsiteChip(props: { value: string; onCommit: (website: string) => void }) {
   const field = useCommitOnBlur(props.value, props.onCommit);
   return (
-    <label className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-card pl-2.5 pr-1 text-sm focus-within:border-foreground/50">
+    <label className="inline-flex h-8 items-center gap-1.5 rounded-full border border-line bg-card pl-2.5 pr-1 text-sm focus-within:border-foreground/50">
       <Globe className="size-3.5 shrink-0 text-muted-foreground" />
       <input
         {...field}
@@ -233,7 +233,7 @@ export function PhoneChip(props: { phone: string; name: string }) {
     <a
       href={`tel:${props.phone.replace(/\s+/g, "")}`}
       title={props.name ? `Подзвонити: ${props.name}` : "Подзвонити"}
-      className={cn("inline-flex items-center rounded-full border border-border bg-card hover:border-foreground/30", CHIP)}
+      className={cn("inline-flex items-center rounded-full border border-line-strong bg-card hover:border-foreground/30", CHIP)}
     >
       <Phone className="size-3.5 text-muted-foreground" />
       <span className="font-mono text-xs tabular-nums">{props.phone}</span>

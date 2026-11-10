@@ -207,7 +207,7 @@ export function ThreadComposer({
   };
 
   return (
-    <div ref={rootRef} className="group/composer relative border-t border-border/40 bg-card p-2.5">
+    <div ref={rootRef} className="group/composer relative border-t border-line-subtle bg-card p-2.5">
       {isRecording || isTranscribing ? null : (
         <div
           aria-hidden
@@ -223,7 +223,7 @@ export function ThreadComposer({
         </div>
       )}
       {replyTo ? (
-        <div className="mb-2 flex items-start gap-2 rounded-xl border border-border/60 bg-muted/40 py-1.5 pl-2 pr-1.5">
+        <div className="mb-2 flex items-start gap-2 rounded-xl border border-line bg-muted/40 py-1.5 pl-2 pr-1.5">
           <span className="mt-0.5 h-full w-0.5 shrink-0 self-stretch rounded-full bg-foreground" />
           <span className="flex min-w-0 flex-1 flex-col">
             <span className="text-2xs font-semibold text-foreground">{replyTo.author}</span>
@@ -254,7 +254,7 @@ export function ThreadComposer({
       ) : null}
 
       {matches.length > 0 ? (
-        <div className="mb-2 max-h-[184px] overflow-y-auto overscroll-contain rounded-xl border border-border/60 bg-card">
+        <div className="mb-2 max-h-[184px] overflow-y-auto overscroll-contain rounded-xl border border-line bg-card">
           {matches.map((candidate, index) => (
             <button
               key={candidate.userId}
@@ -290,7 +290,7 @@ export function ThreadComposer({
       ) : (
       <div
         className={cn(
-          "flex min-h-[38px] items-end gap-1 rounded-xl border border-border bg-muted/70 p-1 pl-1.5 transition-colors focus-within:border-foreground/40 focus-within:bg-card",
+          "flex min-h-[38px] items-end gap-1 rounded-xl border border-line bg-muted/70 p-1 pl-1.5 transition-colors focus-within:border-foreground/40 focus-within:bg-card",
           expanded && "flex-wrap"
         )}
       >
@@ -415,7 +415,7 @@ function PendingFileChip({
   }, [file]);
 
   return (
-    <span className="group relative flex items-center gap-2 rounded-xl border border-border/60 bg-muted/40 py-1 pl-1 pr-2">
+    <span className="group relative flex items-center gap-2 rounded-xl border border-line bg-muted/40 py-1 pl-1 pr-2">
       {preview ? (
         <img src={preview} alt="" className="h-9 w-9 rounded-lg object-cover" />
       ) : (

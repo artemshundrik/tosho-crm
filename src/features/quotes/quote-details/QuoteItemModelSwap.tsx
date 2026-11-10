@@ -129,7 +129,7 @@ export function QuoteItemModelSwap({
             Тиражі й ціни лишаться як є. Якщо зміниться вид — нанесення доведеться поставити заново.
           </DialogDescription>
         </DialogHeader>
-        <div className="flex items-center gap-2 rounded-lg border border-border/60 px-3">
+        <div className="flex items-center gap-2 rounded-lg border border-line px-3">
           <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           <Input
             value={query}

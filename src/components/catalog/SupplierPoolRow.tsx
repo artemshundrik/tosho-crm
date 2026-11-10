@@ -124,7 +124,7 @@ export const SupplierPoolRow: React.FC<{ product: SupplierPoolProduct }> = ({ pr
   return (
     <div className="rounded-lg transition-colors hover:bg-muted/40">
       <div className="flex items-center gap-3 px-2 py-2">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/50 bg-muted/50">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-line bg-muted/50">
           <PoolPhoto url={imageUrl} className="h-4 w-4" />
         </span>
 
@@ -182,7 +182,7 @@ export const SupplierPoolRow: React.FC<{ product: SupplierPoolProduct }> = ({ pr
               type="button"
               onClick={() => setOpen((value) => !value)}
               aria-expanded={open}
-              className="flex items-center gap-1 rounded-full border border-border/60 px-2 py-0.5 text-2xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="flex items-center gap-1 rounded-full border border-line-strong px-2 py-0.5 text-2xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               {product.variantCount} {unit}
               <ChevronDown className={cn("h-3 w-3 transition-transform", open && "rotate-180")} />
@@ -226,7 +226,7 @@ export const SupplierPoolRow: React.FC<{ product: SupplierPoolProduct }> = ({ pr
                   "flex items-center gap-1.5 rounded-md border py-0.5 pl-0.5 pr-2 text-2xs transition-colors",
                   isSelected
                     ? "border-foreground bg-foreground text-background"
-                    : "border-border/60 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    : "border-line-strong text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
               >
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded bg-muted/50">

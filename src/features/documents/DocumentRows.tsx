@@ -160,7 +160,7 @@ export function DocumentMobileCard({ doc, manager, onOpen }: Pick<RowProps, "doc
     <button
       type="button"
       onClick={() => onOpen(doc)}
-      className="flex w-full flex-col gap-2 rounded-xl border border-border/60 bg-card p-3 text-left"
+      className="flex w-full flex-col gap-2 rounded-xl border border-line-strong bg-card p-3 text-left"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">

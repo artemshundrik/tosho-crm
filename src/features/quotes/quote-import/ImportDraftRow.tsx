@@ -105,7 +105,7 @@ export function ImportItemPhoto({
     132. Стала висота тримає рядок незалежно від того, що прийшло з фіда.
   */
   const base =
-    "h-15 w-auto min-w-11 max-w-20 shrink-0 overflow-hidden rounded-md border border-border/60";
+    "h-15 w-auto min-w-11 max-w-20 shrink-0 overflow-hidden rounded-md border border-line";
 
   /*
     Вид, який ми виробляємо самі, ЗАВЖДИ малюється, а не показує фото з
@@ -352,7 +352,7 @@ export function ImportDraftRow({
   return (
     <div
       className={cn(
-        "overflow-hidden rounded-xl border border-border/60 transition-colors",
+        "overflow-hidden rounded-xl border border-line transition-colors",
         !draft.selected && "opacity-50"
       )}
     >
@@ -559,7 +559,7 @@ export function ImportDraftRow({
         тому між ними немає ані знаків додавання, ані підсумку.
       */}
       {isPrintModel ? null : (
-        <div className="flex items-center gap-1.5 border-t border-border/60 bg-muted/20 px-3 py-2">
+        <div className="flex items-center gap-1.5 border-t border-line-subtle bg-muted/20 px-3 py-2">
         {/*
           Ліва частина стискається, права — ні. Поки нанесення не назвали,
           смуга пропонує методи, і їх завжди більше, ніж влазить: без цього
@@ -643,7 +643,7 @@ function PoolCandidatesBlock({
             type="button"
             onClick={() => onPick?.(product)}
             aria-label={`Обрати «${product.name}»`}
-            className="flex min-w-0 items-center gap-2 rounded-lg border border-border/60 px-2 py-1.5 text-left transition-colors hover:border-border hover:bg-muted/50"
+            className="flex min-w-0 items-center gap-2 rounded-lg border border-line px-2 py-1.5 text-left transition-colors hover:border-line-strong hover:bg-muted/50"
           >
             <PoolCandidatePhoto url={product.imageUrl} />
             <span className="min-w-0">
@@ -668,7 +668,7 @@ function PoolCandidatesBlock({
 
 /** Фото картки кандидата — 40×40, обрізане під квадрат: тут це підказка, не паспорт товару. */
 function PoolCandidatePhoto({ url }: { url: string | null }) {
-  const base = "h-10 w-10 shrink-0 overflow-hidden rounded-md border border-border/60 bg-muted/40";
+  const base = "h-10 w-10 shrink-0 overflow-hidden rounded-md border border-line bg-muted/40";
   if (!url) {
     return (
       <span className={cn(base, "grid place-items-center")} aria-hidden>
@@ -821,7 +821,7 @@ function RunsField({
               disabled={disabled}
               aria-label="Прибрати тираж"
               onClick={() => onRemoveRun(run.key)}
-              className="absolute -right-1 -top-1 grid h-4 w-4 place-items-center rounded-full border border-border/60 bg-background text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/run:opacity-100"
+              className="absolute -right-1 -top-1 grid h-4 w-4 place-items-center rounded-full border border-line-strong bg-background text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/run:opacity-100"
             >
               <X className="h-2.5 w-2.5" strokeWidth={2.5} />
             </button>
@@ -842,7 +842,7 @@ function RunsField({
             disabled={disabled || blocked}
             aria-label="Додати ще тираж"
             onClick={onAddRun}
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-dashed border-border/60 text-muted-foreground transition-colors hover:border-border hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-dashed border-line text-muted-foreground transition-colors hover:border-line-strong hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
           >
             <Plus className="h-3.5 w-3.5" />
           </button>

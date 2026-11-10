@@ -178,7 +178,7 @@ export function CustomerFilterSelect({
             src={selectedLogo}
             name={value.name}
             size={20}
-            className="shrink-0 border-border/50"
+            className="shrink-0 border-line"
             fallbackClassName="text-3xs font-semibold"
           />
         ) : null}
@@ -252,7 +252,7 @@ export function CustomerFilterSelect({
               src={party.logo_url ?? null}
               name={label}
               size={24}
-              className="shrink-0 border-border/50"
+              className="shrink-0 border-line"
               fallbackClassName="text-3xs font-semibold"
             />
             <span className="min-w-0 flex-1 truncate">{label}</span>

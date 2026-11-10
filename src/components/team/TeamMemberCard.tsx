@@ -124,13 +124,13 @@ export function TeamMemberCard({
   return (
     <article
       className={cn(
-        "group relative flex h-full flex-col overflow-hidden rounded-inner border border-border/50 bg-card",
+        "group relative flex h-full flex-col overflow-hidden rounded-inner border border-line bg-card",
         // Ховер той самий, що в «Інтеграціях», — фон і межа, без тіні: система
         // свідомо пласка, тінь лишилась тільки тому, що спливає над сторінкою.
         // Підйому теж немає: пробували на піксель, Артем відхилив 28.08.2026 —
         // на щільній сітці карток рух під курсором помітніший за саму реакцію.
         "transition-[background-color,border-color] duration-base ease-out motion-reduce:transition-none",
-        person.profileHref && "cursor-pointer hover:border-border hover:bg-muted/30"
+        person.profileHref && "cursor-pointer hover:border-line-strong hover:bg-muted/30"
       )}
     >
       <div className="flex items-start gap-3 p-4 pb-0">
@@ -216,7 +216,7 @@ export function TeamMemberCard({
       )}
 
       {balance ? (
-        <div className="relative z-10 mt-3 border-t border-border/40 px-4 pt-3">
+        <div className="relative z-10 mt-3 border-t border-line-subtle px-4 pt-3">
           <AbsenceBalanceMeters balance={balance} dense entries={balanceEntries} year={year} />
         </div>
       ) : null}

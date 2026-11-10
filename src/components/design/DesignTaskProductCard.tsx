@@ -63,7 +63,7 @@ export function DesignTaskProductCard({ product }: DesignTaskProductCardProps) {
     );
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border/60 bg-card">
+    <div className="overflow-hidden rounded-xl border border-line bg-card">
       {/* Header: media + identity + supplier actions on one balanced line */}
       <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:p-5">
         <div className="shrink-0">
@@ -75,11 +75,11 @@ export function DesignTaskProductCard({ product }: DesignTaskProductCardProps) {
               zoomImageUrl={product.imageUrl}
               alt={product.name || "Товар"}
               loadStrategy="eager"
-              className="h-24 w-24 rounded-xl border-border/60 bg-muted/20 ring-1 ring-border/50 [&>div]:rounded-xl"
+              className="h-24 w-24 rounded-xl border-line bg-muted/20 ring-1 ring-line [&>div]:rounded-xl"
               imageClassName="object-cover"
             />
           ) : (
-            <div className="flex h-24 w-24 items-center justify-center rounded-xl border border-border/50 bg-muted/30">
+            <div className="flex h-24 w-24 items-center justify-center rounded-xl border border-line bg-muted/30">
               <Package className="h-7 w-7 text-muted-foreground/50" />
             </div>
           )}
@@ -117,11 +117,11 @@ export function DesignTaskProductCard({ product }: DesignTaskProductCardProps) {
 
       {/* Друк (сторони) — поліграфія only */}
       {product.productKind === "print" && product.printSides ? (
-        <div className="border-t border-border/50 bg-muted/10 px-4 py-3.5 sm:px-5">
+        <div className="border-t border-line-subtle bg-muted/10 px-4 py-3.5 sm:px-5">
           <div className="mb-2 text-3xs font-semibold uppercase tracking-caps text-muted-foreground">
             Друк
           </div>
-          <span className="inline-flex items-center rounded-full border border-border/50 bg-background px-3 py-1.5 text-sm font-medium text-foreground">
+          <span className="inline-flex items-center rounded-full border border-line bg-background px-3 py-1.5 text-sm font-medium text-foreground">
             {DESIGN_TASK_PRINT_SIDE_LABELS[product.printSides]}
           </span>
         </div>
@@ -129,7 +129,7 @@ export function DesignTaskProductCard({ product }: DesignTaskProductCardProps) {
 
       {/* Surfaces (нанесення) */}
       {product.surfaces.length > 0 ? (
-        <div className="border-t border-border/50 bg-muted/10 px-4 py-3.5 sm:px-5">
+        <div className="border-t border-line-subtle bg-muted/10 px-4 py-3.5 sm:px-5">
           <div className="mb-2 text-3xs font-semibold uppercase tracking-caps text-muted-foreground">
             Нанесення
           </div>
@@ -137,7 +137,7 @@ export function DesignTaskProductCard({ product }: DesignTaskProductCardProps) {
             {product.surfaces.map((surface, index) => (
               <span
                 key={index}
-                className="inline-flex items-center gap-1.5 rounded-full border border-border/50 bg-background px-3 py-1.5 text-sm"
+                className="inline-flex items-center gap-1.5 rounded-full border border-line bg-background px-3 py-1.5 text-sm"
                 title={`${surface.positionLabel ?? "—"} · ${surface.methodLabel ?? "—"}`}
               >
                 <span className="text-muted-foreground">{surface.positionLabel ?? "Позиція"}</span>

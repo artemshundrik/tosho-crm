@@ -38,7 +38,7 @@ function CardBody({ quoteId, preview }: { quoteId: string; preview: QuoteKanbanP
 
   return (
     <div className="w-[360px]">
-      <div className="flex h-[200px] items-center justify-center overflow-hidden rounded-lg border border-border/50 bg-white">
+      <div className="flex h-[200px] items-center justify-center overflow-hidden rounded-lg border border-line bg-white">
         {image ? (
           <img src={image} alt={active?.name ?? ""} decoding="async" className="h-full w-full object-contain p-2" />
         ) : (
@@ -59,7 +59,7 @@ function CardBody({ quoteId, preview }: { quoteId: string; preview: QuoteKanbanP
               onClick={() => setActiveId(product.id)}
               className={cn(
                 "h-9 w-9 shrink-0 overflow-hidden rounded-md border bg-white outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
-                product.id === active?.id ? "border-foreground/60" : "border-border/60 opacity-80 hover:opacity-100"
+                product.id === active?.id ? "border-foreground/60" : "border-line-strong opacity-80 hover:opacity-100"
               )}
             >
               <img src={product.imageUrl ?? ""} alt="" loading="lazy" decoding="async" className="h-full w-full object-contain p-0.5" />
@@ -71,7 +71,7 @@ function CardBody({ quoteId, preview }: { quoteId: string; preview: QuoteKanbanP
         </div>
       ) : null}
 
-      <ul className="mt-2.5 max-h-[216px] divide-y divide-border/40 overflow-y-auto overscroll-contain">
+      <ul className="mt-2.5 max-h-[216px] divide-y divide-line-subtle overflow-y-auto overscroll-contain">
         {products.map((product) => {
           const line = linesById.get(product.id);
           const qty = lineQty(line, product);
@@ -88,7 +88,7 @@ function CardBody({ quoteId, preview }: { quoteId: string; preview: QuoteKanbanP
                 {qty ? <div className="text-2xs tabular-nums text-muted-foreground">{qty}</div> : null}
               </div>
               {line?.declined ? (
-                <span className="shrink-0 rounded-full border border-border/60 bg-muted/30 px-1.5 py-0.5 text-3xs font-semibold">
+                <span className="shrink-0 rounded-full border border-line bg-muted/30 px-1.5 py-0.5 text-3xs font-semibold">
                   відмовився
                 </span>
               ) : line?.amount ? (
@@ -102,7 +102,7 @@ function CardBody({ quoteId, preview }: { quoteId: string; preview: QuoteKanbanP
         })}
       </ul>
 
-      <div className="mt-2 flex items-center justify-between gap-3 border-t border-border/50 pt-2.5">
+      <div className="mt-2 flex items-center justify-between gap-3 border-t border-line-subtle pt-2.5">
         <div className="min-w-0 text-xs">
           <span className="text-muted-foreground">Сума: </span>
           <span className="font-semibold tabular-nums text-foreground">
@@ -204,7 +204,7 @@ export function QuoteItemsHoverCard({
         onKeyDown={(event) => {
           if (event.key !== "Escape") event.stopPropagation();
         }}
-        className="w-auto max-w-none rounded-xl border-border/60 p-3 shadow-menu"
+        className="w-auto max-w-none rounded-xl border-line p-3 shadow-menu"
       >
         <CardBody quoteId={quoteId} preview={preview} />
       </PopoverContent>

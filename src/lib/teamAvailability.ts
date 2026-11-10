@@ -19,7 +19,7 @@ export function getTeamAvailabilityBadgeClass(value?: TeamAvailabilityStatus | n
   const normalized = normalizeTeamAvailabilityStatus(value);
   if (normalized === "vacation") return "bg-info-soft text-info-foreground border-info-soft-border";
   if (normalized === "sick_leave") return "tone-warning";
-  if (normalized === "offline") return "bg-muted text-muted-foreground border-border";
+  if (normalized === "offline") return "bg-muted text-muted-foreground border-line";
   return "bg-success-soft text-success-foreground border-success-soft-border";
 }
 

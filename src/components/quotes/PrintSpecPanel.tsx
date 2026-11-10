@@ -338,7 +338,7 @@ export function PrintSpecPanel({
   const cardColumns = buildCardColumns(preset, columns, entryById, heroIds, marks, tags);
 
   return (
-    <div className={cn("rounded-xl border border-border/50 p-4", className)}>
+    <div className={cn("rounded-xl border border-line p-4", className)}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <Settings2 className="h-4 w-4 text-muted-foreground" />
@@ -384,7 +384,7 @@ export function PrintSpecPanel({
               className={cn(
                 "grid gap-x-8 gap-y-5",
                 CARD_GRID[Math.min(cardColumns.length, 3)],
-                hero.length > 0 ? "mt-4 border-t border-border/50 pt-3.5" : "mt-3"
+                hero.length > 0 ? "mt-4 border-t border-line-subtle pt-3.5" : "mt-3"
               )}
             >
               {cardColumns.map((column) => (
@@ -443,7 +443,7 @@ export function PrintSpecPanel({
             DIALOG_WIDTH[Math.min(preset.columns?.length ?? 1, 3)]
           )}
         >
-          <DialogHeader className="flex-row items-center gap-4 border-b border-border/50 py-4 pl-6 pr-14 sm:pr-6">
+          <DialogHeader className="flex-row items-center gap-4 border-b border-line-subtle py-4 pl-6 pr-14 sm:pr-6">
             <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-muted/70 text-foreground/75">
               <PrintModelArt presetKey={preset.key} className="h-6 w-6" />
             </span>
@@ -470,7 +470,7 @@ export function PrintSpecPanel({
             </span>
           </DialogHeader>
 
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b border-border/50 px-6 py-2 text-xs">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b border-line-subtle px-6 py-2 text-xs">
             {missingForPrice.length > 0 ? (
               <div className="flex min-w-0 flex-wrap items-center gap-x-1 text-foreground">
                 <span className="font-medium">Для ціни бракує:</span>
@@ -545,7 +545,7 @@ export function PrintSpecPanel({
             </div>
           ) : null}
           {sourceNote ? (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border/50 bg-muted/40 px-6 py-2 text-xs text-foreground">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line-subtle bg-muted/40 px-6 py-2 text-xs text-foreground">
               <span>
                 Взято з {sourceNote.from.quoteNumber} від {formatDayMonth(sourceNote.from.quoteDate)} — перевірте
               </span>
@@ -579,7 +579,7 @@ export function PrintSpecPanel({
             />
           </div>
 
-          <DialogFooter className="border-t border-border/50 bg-muted/25 px-6 py-3.5 sm:items-center sm:justify-between">
+          <DialogFooter className="border-t border-line-subtle bg-muted/25 px-6 py-3.5 sm:items-center sm:justify-between">
             <span className="hidden text-xs text-muted-foreground sm:block">
               Збережене видно в картці прорахунку, у списку та в дизайн-задачі.
             </span>
@@ -723,7 +723,7 @@ function PrintSpecHero({
           className={cn(
             "min-w-0 sm:px-5",
             index === 0 && "sm:pl-0",
-            index > 0 && "sm:border-l sm:border-border/60"
+            index > 0 && "sm:border-l sm:border-line-subtle"
           )}
         >
           <div className="truncate text-xl font-semibold leading-6 tracking-tight text-foreground" title={entry.value}>
@@ -909,11 +909,11 @@ function RoundHistory({ preset, rounds }: { preset: PrintSpecPreset; rounds: Pri
   const presetColumns = preset.columns ?? [{ title: preset.label, sections: preset.sections }];
   const part = (section: string) => presetColumns.find((column) => column.sections.includes(section))?.title ?? section;
   return (
-    <div className="mt-4 border-t border-border/50 pt-3">
+    <div className="mt-4 border-t border-line-subtle pt-3">
       <div className="mb-1.5 flex items-center gap-2 text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
         Історія версій <span className="tabular-nums">({rounds.length})</span>
       </div>
-      <div className="divide-y divide-border/40">
+      <div className="divide-y divide-line-subtle">
         {[...rounds].reverse().map((round) => (
           <div key={round.label} className="grid gap-x-4 gap-y-1 py-2 text-xs sm:grid-cols-[16rem_1fr]">
             <div className="flex items-center gap-2 text-muted-foreground">

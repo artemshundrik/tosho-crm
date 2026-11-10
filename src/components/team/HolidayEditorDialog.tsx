@@ -260,7 +260,7 @@ export function HolidayEditorDialog({
             </p>
           ) : null}
 
-          <div className="rounded-inner border border-border/60">
+          <div className="rounded-inner border border-line">
             {loading ? (
               <div className="flex items-center justify-center gap-2 py-8 text-xs text-muted-foreground">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
@@ -274,7 +274,7 @@ export function HolidayEditorDialog({
                 className="border-0"
               />
             ) : (
-              <div className="divide-y divide-border/40">
+              <div className="divide-y divide-line-subtle">
                 {rows.map((row) => (
                   <div key={row.dateKey} className="group flex items-center gap-3 px-3 py-2">
                     <span className="w-[92px] shrink-0 text-xs">

@@ -160,7 +160,7 @@ function WorkdayGrid({ cells }: { cells: WorkdayCell[] }) {
                 ? ABSENCE_CELL_CLASS[normalizeTeamAbsenceKind(cell.absence.kind)]
                 : cell.passed
                   ? "border-transparent bg-success-solid"
-                  : "border-border bg-muted"
+                  : "border-line bg-muted"
             )}
           />
         ))}
@@ -192,7 +192,7 @@ function OutputSection({
   const remaining = Math.max(0, data.normToDate - data.works);
 
   return (
-    <div className="border-t border-border/50 px-3.5 py-2.5">
+    <div className="border-t border-line-subtle px-3.5 py-2.5">
       <div className="flex items-center gap-2">
         <span className="text-3xs font-semibold uppercase tracking-caps text-muted-foreground/70">{label}</span>
         {over ? (
@@ -376,7 +376,7 @@ export function DesignerEarningsWidget({
                 нижче показували те саме просування місяця втретє. */}
           </div>
 
-          <div className="mt-3 border-t border-border/50 px-3.5 py-2.5">
+          <div className="mt-3 border-t border-line-subtle px-3.5 py-2.5">
             <div className="flex items-center gap-2">
               <span className="text-3xs font-semibold uppercase tracking-caps text-muted-foreground/70">База</span>
               <span className="ml-auto text-3xs tabular-nums text-muted-foreground">
@@ -400,7 +400,7 @@ export function DesignerEarningsWidget({
           <OutputSection label="Макети" unitsLabel="макетів" data={earnings.layouts} masked={masked} />
 
           {earnings.creatives.length > 0 ? (
-            <div className="border-t border-border/50 px-3.5 py-2.5">
+            <div className="border-t border-line-subtle px-3.5 py-2.5">
               <div className="flex items-center gap-2">
                 <span className="text-3xs font-semibold uppercase tracking-caps text-muted-foreground/70">Креативи</span>
                 {earnings.creativesPay > 0 ? (
@@ -435,7 +435,7 @@ export function DesignerEarningsWidget({
             </div>
           ) : null}
 
-          <div className="border-t border-border/50 px-3.5 py-2 text-3xs leading-snug text-muted-foreground/80">
+          <div className="border-t border-line-subtle px-3.5 py-2 text-3xs leading-snug text-muted-foreground/80">
             Рахуються унікальні роботи — перезаливи одного файлу не додають. Норма денна: за дні відпустки
             й лікарняного вона не нараховується.
           </div>

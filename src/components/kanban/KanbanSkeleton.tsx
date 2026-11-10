@@ -98,7 +98,7 @@ export function KanbanSkeleton({
             {Array.from({ length: cardsPerColumn }).map((_, cardIndex) => (
               <div
                 key={`${column.id}:skeleton:${cardIndex}`}
-                className="rounded-xl border border-border/50 bg-card/82 p-3"
+                className="rounded-xl border border-line bg-card/82 p-3"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 flex-1 items-center gap-2.5">
@@ -114,7 +114,7 @@ export function KanbanSkeleton({
                   <Skeleton className={cn("h-3 rounded-full opacity-80", columnIndex % 2 === 0 ? "w-[86%]" : "w-[76%]")} />
                   <Skeleton className={cn("h-3 rounded-full opacity-70", cardIndex % 2 === 0 ? "w-[62%]" : "w-[72%]")} />
                 </div>
-                <div className="mt-3 flex items-center gap-2 border-t border-border/40 pt-3">
+                <div className="mt-3 flex items-center gap-2 border-t border-line-subtle pt-3">
                   <Skeleton className="h-7 w-7 shrink-0 rounded-full" />
                   <Skeleton className="h-3 w-[46%] rounded-full" />
                 </div>

@@ -63,7 +63,7 @@ function LaunchExceptionFooter({
 
   if (exception?.status === "pending") {
     return (
-      <div className="flex items-center gap-1.5 border-t border-border/50 px-4 py-2.5 text-xs font-medium tone-text-info">
+      <div className="flex items-center gap-1.5 border-t border-line-subtle px-4 py-2.5 text-xs font-medium tone-text-info">
         <Clock className="h-3.5 w-3.5" />
         Попросили дозволу запустити без {what} — чекає рішення СЕО або головбуха
       </div>
@@ -71,7 +71,7 @@ function LaunchExceptionFooter({
   }
   if (exception?.status === "approved") {
     return (
-      <div className="border-t border-border/50 px-4 py-2.5 text-xs text-muted-foreground">
+      <div className="border-t border-line-subtle px-4 py-2.5 text-xs text-muted-foreground">
         <span className="tone-text-success font-medium">Запуск без {what || "умов"} дозволено</span>
         {exception.decisionNote ? ` · «${exception.decisionNote}»` : ""}
       </div>
@@ -80,7 +80,7 @@ function LaunchExceptionFooter({
   if (!path.blocker || path.missing.length === 0) return null;
 
   return (
-    <div className="border-t border-border/50 px-4 py-2.5 text-xs">
+    <div className="border-t border-line-subtle px-4 py-2.5 text-xs">
       {exception?.status === "returned" ? (
         <div className="mb-1.5 tone-text-warning">Відмовили: {exception.decisionNote ?? "без коментаря"}</div>
       ) : null}
@@ -140,8 +140,8 @@ export function OrderLaunchPathCard({
   const path = buildLaunchPath(record);
 
   return (
-    <section className="rounded-xl border border-border/60 bg-card" aria-labelledby="order-launch-path-heading">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 px-4 py-3">
+    <section className="rounded-xl border border-line bg-card" aria-labelledby="order-launch-path-heading">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line-subtle px-4 py-3">
         <div>
           <div className="text-3xs font-semibold uppercase tracking-caps text-muted-foreground">Шлях до запуску</div>
           <h2 id="order-launch-path-heading" className="mt-0.5 text-sm font-semibold text-foreground">
@@ -160,7 +160,7 @@ export function OrderLaunchPathCard({
             key={step.key}
             className={cn(
               "flex flex-col gap-1 px-4 py-3",
-              index > 0 && "border-t border-border/40 sm:border-l sm:border-t-0",
+              index > 0 && "border-t border-line-subtle sm:border-l sm:border-t-0",
               step.state === "current" && "tone-warning-subtle"
             )}
           >
@@ -173,7 +173,7 @@ export function OrderLaunchPathCard({
           </li>
         ))}
       </ol>
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-border/50 bg-muted/20 px-4 py-2.5 text-xs">
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-line-subtle bg-muted/20 px-4 py-2.5 text-xs">
         {termsSummary.map((item) => (
           <span key={item.label}>
             <span className="text-muted-foreground">{item.label} </span>

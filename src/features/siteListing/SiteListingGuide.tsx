@@ -56,7 +56,7 @@ const STEPS: Array<{ key: string; title: string; caption: React.ReactNode; scene
     title: "Беремо",
     caption: "у «Нових»",
     scene: (
-      <span className="flex w-full max-w-[260px] items-center gap-2 rounded-lg bg-card px-2 py-1.5 ring-1 ring-border/60">
+      <span className="flex w-full max-w-[260px] items-center gap-2 rounded-lg bg-card px-2 py-1.5 ring-1 ring-line">
         <span className="h-7 w-7 shrink-0 rounded-md bg-muted" />
         <span className="flex-1 space-y-1">
           <Bar className="w-20 bg-muted-foreground/30" />
@@ -73,7 +73,7 @@ const STEPS: Array<{ key: string; title: string; caption: React.ReactNode; scene
     title: "Чернетка",
     caption: "~20 с, перевірити",
     scene: (
-      <span className="flex w-full max-w-[260px] flex-col gap-2 rounded-lg bg-card p-2 ring-1 ring-border/60">
+      <span className="flex w-full max-w-[260px] flex-col gap-2 rounded-lg bg-card p-2 ring-1 ring-line">
         <span className="flex gap-1.5">
           {TILE_COLORS.map((color) => (
             <span
@@ -101,7 +101,7 @@ const STEPS: Array<{ key: string; title: string; caption: React.ReactNode; scene
           Зібрати файл
         </Button>
         <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <span className="flex items-center gap-1.5 rounded-md bg-card px-2 py-1 text-2xs text-muted-foreground ring-1 ring-border/60">
+        <span className="flex items-center gap-1.5 rounded-md bg-card px-2 py-1 text-2xs text-muted-foreground ring-1 ring-line">
           …/site-listing.xlsx
           <Copy className="h-3 w-3" aria-hidden="true" />
         </span>

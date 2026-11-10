@@ -116,7 +116,7 @@ export function DevRequestQueue({
             <TodayRow key={request.id} request={request} onSelect={onSelect} onDrop={dropToday} />
           ))}
           {todayOrdered.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-border/60 px-4 py-6 text-center text-sm text-muted-foreground md:col-span-2">
+            <p className="rounded-xl border border-dashed border-line px-4 py-6 text-center text-sm text-muted-foreground md:col-span-2">
               Порожньо. Познач тут те, що збираєшся зробити сьогодні — решта чекатиме, не вимагаючи уваги.
             </p>
           ) : null}
@@ -251,7 +251,7 @@ function Shelf({
 
 function Empty({ text }: { text: string }) {
   return (
-    <p className="rounded-xl border border-dashed border-border/60 px-4 py-6 text-center text-sm text-muted-foreground">
+    <p className="rounded-xl border border-dashed border-line px-4 py-6 text-center text-sm text-muted-foreground">
       {text}
     </p>
   );
@@ -282,7 +282,7 @@ function BlockedRow({
     <button
       type="button"
       onClick={() => onSelect(request)}
-      className="flex w-full flex-col gap-1.5 rounded-xl border border-border/60 bg-card px-3 py-2.5 text-left transition-colors hover:border-border hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      className="flex w-full flex-col gap-1.5 rounded-xl border border-line bg-card px-3 py-2.5 text-left transition-colors hover:border-line-strong hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     >
       <span className="flex items-start gap-2">
         {ThemeIcon ? (
@@ -337,7 +337,7 @@ function TodayRow({
   const progress = papercut ? checklistProgress(request.checklist) : null;
   const left = progress ? progress.total - progress.done : 0;
   return (
-    <div className="flex items-start gap-3 rounded-xl border border-border/70 bg-card px-4 py-3 transition-colors hover:border-border hover:bg-muted/30">
+    <div className="flex items-start gap-3 rounded-xl border border-line bg-card px-4 py-3 transition-colors hover:border-line-strong hover:bg-muted/30">
       <button
         type="button"
         onClick={() => onSelect(request)}
@@ -404,7 +404,7 @@ function Rows({
   onAddToday?: (request: DevRequest) => void;
 }) {
   return (
-    <ul className="divide-y divide-border/50 overflow-hidden rounded-xl border border-border/60 bg-card">
+    <ul className="divide-y divide-line-subtle overflow-hidden rounded-xl border border-line bg-card">
       {requests.map((request) => (
         <li key={request.id}>
           {/*
@@ -625,7 +625,7 @@ function PapercutCard({
   };
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border/60 bg-card">
+    <div className="overflow-hidden rounded-xl border border-line bg-card">
       <div className="group/papercut flex items-center gap-3 px-3 py-2.5">
         <button
           type="button"
@@ -719,14 +719,14 @@ function PapercutCard({
       </div>
 
       {open ? (
-        <ul className="border-t border-border/50">
+        <ul className="border-t border-line-subtle">
           {/*
             СОРТУЄМО ЛИШЕ ПОКАЗ, не базу: у базі новий пункт дописується в
             кінець, і переставляти його після закриття означало б переписувати
             історію напряму заради вигляду. Пояснення — у withDoneLast.
           */}
           {withDoneLast(request.checklist).map((item) => (
-            <li key={item.id} className="border-b border-border/40 last:border-b-0">
+            <li key={item.id} className="border-b border-line-subtle last:border-b-0">
               <button
                 type="button"
                 onClick={() => toggle(item)}
@@ -739,7 +739,7 @@ function PapercutCard({
                     "mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded border",
                     item.state === "done"
                       ? "border-success-solid bg-success-solid text-background"
-                      : "border-border"
+                      : "border-line"
                   )}
                   aria-hidden
                 >

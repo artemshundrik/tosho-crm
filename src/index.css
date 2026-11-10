@@ -75,6 +75,11 @@
     --destructive-foreground: 210 40% 98%;
 
     --border: 225 9% 87%;
+    /* Сила трьох ліній (tailwind.config.js → colors.line). Темна тема може
+       перевизначити будь-яку з них одним рядком у своєму блоці. */
+    --line-subtle-alpha: 0.4;
+    --line-alpha: 0.6;
+    --line-strong-alpha: 1;
     --input: 225 9% 87%;
     
     /* --- BRAND TOKENS (single knob) --- */
@@ -1337,10 +1342,10 @@
     background: hsl(var(--canvas-header-bg));
   }
   .quote-soft-card {
-    @apply border-border/80 bg-card/80 shadow-sm;
+    @apply border-line bg-card/80 shadow-sm;
   }
   .quote-muted-card {
-    @apply border border-border/70 bg-muted/20 shadow-sm;
+    @apply border border-line bg-muted/20 shadow-sm;
   }
 
   .quote-kind-badge-kp {
@@ -1632,7 +1637,7 @@
     color: hsl(var(--warning-foreground));
   }
   .quote-activity-accent-default {
-    @apply bg-muted/40 text-muted-foreground border-border;
+    @apply bg-muted/40 text-muted-foreground border-line;
   }
 
   .cmd-highlight {

@@ -235,7 +235,7 @@ export function OrderInvoiceCorrectionDialog({
           </div>
         </div>
 
-        <div className="flex items-baseline justify-between border-t border-border/60 pt-3 text-sm">
+        <div className="flex items-baseline justify-between border-t border-line-subtle pt-3 text-sm">
           <span className="text-muted-foreground">Разом</span>
           <span className="tabular-nums">
             {total !== record.total ? (

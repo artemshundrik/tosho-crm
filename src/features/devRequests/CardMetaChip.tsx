@@ -41,9 +41,9 @@ const CHIP_SHAPE = "rounded-full px-2 py-0.5 text-2xs font-medium normal-case tr
 
 function weightClassName(weight: ChipWeight): string {
   if (weight === "quiet") {
-    return cn(CHIP_SHAPE, "border-border/40 bg-transparent text-muted-foreground/70");
+    return cn(CHIP_SHAPE, "border-line bg-transparent text-muted-foreground/70");
   }
-  return cn(CHIP_SHAPE, "border-border/60 bg-muted/20 text-muted-foreground");
+  return cn(CHIP_SHAPE, "border-line bg-muted/20 text-muted-foreground");
 }
 
 /**

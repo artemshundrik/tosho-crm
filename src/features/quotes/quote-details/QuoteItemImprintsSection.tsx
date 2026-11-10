@@ -102,7 +102,7 @@ export function QuoteItemImprintsSection({
       };
 
   return (
-    <div className="mt-4 border-t border-border/50 pt-3">
+    <div className="mt-4 border-t border-line-subtle pt-3">
       <QuoteItemImprints
         teamId={teamId}
         itemId={itemId}

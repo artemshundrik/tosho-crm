@@ -59,12 +59,12 @@ export function QuoteItemSpec({ sections }: { sections: QuoteItemSpecSection[] }
   );
 
   if (fieldCount < COLLAPSIBLE_FROM) {
-    return <div className="mt-4 border-t border-border/50 pt-3">{grid}</div>;
+    return <div className="mt-4 border-t border-line-subtle pt-3">{grid}</div>;
   }
 
   return (
     <details open className="group mt-4">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 border-t border-border/50 pt-3 [&::-webkit-details-marker]:hidden">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 border-t border-line-subtle pt-3 [&::-webkit-details-marker]:hidden">
         <span className="text-sm font-semibold text-foreground">Специфікація</span>
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <span className="tabular-nums">{fieldCount}</span> параметрів

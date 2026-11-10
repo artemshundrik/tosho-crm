@@ -258,7 +258,7 @@ function VisualCard({
     <div
       className={cn(
         "group rounded-xl border p-3 transition-colors hover:bg-muted/10",
-        selected ? "border-success-soft-border" : "border-border/40"
+        selected ? "border-success-soft-border" : "border-line"
       )}
     >
       <button
@@ -354,7 +354,7 @@ export function QuoteDesignStatusStrip({
 
   return (
     <section
-      className="flex flex-col gap-4 rounded-xl border border-border/50 bg-card p-4 sm:flex-row sm:items-center sm:gap-6"
+      className="flex flex-col gap-4 rounded-xl border border-line bg-card p-4 sm:flex-row sm:items-center sm:gap-6"
       aria-label="Стан дизайну"
     >
       <div className="shrink-0">
@@ -412,7 +412,7 @@ function MiniVisual({
       aria-label={previewable ? `Переглянути ${displayName}` : `Завантажити ${displayName}`}
       className={cn(
         "relative flex h-[54px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted/20 transition-transform hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
-        selected ? "border-success-soft-border ring-2 ring-success-soft-border/60" : "border-border/50"
+        selected ? "border-success-soft-border ring-2 ring-success-soft-border/60" : "border-line-strong"
       )}
     >
       {previewable ? (
@@ -473,9 +473,9 @@ export function QuoteDesignTaskCardView({
   const extra = task.visuals.length - minis.length;
 
   return (
-    <article className="overflow-hidden rounded-xl border border-border/50 bg-card">
+    <article className="overflow-hidden rounded-xl border border-line bg-card">
       <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-start sm:gap-4 sm:p-4">
-        <span className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border/50 bg-muted/20">
+        <span className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-line bg-muted/20">
           {task.imageUrl ? (
             <img src={task.imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
           ) : (
@@ -558,7 +558,7 @@ export function QuoteDesignTaskCardView({
                   <button
                     type="button"
                     onClick={onToggle}
-                    className="flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-lg border border-dashed border-border text-xs font-semibold tabular-nums text-muted-foreground hover:bg-muted/30 hover:text-foreground"
+                    className="flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-lg border border-dashed border-line-strong text-xs font-semibold tabular-nums text-muted-foreground hover:bg-muted/30 hover:text-foreground"
                     aria-label={`Показати ще ${extra} візуалів`}
                   >
                     +{extra}
@@ -566,7 +566,7 @@ export function QuoteDesignTaskCardView({
                 ) : null}
               </div>
             ) : (
-              <div className="flex h-[54px] shrink-0 items-center gap-2 rounded-lg border border-dashed border-border/60 px-3 text-xs text-muted-foreground">
+              <div className="flex h-[54px] shrink-0 items-center gap-2 rounded-lg border border-dashed border-line px-3 text-xs text-muted-foreground">
                 <ImageIcon className="h-3.5 w-3.5" />
                 Візуалів ще немає
               </div>
@@ -579,14 +579,14 @@ export function QuoteDesignTaskCardView({
         type="button"
         onClick={onToggle}
         aria-expanded={expanded}
-        className="flex w-full items-center justify-center gap-1.5 border-t border-border/40 py-1.5 text-2xs font-medium text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foreground/20"
+        className="flex w-full items-center justify-center gap-1.5 border-t border-line-subtle py-1.5 text-2xs font-medium text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foreground/20"
       >
         {expanded ? "Згорнути" : "ТЗ повністю й усі візуали"}
         <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-180")} />
       </button>
 
       {expanded ? (
-        <div className="space-y-5 border-t border-border/40 p-4">
+        <div className="space-y-5 border-t border-line-subtle p-4">
           <div>
             <div className="flex items-center justify-between gap-3">
               <span className="text-sm font-semibold text-foreground">ТЗ задачі</span>
@@ -657,7 +657,7 @@ export function QuoteDesignMaterials({
 }) {
   if (materials.length === 0 && !canAdd) return null;
   return (
-    <section className="rounded-xl border border-border/50 bg-card p-4" aria-label="Вихідні матеріали">
+    <section className="rounded-xl border border-line bg-card p-4" aria-label="Вихідні матеріали">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="text-sm font-semibold text-foreground">
@@ -671,7 +671,7 @@ export function QuoteDesignMaterials({
         {canAdd && materials.length > 0 ? (
           <label
             className={cn(
-              "inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-lg border border-border/60 px-2.5 text-2xs font-semibold text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground",
+              "inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-lg border border-line px-2.5 text-2xs font-semibold text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground",
               uploading && "pointer-events-none opacity-60"
             )}
           >
@@ -696,7 +696,7 @@ export function QuoteDesignMaterials({
             const displayName = getAttachmentDisplayFileName(file.name, file.storagePath, file.mimeType);
             const extension = getFileExtension(displayName);
             return (
-              <div key={file.id} className="flex items-center gap-3 border-b border-border/40 py-2.5 last:border-b-0">
+              <div key={file.id} className="flex items-center gap-3 border-b border-line-subtle py-2.5 last:border-b-0">
                 {isPreviewable(file) ? (
                   <StorageObjectImage
                     bucket={file.storageBucket}
@@ -704,7 +704,7 @@ export function QuoteDesignMaterials({
                     alt={displayName}
                     variant="thumb"
                     hoverPreview
-                    className="h-9 w-9 shrink-0 rounded-lg border border-border/60 bg-muted/30"
+                    className="h-9 w-9 shrink-0 rounded-lg border border-line bg-muted/30"
                   />
                 ) : (
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted/30 text-3xs font-bold uppercase text-muted-foreground">

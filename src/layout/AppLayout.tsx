@@ -351,7 +351,7 @@ function FxPopoverRow({
     <div
       className={cn(
         "flex items-baseline justify-between gap-3 py-2.5",
-        withDivider && "border-b border-border/60"
+        withDivider && "border-b border-line-subtle"
       )}
     >
       <span className="inline-flex items-baseline gap-2.5">
@@ -433,7 +433,7 @@ function renderInAppToastContent({
   onClose?: () => void;
 }) {
   return (
-    <div className="w-[min(420px,calc(100vw-32px))] rounded-xl border border-border bg-card p-4 text-card-foreground ring-1 ring-[hsl(var(--soft-ring))]">
+    <div className="w-[min(420px,calc(100vw-32px))] rounded-xl border border-line bg-card p-4 text-card-foreground ring-1 ring-[hsl(var(--soft-ring))]">
       <div className="flex items-start gap-3">
         <div
           className={cn(
@@ -452,7 +452,7 @@ function renderInAppToastContent({
               <button
                 type="button"
                 onClick={onClose}
-                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border/70 bg-background/80 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line-strong bg-background/80 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 aria-label="Закрити сповіщення"
               >
                 <CloseIcon className="h-4 w-4" />
@@ -465,7 +465,7 @@ function renderInAppToastContent({
               <button
                 type="button"
                 onClick={onAction}
-                className="inline-flex h-8 items-center rounded-full border border-border bg-background px-3 text-xs font-semibold text-foreground transition-colors hover:bg-muted/70"
+                className="inline-flex h-8 items-center rounded-full border border-line-strong bg-background px-3 text-xs font-semibold text-foreground transition-colors hover:bg-muted/70"
               >
                 {actionLabel}
               </button>
@@ -1751,7 +1751,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       className="h-[92dvh] max-h-[92dvh] bg-[linear-gradient(180deg,hsl(var(--page-underlay-bg)),hsl(var(--card)))]"
       contentClassName="min-h-0 flex-1 overflow-hidden overscroll-none p-0"
       header={
-        <div className="border-b border-border/70 bg-background/82 px-4 pb-3 backdrop-blur-xl">
+        <div className="border-b border-line-subtle bg-background/82 px-4 pb-3 backdrop-blur-xl">
           <ToShoAiWordmark />
         </div>
       }
@@ -1772,10 +1772,10 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         // `sm:` тут обов'язкові: базовий варіант бічної панелі має власні
         // `sm:w-3/4 sm:max-w-sm`, і без префікса вони перемагають на широкому
         // екрані — панель звужувалась із 620 до 384px.
-        className="z-overlay inset-y-0 left-auto right-0 h-[100dvh] max-h-[100dvh] w-full overflow-hidden overscroll-none border-l border-border/70 bg-[linear-gradient(180deg,hsl(var(--page-underlay-bg)),hsl(var(--card)))] p-0 sm:w-full sm:max-w-[620px]"
+        className="z-overlay inset-y-0 left-auto right-0 h-[100dvh] max-h-[100dvh] w-full overflow-hidden overscroll-none border-l border-line-subtle bg-[linear-gradient(180deg,hsl(var(--page-underlay-bg)),hsl(var(--card)))] p-0 sm:w-full sm:max-w-[620px]"
       >
         <div className="flex h-full min-h-0 w-full min-w-0 max-w-full flex-col overflow-hidden">
-          <div className="shrink-0 border-b border-border/70 bg-background/82 px-4 py-4 backdrop-blur-xl md:px-5">
+          <div className="shrink-0 border-b border-line-subtle bg-background/82 px-4 py-4 backdrop-blur-xl md:px-5">
             <SheetHeader>
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -1813,13 +1813,13 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       <aside
         data-collapsed={sidebarCollapsed}
         className={cn(
-          "group/sb hidden md:flex fixed inset-y-0 z-30 flex-col bg-[hsl(var(--sidebar-surface-bg))] border-r border-border/40",
+          "group/sb hidden md:flex fixed inset-y-0 z-30 flex-col bg-[hsl(var(--sidebar-surface-bg))] border-r border-line-subtle",
           "transition-[width]",
           SB_GEOM_TRANSITION,
           sidebarCollapsed ? "w-[72px]" : "w-[232px]"
         )}
       >
-        <div className={cn("h-14 border-b border-border/40", sidebarCollapsed ? "px-3" : "px-4")}>
+        <div className={cn("h-14 border-b border-line-subtle", sidebarCollapsed ? "px-3" : "px-4")}>
           <div className={cn("flex h-full items-center", sidebarCollapsed ? "justify-center" : "justify-between")}>
             <Link
               to={ROUTES.overview}
@@ -1977,7 +1977,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             відступ зникає разом із нею. */}
 <div
   className={cn(
-    "flex flex-col border-t border-border/40 transition-[padding,gap]",
+    "flex flex-col border-t border-line-subtle transition-[padding,gap]",
     SB_STACK_TRANSITION,
     sidebarCollapsed ? "gap-2 p-2" : "gap-2.5 p-4"
   )}
@@ -2035,7 +2035,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
             // Шапка не ховається, z-30 — див. layout/pageChrome.ts.
             // pt під статус-бар: в установленому застосунку фон шапки тягнеться до
             // самого верху екрана, а не лишає прозору смугу (див. --safe-top).
-            "fixed top-0 pt-[calc(var(--safe-top)+var(--view-as-offset,0px))] right-0 z-30 border-b border-border/40",
+            "fixed top-0 pt-[calc(var(--safe-top)+var(--view-as-offset,0px))] right-0 z-30 border-b border-line-subtle",
             "[transition:left_280ms_cubic-bezier(0.32,0.72,0,1),background-color_200ms_linear,backdrop-filter_200ms_linear,border-color_200ms_linear]",
             "motion-reduce:transition-none",
             "bg-[hsl(var(--page-underlay-bg))]/80 supports-[backdrop-filter]:backdrop-blur-lg",
@@ -2066,13 +2066,13 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                     hideClose
                     dismissible
                     className={cn(
-                      "min-h-[100dvh] pt-[var(--safe-top)] w-[min(92vw,340px)] max-w-[340px] overflow-hidden border-r border-border/70 bg-[hsl(var(--sidebar-surface-bg))]/95 p-0 backdrop-blur-xl",
+                      "min-h-[100dvh] pt-[var(--safe-top)] w-[min(92vw,340px)] max-w-[340px] overflow-hidden border-r border-line-subtle bg-[hsl(var(--sidebar-surface-bg))]/95 p-0 backdrop-blur-xl",
                       "pb-[env(safe-area-inset-bottom)] will-change-transform",
                       "data-[state=open]:duration-slow data-[state=closed]:duration-base data-[state=open]:ease-out data-[state=closed]:ease-in"
                     )}
                   >
                     <div className="flex h-full min-w-0 flex-col overflow-hidden">
-                      <div className="shrink-0 border-b border-border/70 bg-background/55">
+                      <div className="shrink-0 border-b border-line-subtle bg-background/55">
                         <SheetHeader className="px-4 pb-2 pt-4">
                           <div className="flex items-center justify-between gap-3">
                             <SheetTitle className="flex items-center">
@@ -2115,7 +2115,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                               onClick={() => setCmdkOpen(true)}
                             />
                             <div className="absolute inset-y-0 right-2 flex items-center pointer-coarse:hidden">
-                              <kbd className="pointer-events-none inline-flex h-6 select-none items-center gap-1 rounded-md border border-border bg-muted/70 px-2.5 font-mono text-3xs font-medium text-muted-foreground">
+                              <kbd className="pointer-events-none inline-flex h-6 select-none items-center gap-1 rounded-md border border-line bg-muted/70 px-2.5 font-mono text-3xs font-medium text-muted-foreground">
                                 <span className="text-2xs">⌘</span>K
                               </kbd>
                             </div>
@@ -2164,7 +2164,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                         {/* Налаштування смуги живуть тут, а не в самій смузі:
                             вона й так тісна, а міняють її склад раз на місяць.
                             Гамбургер — місце, де вже лежить «усе інше». */}
-                        <div className="mt-6 border-t border-border/70 pt-4">
+                        <div className="mt-6 border-t border-line-subtle pt-4">
                           <button
                             type="button"
                             onClick={() => {
@@ -2178,7 +2178,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                           </button>
                         </div>
 
-                        <div className="mt-2 border-t border-border/70 pt-4">
+                        <div className="mt-2 border-t border-line-subtle pt-4">
                           <UserMenu mobile onNavigate={() => setMobileMenuOpen(false)} fxWarning={fxError ?? fxStaleWarning} />
                         </div>
                       </div>
@@ -2224,7 +2224,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 // Наведення нейтральне, як у решти полів: світлішає фон, рамка
                 // лишається своя. Рожевий обідок робив із поля рекламу модуля —
                 // сам колір бренду живе в пігулці праворуч, і цього досить.
-                className="group/search inline-flex h-(--control-h) w-[320px] cursor-pointer items-center gap-2 rounded-lg border border-border/50 bg-muted/40 pl-3.5 pr-1 text-sm text-muted-foreground transition-all duration-base hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:border-foreground/50"
+                className="group/search inline-flex h-(--control-h) w-[320px] cursor-pointer items-center gap-2 rounded-lg border border-line-strong bg-muted/40 pl-3.5 pr-1 text-sm text-muted-foreground transition-all duration-base hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:border-foreground/50"
               >
                 <Search className="h-4 w-4 shrink-0 opacity-70" />
                 {/* Не «Пошук»: те саме поле тепер і шукає, і питає ToSho AI.
@@ -2258,7 +2258,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                   клік по самому полю. Приклад береться з того самого реєстру, що
                   й підказки в палітрі, — тобто залежить від посади й сторінки. */}
               {searchHintExample ? (
-                <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1.5 max-w-[420px] -translate-x-1/2 truncate rounded-lg border border-border/60 bg-popover shadow-menu px-2.5 py-1 text-xs text-muted-foreground opacity-0 transition-opacity duration-base group-hover:opacity-100 group-focus-within:opacity-100">
+                <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-1.5 max-w-[420px] -translate-x-1/2 truncate rounded-lg border border-line bg-popover shadow-menu px-2.5 py-1 text-xs text-muted-foreground opacity-0 transition-opacity duration-base group-hover:opacity-100 group-focus-within:opacity-100">
                   наприклад: {searchHintExample}
                 </span>
               ) : null}
@@ -2340,7 +2340,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                       <div className="px-4 pb-3 pt-2.5 text-2xs text-muted-foreground">
                         {getFxSourceText(usdUahSourceLabel, Boolean(usdUahRate || eurUahRate))}
                       </div>
-                      <div className="flex items-center gap-2 border-t border-border/60 px-4 py-2.5">
+                      <div className="flex items-center gap-2 border-t border-line-subtle px-4 py-2.5">
                         <Button
                           type="button"
                           size="sm"

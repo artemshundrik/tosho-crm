@@ -34,7 +34,7 @@ export function BulkActionsBar({
     <div
       className={cn(
         "fixed bottom-6 left-1/2 -translate-x-1/2 z-50",
-        "bg-card border border-border/60 rounded-xl",
+        "bg-card border border-line rounded-xl",
         "px-4 py-3 flex items-center gap-3",
         "animate-in slide-in-from-bottom-4 fade-in duration-slow",
         className

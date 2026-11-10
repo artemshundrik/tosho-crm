@@ -268,7 +268,7 @@ export function QuoteImportDialog({
 
         {stage === "preview" || stage === "saving" ? (
           <>
-            <div className="shrink-0 space-y-2 border-b border-border/60 pb-2">
+            <div className="shrink-0 space-y-2 border-b border-line-subtle pb-2">
               <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
                 <div className="text-muted-foreground">
                   {fileName} · знайдено {drafts.length}{" "}
@@ -346,7 +346,7 @@ export function QuoteImportDialog({
         ) : null}
 
         {stage === "preview" || stage === "saving" ? (
-          <DialogFooter className="shrink-0 gap-2 border-t border-border/60 pt-3">
+          <DialogFooter className="shrink-0 gap-2 border-t border-line-subtle pt-3">
             <Button type="button" variant="ghost" disabled={stage === "saving"} onClick={() => onOpenChange(false)}>
               Скасувати
             </Button>

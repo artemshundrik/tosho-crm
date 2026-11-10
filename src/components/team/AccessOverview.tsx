@@ -36,7 +36,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { MatrixPerson } from "@/components/team/AccessMatrix";
 
-const CARD = "rounded-xl border border-border/60 bg-card";
+const CARD = "rounded-xl border border-line bg-card";
 const CAP = "text-3xs font-semibold uppercase tracking-widest text-muted-foreground";
 
 /** Контури, помилка в яких коштує найдорожче. Порядок — за вагою наслідків. */
@@ -277,7 +277,7 @@ export function AccessOverview({
       </div>
 
       <section className={CARD}>
-        <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border/60 px-4 py-3">
+        <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line-subtle px-4 py-3">
           <h2 className="text-sm font-semibold">Чутливі контури</h2>
           <span className="text-2xs text-muted-foreground">хто справді має доступ — з урахуванням бази</span>
           <button
@@ -291,7 +291,7 @@ export function AccessOverview({
         {sensitiveRows.map((row) => (
           <div
             key={row.key}
-            className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/60 px-4 py-2.5 last:border-b-0"
+            className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line-subtle px-4 py-2.5 last:border-b-0"
           >
             <div className="flex min-w-[13rem] items-center gap-2 text-sm font-medium">
               <ShieldAlert className="h-4 w-4 text-warning-foreground" />
@@ -315,7 +315,7 @@ export function AccessOverview({
                         assetVariant="xs"
                         size={24}
                         shape="circle"
-                        className="border-border bg-muted/50"
+                        className="border-line bg-muted/50"
                         fallbackClassName="text-3xs font-bold"
                       />
                     </Link>
@@ -339,7 +339,7 @@ export function AccessOverview({
       </section>
 
       <section className={CARD}>
-        <header className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
+        <header className="flex items-center gap-2 border-b border-line-subtle px-4 py-3">
           <History className="h-4 w-4 text-muted-foreground" />
           <h2 className="text-sm font-semibold">Останні зміни</h2>
           <span className="ml-auto text-2xs text-muted-foreground">ролі, доступи й HR-статуси</span>
@@ -360,7 +360,7 @@ export function AccessOverview({
             return (
               <div
                 key={entry.id}
-                className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border/60 px-4 py-2.5 text-xs last:border-b-0"
+                className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line-subtle px-4 py-2.5 text-xs last:border-b-0"
               >
                 {actor ? (
                   <AvatarBase
@@ -370,7 +370,7 @@ export function AccessOverview({
                     assetVariant="xs"
                     size={22}
                     shape="circle"
-                    className="border-border bg-muted/50"
+                    className="border-line bg-muted/50"
                     fallbackClassName="text-3xs font-bold"
                   />
                 ) : null}

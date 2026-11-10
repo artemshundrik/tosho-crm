@@ -137,7 +137,7 @@ export function LeadConversionForm(props: {
                       aria-pressed={values.ownership === value}
                       onClick={() => pickOwnership(value)}
                       className={cn(
-                        "h-7 rounded-full border border-border px-2.5 text-xs font-medium transition-colors",
+                        "h-7 rounded-full border border-line-strong px-2.5 text-xs font-medium transition-colors",
                         values.ownership === value ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground",
                       )}
                     >

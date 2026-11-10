@@ -36,7 +36,7 @@ export default function HandbookPage() {
         {CRM_KNOWLEDGE.map((topic) => (
           <section
             key={topic.title}
-            className="rounded-section border border-border/60 bg-card p-5"
+            className="rounded-section border border-line bg-card p-5"
           >
             <div className="flex items-start justify-between gap-3">
               <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">

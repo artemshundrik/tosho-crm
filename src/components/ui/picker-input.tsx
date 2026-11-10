@@ -234,7 +234,7 @@ function PickerPanel({
           }}
         />
 
-        <div className="flex flex-col gap-3 border-t border-border/60 p-3">
+        <div className="flex flex-col gap-3 border-t border-line-subtle p-3">
           {withTime ? (
             <div className="flex flex-col gap-1.5">
               <span className="text-3xs font-semibold uppercase tracking-caps text-muted-foreground">Час</span>
@@ -249,7 +249,7 @@ function PickerPanel({
                       "h-[30px] w-full justify-center rounded-lg border px-1 text-xs font-medium tabular-nums",
                       preset === timeValue
                         ? "border-control-active-border bg-control-active text-foreground"
-                        : "border-border/60 hover:border-foreground/30 hover:text-foreground"
+                        : "border-line-strong hover:border-foreground/30 hover:text-foreground"
                     )}
                     onClick={() => onPickTime?.(preset)}
                   >
@@ -290,7 +290,7 @@ function PickerPanel({
       </div>
 
       {draft ? (
-        <div className="grid grid-cols-2 gap-2 border-t border-border/60 p-3">
+        <div className="grid grid-cols-2 gap-2 border-t border-line-subtle p-3">
           <Button type="button" variant="outline" size="sm" className="h-[34px]" disabled={saving} onClick={onDraftCancel}>
             Скасувати
           </Button>

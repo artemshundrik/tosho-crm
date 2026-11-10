@@ -170,7 +170,7 @@ const cellClass = (key: string) => {
   return column ? frameCellClass(column) : undefined;
 };
 /** Роздільник між групами колонок — на першій клітинці групи, як і в шапці. */
-const GROUP_START = "border-l border-border/40";
+const GROUP_START = "border-l border-line-subtle";
 
 export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
   const now = React.useMemo(() => new Date(), []);
@@ -596,7 +596,7 @@ export function FinancePayroll({ teamId, userId }: FinancePayrollProps) {
                       name={person.name}
                       fallback={person.initials ?? person.name.slice(0, 2)}
                       size={28}
-                      className={cn("shrink-0 border-border/60", person.departed && "grayscale opacity-80")}
+                      className={cn("shrink-0 border-line", person.departed && "grayscale opacity-80")}
                     />
                     <div className="min-w-0 flex-1">
                       <div

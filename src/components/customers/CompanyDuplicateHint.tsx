@@ -191,7 +191,7 @@ export function CompanyHintList({ matches }: { matches: CompanyHintMatch[] }) {
                       src={avatar}
                       name={manager}
                       size={16}
-                      className="shrink-0 border-border/60"
+                      className="shrink-0 border-line"
                       fallbackClassName="text-[8px] font-semibold"
                     />
                     <span className="truncate">{manager}</span>
@@ -268,7 +268,7 @@ export function CompanyDuplicateHintField({
         // «Джерело» під назвами компаній. Підказку про дубль треба прочитати з
         // першого разу, а не розбирати крізь чужий текст.
         // Натискати тут нічого, а лежить підказка на сусідніх полях: клік має дійти до них.
-        className="pointer-events-none w-[var(--radix-popover-trigger-width)] border-border/60 bg-popover p-1.5 backdrop-blur-none"
+        className="pointer-events-none w-[var(--radix-popover-trigger-width)] border-line bg-popover p-1.5 backdrop-blur-none"
         // Фокус лишається в полі: людина продовжує друкувати, а поповер лише
         // показує. Без цього перше ж спрацювання виривало б курсор із поля.
         onOpenAutoFocus={(event) => event.preventDefault()}

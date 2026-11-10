@@ -180,11 +180,11 @@ function DigestBody({
         </DialogDescription>
       </div>
 
-      <div className="border-t border-border">
+      <div className="border-t border-line-subtle">
         {updates.map((update) => (
           <div
             key={update.id}
-            className="grid grid-cols-[3px_minmax(0,1fr)_auto] items-center gap-3.5 border-b border-border px-6 py-3.5 last:border-b-0"
+            className="grid grid-cols-[3px_minmax(0,1fr)_auto] items-center gap-3.5 border-b border-line-subtle px-6 py-3.5 last:border-b-0"
           >
             <span
               className={cn(
@@ -212,7 +212,7 @@ function DigestBody({
         ))}
       </div>
 
-      <div className="flex items-center justify-between gap-3 border-t border-border bg-muted/40 px-6 py-4">
+      <div className="flex items-center justify-between gap-3 border-t border-line-subtle bg-muted/40 px-6 py-4">
         <button
           type="button"
           onClick={() => {

@@ -70,7 +70,7 @@ function Chip({
       title={title}
       className={cn(
         "inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-2xs",
-        className ?? "border border-border/70 text-muted-foreground"
+        className ?? "border border-line text-muted-foreground"
       )}
     >
       {Icon ? <Icon className="h-3 w-3" /> : null}
@@ -246,7 +246,7 @@ export function DevRequestDetailsSheet({
                 <Chip
                   title="Напрямок"
                   className={
-                    moduleLabel ? undefined : "border border-dashed border-border text-muted-foreground/70"
+                    moduleLabel ? undefined : "border border-dashed border-line-strong text-muted-foreground/70"
                   }
                 >
                   {moduleLabel ?? "без напрямку"}
@@ -335,7 +335,7 @@ export function DevRequestDetailsSheet({
               ) : null}
 
               {historyEntries.length > 0 ? (
-                <section className="border-t border-border/60 pt-3">
+                <section className="border-t border-line-subtle pt-3">
                   <button
                     type="button"
                     onClick={() => setHistoryOpen((open) => !open)}
@@ -361,7 +361,7 @@ export function DevRequestDetailsSheet({
                         return (
                           <li
                             key={entry.id}
-                            className="border-b border-border/40 pb-2.5 last:border-0 last:pb-0"
+                            className="border-b border-line pb-2.5 last:border-0 last:pb-0"
                           >
                             <div className="flex items-baseline justify-between gap-2">
                               {/* Без actor_user_id запис зробила не людина, а

@@ -8,7 +8,7 @@ export function SpecificationItemTextsField({ state }: { state: SpecificationIte
   const { texts, loading, setText, resetText } = state;
   if (!loading && texts.length === 0) return null;
   return (
-    <div className="space-y-3 rounded-md border border-border/60 p-3">
+    <div className="space-y-3 rounded-md border border-line p-3">
       <div>
         <div className="text-sm font-medium">Текст у СП</div>
         <p className="text-xs text-muted-foreground">

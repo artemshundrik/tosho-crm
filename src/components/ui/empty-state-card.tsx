@@ -55,7 +55,7 @@ export function EmptyStateCard({
   return (
     <div
       className={cn(
-        "rounded-inner border border-dashed border-border bg-card/40",
+        "rounded-inner border border-dashed border-line bg-card/40",
         // Компактна коробка по центру, а не смуга на всю ширину сторінки.
         // Всередині все й так вирівняно по центру, тож на широкому екрані
         // виходив довжелезний блок із крихітним текстом посередині — рамка

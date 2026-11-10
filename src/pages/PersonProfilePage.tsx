@@ -114,7 +114,7 @@ const JOB_ROLE_OPTIONS = [
 
 /** Підпис-мікрозаголовок у мові «Релізів» і «Стеку». */
 const CAP = "text-3xs font-semibold uppercase tracking-widest text-muted-foreground";
-const CARD = "rounded-xl border border-border/60 bg-card";
+const CARD = "rounded-xl border border-line bg-card";
 
 function SectionCard({
   title,
@@ -416,7 +416,7 @@ export default function PersonProfilePage() {
           assetVariant="md"
           size={72}
           shape="circle"
-          className="border-border bg-muted/50"
+          className="border-line bg-muted/50"
           fallbackClassName="text-lg font-bold"
           availability={person.availabilityStatus}
           inactive={inactive}
@@ -509,7 +509,7 @@ export default function PersonProfilePage() {
         читались як пʼять кнопок дії, і активна губилась серед них. Тут активна
         тримається вагою тексту й тонкою рискою знизу.
       */}
-      <TabBar value={section} wrapperClassName="-mx-1 border-b border-border/60 px-1">
+      <TabBar value={section} wrapperClassName="-mx-1 border-b border-line-subtle px-1">
         {visibleSections.map((key) => {
           const active = section === key;
           return (
@@ -671,7 +671,7 @@ export default function PersonProfilePage() {
                 />
               </div>
               {canManage && !isSelf ? (
-                <div className="flex flex-wrap items-center gap-3 border-t border-border/60 pt-3">
+                <div className="flex flex-wrap items-center gap-3 border-t border-line-subtle pt-3">
                   <p className="min-w-0 flex-1 text-2xs leading-relaxed text-muted-foreground">
                     {employment === "inactive"
                       ? "Співпрацю завершено. За потреби людину можна повернути в штат."
@@ -1017,7 +1017,7 @@ function PersonAccessSection({
           інформацію. Тут наслідок видно без уяви — той самий фон сайдбара,
           ті самі групи, той самий порядок і ті самі іконки.
         */}
-        <div className="flex flex-col gap-0.5 rounded-xl border border-border/50 bg-[hsl(var(--sidebar-surface-bg))] p-2">
+        <div className="flex flex-col gap-0.5 rounded-xl border border-line bg-[hsl(var(--sidebar-surface-bg))] p-2">
           {MODULE_GROUPS.map((group) => (
             <div key={group.group} className="flex flex-col gap-0.5">
               <div className={cn(CAP, "px-2.5 pb-1 pt-3 first:pt-1")}>{group.label}</div>
@@ -1056,7 +1056,7 @@ function PersonAccessSection({
                     <span
                       className={cn(
                         "grid h-3.5 w-3.5 shrink-0 place-items-center rounded-sm border transition-colors duration-base",
-                        lock.checked ? "border-primary bg-primary text-primary-foreground" : "border-border",
+                        lock.checked ? "border-primary bg-primary text-primary-foreground" : "border-line",
                         lock.locked && "opacity-45"
                       )}
                       aria-hidden
@@ -1082,7 +1082,7 @@ function PersonAccessSection({
         </div>
         <p className="text-2xs text-muted-foreground">Сповіщення доступні всім і окремого дозволу не потребують.</p>
         {canEdit ? (
-          <div className="flex items-center gap-3 border-t border-border/60 pt-3">
+          <div className="flex items-center gap-3 border-t border-line-subtle pt-3">
             <span className="text-2xs text-muted-foreground">
               {dirty ? "Є незбережені зміни" : "Усе збережено"}
             </span>

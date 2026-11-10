@@ -41,7 +41,7 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className={cn("border-border/40 bg-card sm:max-w-[520px]", className)}>
+      <AlertDialogContent className={cn("border-line bg-card sm:max-w-[520px]", className)}>
         <AlertDialogHeader className="space-y-3">
           <AlertDialogTitle className="flex items-center gap-2 text-xl">
             {icon}
@@ -54,7 +54,7 @@ export function ConfirmDialog({
           ) : null}
         </AlertDialogHeader>
         <AlertDialogFooter className="pt-2">
-          <AlertDialogCancel className="border-border/60">{cancelLabel}</AlertDialogCancel>
+          <AlertDialogCancel className="border-line">{cancelLabel}</AlertDialogCancel>
           <AlertDialogAction
             className={cn(confirmClassName)}
             onClick={onConfirm}

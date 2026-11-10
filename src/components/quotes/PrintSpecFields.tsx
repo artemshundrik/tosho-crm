@@ -66,7 +66,7 @@ const OptionChip: React.FC<{
         "inline-flex h-7 items-center gap-1 whitespace-nowrap rounded-md border px-2.5 text-xs transition-colors",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
         "disabled:cursor-not-allowed disabled:opacity-60",
-        inert && "border-border/40 bg-muted/50 text-muted-foreground/60 disabled:opacity-100",
+        inert && "border-line-strong bg-muted/50 text-muted-foreground/60 disabled:opacity-100",
         active
           ? "border-foreground bg-foreground font-semibold text-background"
           : inert
@@ -75,7 +75,7 @@ const OptionChip: React.FC<{
               ? "border-dashed border-warning-soft-border bg-background font-medium text-warning-foreground hover:bg-warning-soft"
               : cn(
                   "bg-background font-medium hover:bg-muted",
-                  dashed ? "border-dashed border-border text-muted-foreground" : "border-border/70 text-foreground/80"
+                  dashed ? "border-dashed border-line-strong text-muted-foreground" : "border-line-strong text-foreground/80"
                 )
       )}
     >
@@ -222,7 +222,7 @@ const MissingChip: React.FC<{ label: string; onClick: () => void }> = ({ label, 
   <button
     type="button"
     onClick={onClick}
-    className="inline-flex h-5 items-center rounded-md border border-border/70 bg-background px-1.5 text-2xs font-medium text-foreground/80 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
+    className="inline-flex h-5 items-center rounded-md border border-line-strong bg-background px-1.5 text-2xs font-medium text-foreground/80 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
   >
     {label}
   </button>
@@ -434,7 +434,7 @@ export function PrintSpecFields({
         const base = current === "" ? 0 : Number(current);
         setValue(field.id, String(Math.max(0, base + direction * step)));
       };
-      const stepButton = "grid h-(--control-h) w-7 shrink-0 place-items-center rounded-md border border-border/70 bg-background text-foreground/80 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 disabled:cursor-not-allowed disabled:opacity-50";
+      const stepButton = "grid h-(--control-h) w-7 shrink-0 place-items-center rounded-md border border-line-strong bg-background text-foreground/80 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 disabled:cursor-not-allowed disabled:opacity-50";
       return (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
           <div className="flex items-center gap-1.5">
@@ -580,7 +580,7 @@ export function PrintSpecFields({
               {renderControl(field)}
             </FieldShell>
             {children ? (
-              <div className="ml-0.5 mt-3 space-y-3 border-l-2 border-border/60 pl-3">{children}</div>
+              <div className="ml-0.5 mt-3 space-y-3 border-l-2 border-line-subtle pl-3">{children}</div>
             ) : null}
           </div>
         );
@@ -604,11 +604,11 @@ export function PrintSpecFields({
         key={column.title}
         aria-label={column.title}
         className={cn(
-          "min-w-0 rounded-xl border border-border/50 bg-background",
+          "min-w-0 rounded-xl border border-line bg-background",
           !narrow && LANE_SCROLL[Math.min(columns.length, 3)]
         )}
       >
-        <div className={cn("space-y-1.5 border-b border-border/40 bg-background px-4 pb-3 pt-4", !narrow && "sticky top-0 z-10")}>
+        <div className={cn("space-y-1.5 border-b border-line-subtle bg-background px-4 pb-3 pt-4", !narrow && "sticky top-0 z-10")}>
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-semibold text-foreground">{column.title}</h3>
             <span className="text-xs font-medium tabular-nums text-foreground">

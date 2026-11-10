@@ -49,7 +49,7 @@ export function SearchBar({
   onCreateModel,
 }: SearchBarProps) {
   return (
-    <div className="border-b border-border/40 bg-muted/20 p-4">
+    <div className="border-b border-line-subtle bg-muted/20 p-4">
       <div className="flex items-center gap-3">
         {/* Search */}
         <div className="group relative flex-1">
@@ -58,7 +58,7 @@ export function SearchBar({
             value={globalSearch}
             onChange={(e) => setGlobalSearch(e.target.value)}
             placeholder="Пошук моделі або SKU..."
-            className="border-border/60 pl-9 pr-9 focus:border-primary/40"
+            className="border-line-strong pl-9 pr-9 focus:border-primary/40"
           />
           {globalSearch && (
             <button

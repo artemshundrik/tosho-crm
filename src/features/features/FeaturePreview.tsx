@@ -35,8 +35,8 @@ const WAVE_BARS = [
 
 export function FeaturePreview({ featureKey }: { featureKey: FeatureKey }) {
   return (
-    <div className="relative overflow-hidden rounded-xl border border-border bg-card">
-      <div className="flex items-center gap-1.5 border-b border-border/40 bg-muted/60 px-2.5 py-1.5">
+    <div className="relative overflow-hidden rounded-xl border border-line bg-card">
+      <div className="flex items-center gap-1.5 border-b border-line-subtle bg-muted/60 px-2.5 py-1.5">
         <span className="h-1.5 w-1.5 rounded-full bg-border" />
         <span className="h-1.5 w-1.5 rounded-full bg-border" />
         <span className="h-1.5 w-1.5 rounded-full bg-border" />
@@ -77,7 +77,7 @@ function TelegramShot() {
 function DictationShot() {
   return (
     <div className="grid gap-2">
-      <div className="min-h-[38px] rounded-lg border border-border/60 px-2 py-1.5 text-3xs leading-4 text-muted-foreground">
+      <div className="min-h-[38px] rounded-lg border border-line px-2 py-1.5 text-3xs leading-4 text-muted-foreground">
         Логотип на чорному фоні, біла заливка, вектор…
       </div>
       <div className="flex items-center gap-1.5 rounded-full border border-destructive/40 py-1 pl-2 pr-1">
@@ -106,10 +106,10 @@ function AbsenceShot() {
   return (
     <div className="grid gap-2">
       <div className="flex gap-1.5">
-        <span className="flex-1 rounded-lg border border-border px-2 py-1.5 text-center text-3xs tabular-nums">
+        <span className="flex-1 rounded-lg border border-line px-2 py-1.5 text-center text-3xs tabular-nums">
           12 серп
         </span>
-        <span className="flex-1 rounded-lg border border-border px-2 py-1.5 text-center text-3xs tabular-nums">
+        <span className="flex-1 rounded-lg border border-line px-2 py-1.5 text-center text-3xs tabular-nums">
           16 серп
         </span>
       </div>
@@ -125,7 +125,7 @@ function PaletteShot() {
     <div className="grid gap-1.5">
       <div className="flex items-center gap-1.5 rounded-lg border border-primary px-2 py-1.5">
         <span className="flex-1 text-3xs">ромаш</span>
-        <span className="rounded border border-border px-1 font-mono text-3xs text-muted-foreground">
+        <span className="rounded border border-line px-1 font-mono text-3xs text-muted-foreground">
           ⌘K
         </span>
       </div>
@@ -139,9 +139,9 @@ function AddressShot() {
   return (
     <div className="grid gap-1.5">
       <div className="rounded-lg border border-primary px-2 py-1.5 text-3xs">Кив</div>
-      <div className="overflow-hidden rounded-lg border border-border">
+      <div className="overflow-hidden rounded-lg border border-line">
         <div className="bg-primary/10 px-2 py-1 text-3xs font-medium">Київ · Відділення №12</div>
-        <div className="border-t border-border px-2 py-1 text-3xs text-muted-foreground">
+        <div className="border-t border-line-subtle px-2 py-1 text-3xs text-muted-foreground">
           Київ · Поштомат №4471
         </div>
       </div>
@@ -177,7 +177,7 @@ function ChatShot() {
       <div className="ml-auto max-w-[86%] rounded-xl rounded-br-sm bg-primary px-2 py-1.5 text-3xs leading-4 text-primary-foreground">
         Прийняв, зроблю до 16:00
       </div>
-      <div className="mt-0.5 flex items-center gap-1.5 rounded-full border border-border/60 py-1 pl-2.5 pr-1">
+      <div className="mt-0.5 flex items-center gap-1.5 rounded-full border border-line py-1 pl-2.5 pr-1">
         <span className="flex-1 text-3xs text-muted-foreground">Написати…</span>
         <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground">
           <ArrowRight className="h-3 w-3" />

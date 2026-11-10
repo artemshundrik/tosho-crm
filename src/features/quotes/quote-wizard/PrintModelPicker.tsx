@@ -87,7 +87,7 @@ export function PrintModelPicker({ suggestions, onPick, addedModelIds, disabled 
       ) : null}
 
       {shown.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border/60 px-4 py-6 text-center text-sm text-muted-foreground">
+        <div className="rounded-xl border border-dashed border-line px-4 py-6 text-center text-sm text-muted-foreground">
           Такого виду немає. Готове від постачальника шукайте в «Товарі».
         </div>
       ) : (
@@ -114,7 +114,7 @@ export function PrintModelPicker({ suggestions, onPick, addedModelIds, disabled 
                   // Монохром: вибране позначає контур і тон підкладки, не колір.
                   added
                     ? "border-foreground/60 bg-muted/60 text-foreground"
-                    : "border-border/50 bg-background/60 text-muted-foreground hover:border-border hover:bg-muted/40"
+                    : "border-line bg-background/60 text-muted-foreground hover:border-line-strong hover:bg-muted/40"
                 )}
               >
                 <PrintModelArt

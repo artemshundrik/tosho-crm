@@ -1495,7 +1495,7 @@ export function TeamPage() {
                     entries={userId ? balanceEntriesByUser.get(userId) : undefined}
                     year={year}
                   />
-                  <p className="mt-3 border-t border-border/40 pt-2.5 text-2xs text-muted-foreground">
+                  <p className="mt-3 border-t border-line-subtle pt-2.5 text-2xs text-muted-foreground">
                     Відпустка міряється календарними днями — вихідні всередині неї
                     квоту списують. Відгул і лікарняний рахуються робочими. Свята не
                     списують нічого.
@@ -1540,7 +1540,7 @@ export function TeamPage() {
                   ))
                 )}
                               {wfhToday.length > 0 ? (
-                  <div className="flex items-center gap-2 border-t border-border/40 pt-2.5 text-2xs">
+                  <div className="flex items-center gap-2 border-t border-line-subtle pt-2.5 text-2xs">
                     <span className={cn("grid h-5 w-5 shrink-0 place-items-center rounded-full border", toneBadgeClass.success)}>
                       <House className="h-2.5 w-2.5" aria-hidden />
                     </span>
@@ -1575,7 +1575,7 @@ export function TeamPage() {
                   </div>
                 ) : (
                   <>
-                    <div className="divide-y divide-border/30 px-5">
+                    <div className="divide-y divide-line-subtle px-5">
                       {upcomingEvents.slice(0, EVENTS_PREVIEW_COUNT).map((event) => {
                         const Icon = EVENT_ICONS[event.type];
                         const member = event.userId ? memberById.get(event.userId) : null;
@@ -1632,7 +1632,7 @@ export function TeamPage() {
                       <button
                         type="button"
                         onClick={() => setTab("calendar")}
-                        className="mt-1 flex w-full items-center justify-center gap-1 border-t border-border/40 py-2 text-2xs font-semibold text-primary transition-colors hover:bg-muted/40"
+                        className="mt-1 flex w-full items-center justify-center gap-1 border-t border-line-subtle py-2 text-2xs font-semibold text-primary transition-colors hover:bg-muted/40"
                       >
                         Ще {upcomingEvents.length - EVENTS_PREVIEW_COUNT}{" "}
                         {pluralEvents(upcomingEvents.length - EVENTS_PREVIEW_COUNT)} →
@@ -1765,14 +1765,14 @@ export function TeamPage() {
               ))}
               <span className="inline-flex items-center gap-1.5">
                 <span
-                  className="inline-block h-2.5 w-4 rounded-sm border border-dashed border-border bg-muted"
+                  className="inline-block h-2.5 w-4 rounded-sm border border-dashed border-line bg-muted"
                   aria-hidden
                 />
                 На погодженні
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <span
-                  className="inline-block h-2.5 w-4 rounded-sm border border-border/50 bg-[hsl(var(--festive-soft)/0.55)] dark:bg-[hsl(var(--festive-solid)/0.16)]"
+                  className="inline-block h-2.5 w-4 rounded-sm border border-line bg-[hsl(var(--festive-soft)/0.55)] dark:bg-[hsl(var(--festive-solid)/0.16)]"
                   aria-hidden
                 />
                 Свято
@@ -1797,7 +1797,7 @@ export function TeamPage() {
               onPickDay={handlePlannerPick}
               onOpenAbsence={canManageAbsences ? (absence) => openAbsenceDialog({ absence }) : undefined}
             />
-            <p className="border-t border-border/40 px-5 py-3 text-2xs text-muted-foreground">
+            <p className="border-t border-line-subtle px-5 py-3 text-2xs text-muted-foreground">
               Сірі стовпчики — вихідні та свята. Свята квоту не списують ніколи;
               вихідні всередині відпустки — списують, бо відпустка міряється
               календарними днями.
@@ -1823,7 +1823,7 @@ export function TeamPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="divide-y divide-border/40">
+            <div className="divide-y divide-line-subtle">
               {pendingRequests.map((absence) => (
                 <AbsenceRow
                   key={absence.id}
@@ -1900,7 +1900,7 @@ export function TeamPage() {
                     hint="Щойно хтось попросить відпустку — вона зʼявиться тут."
                   />
                 ) : (
-                  <div className="divide-y divide-border/40">
+                  <div className="divide-y divide-line-subtle">
                     {pendingRequests.map((absence) => {
                       const member = memberById.get(absence.userId);
                       const requesterPrivileged =
@@ -1972,7 +1972,7 @@ export function TeamPage() {
                   onAction={() => openAbsenceDialog({ mode: "request", userId: userId ?? undefined })}
                 />
               ) : (
-                <div className="divide-y divide-border/40">
+                <div className="divide-y divide-line-subtle">
                   {myAbsences.map((absence) => (
                     <AbsenceRow
                       key={absence.id}
@@ -2011,7 +2011,7 @@ export function TeamPage() {
                 {(absences ?? []).length === 0 ? (
                   <EmptyRow icon={CalendarDays} title="За цей рік відсутностей не записано" />
                 ) : (
-                  <div className="divide-y divide-border/40">
+                  <div className="divide-y divide-line-subtle">
                     {(absences ?? []).map((absence) => (
                       <AbsenceRow
                         key={absence.id}

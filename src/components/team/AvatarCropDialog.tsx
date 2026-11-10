@@ -111,7 +111,7 @@ export function AvatarCropDialog({
         </DialogHeader>
 
         <div className="flex flex-col gap-4">
-          <div className="relative mx-auto h-48 w-48 overflow-hidden rounded-full border border-border bg-background">
+          <div className="relative mx-auto h-48 w-48 overflow-hidden rounded-full border border-line bg-background">
             {imageSrc ? (
               <Cropper
                 image={imageSrc}

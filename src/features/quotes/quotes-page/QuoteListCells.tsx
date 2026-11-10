@@ -32,7 +32,7 @@ export function QuoteItemsCellContent({
   return (
     <QuoteItemsHoverCard quoteId={quoteId} preview={preview}>
       <div className="flex min-w-0 items-center gap-2">
-        <div className="grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded-md border border-border/60 bg-secondary text-muted-foreground/60">
+        <div className="grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded-md border border-line bg-secondary text-muted-foreground/60">
           {preview?.imageUrl ? (
             <img src={preview.imageUrl} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
           ) : FallbackIcon ? (
@@ -43,7 +43,7 @@ export function QuoteItemsCellContent({
         {extra > 0 ? <span className="shrink-0 text-xs text-muted-foreground">+{extra}</span> : null}
         {qty ? <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{qty}</span> : null}
         {quoteType && quoteType !== "merch" ? (
-          <span className="inline-flex h-4 shrink-0 items-center gap-1 rounded-full border border-border/60 bg-muted/20 px-1.5 text-3xs font-semibold text-muted-foreground">
+          <span className="inline-flex h-4 shrink-0 items-center gap-1 rounded-full border border-line bg-muted/20 px-1.5 text-3xs font-semibold text-muted-foreground">
             {TypeIcon ? createElement(TypeIcon, { className: "h-3 w-3" }) : null}
             {quoteTypeLabel(quoteType)}
           </span>

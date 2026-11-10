@@ -66,5 +66,5 @@ export function vchasnoStatusBadge(
   if (code === 7001 || status.sentAt) {
     return { text: "Вчасно · надіслано", className: "border-blue-200 text-blue-700", dot: "bg-blue-500" };
   }
-  return { text: "Вчасно · чернетка", className: "border-border/60 text-muted-foreground", dot: "bg-muted-foreground/50" };
+  return { text: "Вчасно · чернетка", className: "border-line text-muted-foreground", dot: "bg-muted-foreground/50" };
 }

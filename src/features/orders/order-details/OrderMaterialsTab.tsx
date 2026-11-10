@@ -66,9 +66,9 @@ function AssetTile({
       onClick={onClick}
       disabled={opening || (!asset.url && !stored)}
       title={asset.label}
-      className="group flex min-w-0 flex-col overflow-hidden rounded-lg border border-border/60 bg-background text-left transition-colors hover:border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+      className="group flex min-w-0 flex-col overflow-hidden rounded-lg border border-line bg-background text-left transition-colors hover:border-line-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
     >
-      <div className="relative aspect-[4/3] w-full border-b border-border/50 bg-muted/20">
+      <div className="relative aspect-[4/3] w-full border-b border-line-subtle bg-muted/20">
         {stored && hasImagePreview(stored) ? (
           <StorageObjectImage
             bucket={stored.storageBucket}
@@ -197,7 +197,7 @@ function MaterialViewer({
       >
         {current ? (
           <>
-            <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 pr-12">
+            <div className="flex items-center gap-3 border-b border-line-subtle px-4 py-3 pr-12">
               <div className="min-w-0 flex-1">
                 <DialogTitle className="truncate text-sm">{current.asset.label}</DialogTitle>
                 <div className="mt-0.5 text-xs text-muted-foreground">
@@ -245,7 +245,7 @@ function MaterialViewer({
               ) : null}
             </div>
             {canStep ? (
-              <div className="flex flex-none gap-2 overflow-x-auto border-t border-border/60 px-4 py-2.5">
+              <div className="flex flex-none gap-2 overflow-x-auto border-t border-line-subtle px-4 py-2.5">
                 {items.map((item, itemIndex) => (
                   <button
                     key={item.asset.id}
@@ -255,7 +255,7 @@ function MaterialViewer({
                     onClick={() => onIndexChange(itemIndex)}
                     className={cn(
                       "h-14 w-14 flex-none overflow-hidden rounded-md border bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                      itemIndex === index ? "border-foreground" : "border-border/60 opacity-70 hover:opacity-100"
+                      itemIndex === index ? "border-foreground" : "border-line-strong opacity-70 hover:opacity-100"
                     )}
                   >
                     <StorageObjectImage
@@ -270,7 +270,7 @@ function MaterialViewer({
                 ))}
               </div>
             ) : null}
-            <div className="flex flex-wrap justify-end gap-2 border-t border-border/60 px-4 py-3">
+            <div className="flex flex-wrap justify-end gap-2 border-t border-line-subtle px-4 py-3">
               <Button type="button" variant="outline" size="sm" className="gap-1.5" disabled={busy !== null} onClick={() => void openOriginal()}>
                 {busy === "open" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ExternalLink className="h-3.5 w-3.5" />}
                 Відкрити оригінал
@@ -325,7 +325,7 @@ export function OrderMaterialsTab({
   };
 
   return (
-    <section className="rounded-xl border border-border/60 bg-card p-4" aria-label="Затверджені матеріали">
+    <section className="rounded-xl border border-line bg-card p-4" aria-label="Затверджені матеріали">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-2">
           <Palette className="mt-0.5 h-4 w-4 text-muted-foreground" />

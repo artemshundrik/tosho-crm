@@ -32,7 +32,7 @@ export function ActionButton({ onClick, title, disabled, loading, icon, label, d
         iconOnly ? "w-9" : "px-3",
         destructive
           ? "border-destructive/30 text-destructive hover:border-destructive/40 hover:bg-destructive/10 active:bg-destructive/[0.18]"
-          : "border-border/60 bg-background text-foreground hover:bg-muted/60 active:bg-muted"
+          : "border-line-strong bg-background text-foreground hover:bg-muted/60 active:bg-muted"
       )}
     >
       {loading ? <Loader2 className="animate-spin" /> : icon}

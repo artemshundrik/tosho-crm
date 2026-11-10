@@ -175,7 +175,7 @@ function IssuerLine({ record, issuer }: { record: DerivedOrderRecord; issuer: Or
   const lockReason = legalEntityLockReason(record);
   const closing = record.closingDocument;
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-border/40 px-4 py-2 text-xs">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-line-subtle px-4 py-2 text-xs">
       <span className="flex items-center gap-1.5">
         <span className="text-muted-foreground">Від кого</span>
         <DropdownMenu>
@@ -581,7 +581,7 @@ export function OrderDocumentsCard({
 
   return (
     <>
-      <section className="rounded-xl border border-border/60 bg-card" aria-labelledby="order-docs-heading">
+      <section className="rounded-xl border border-line bg-card" aria-labelledby="order-docs-heading">
         <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
           <div className="flex items-center gap-2">
             <h2 id="order-docs-heading" className="text-sm font-semibold text-foreground">
@@ -601,20 +601,20 @@ export function OrderDocumentsCard({
         </div>
         {cashless && issuer ? <IssuerLine record={record} issuer={issuer} /> : null}
         {!cashless ? (
-          <p className="border-t border-border/40 px-4 py-3 text-sm text-muted-foreground">
+          <p className="border-t border-line-subtle px-4 py-3 text-sm text-muted-foreground">
             Договору, СП, рахунку й видаткової тут немає: вони лише для безготівки.
             {customerDocs.length > 0 ? " Нижче — те, що вже оформили раніше." : ""}
           </p>
         ) : null}
         {customerDocs.length > 0 ? (
-          <div className="divide-y divide-border/40 border-t border-border/40">
+          <div className="divide-y divide-line-subtle border-t border-line-subtle">
             {customerDocs.map((document) => (
               <DocumentRow key={document.kind} document={document} {...rowProps} />
             ))}
           </div>
         ) : null}
         {/* Написати замовнику треба й на готівці — тут єдине місце на телефоні, де це можна. */}
-        <div className="flex flex-wrap items-center gap-2 rounded-b-xl border-t border-border/40 bg-muted/20 px-4 py-2.5">
+        <div className="flex flex-wrap items-center gap-2 rounded-b-xl border-t border-line-subtle bg-muted/20 px-4 py-2.5">
           <span className="flex w-full items-baseline gap-2 sm:w-auto sm:flex-1">
             <span className="text-sm font-semibold text-foreground">
               {cashless ? "Надіслати замовнику" : "Написати замовнику"}
@@ -652,7 +652,7 @@ export function OrderDocumentsCard({
       </section>
 
       {techCard ? (
-        <section className="rounded-xl border border-border/60 bg-card" aria-label="Внутрішні документи">
+        <section className="rounded-xl border border-line bg-card" aria-label="Внутрішні документи">
           <div className="px-4 pt-3 text-3xs font-semibold uppercase tracking-caps text-muted-foreground">
             Внутрішні · для виробництва
           </div>

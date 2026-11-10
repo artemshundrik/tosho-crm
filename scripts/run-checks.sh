@@ -47,6 +47,7 @@ FAST_CHECKS='
 перевизначення контролів|node scripts/check-control-overrides.mjs
 сирі таблиці|node scripts/check-raw-tables.mjs
 шкала тексту|node scripts/check-type-scale.mjs
+ролі ліній|node scripts/check-line-tokens.mjs
 розростання файлів|node scripts/check-file-growth.mjs
 розмір інструкцій|node scripts/check-instruction-size.mjs
 реєстр функцій|npm run check:functions --silent
@@ -66,6 +67,7 @@ FULL_CHECKS='
 перевизначення контролів|node scripts/check-control-overrides.mjs
 сирі таблиці|node scripts/check-raw-tables.mjs
 шкала тексту|node scripts/check-type-scale.mjs
+ролі ліній|node scripts/check-line-tokens.mjs
 розростання файлів|node scripts/check-file-growth.mjs
 розмір інструкцій|node scripts/check-instruction-size.mjs
 знімок стеку|node scripts/check-stack-snapshot.mjs

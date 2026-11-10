@@ -25,13 +25,13 @@ export function PrefixField({
     <div
       data-invalid={invalid ? "true" : undefined}
       className={cn(
-        "flex h-(--control-h) w-full items-center overflow-hidden rounded-lg border border-border/50 bg-muted/40 text-sm transition-all duration-base ease-out",
+        "flex h-(--control-h) w-full items-center overflow-hidden rounded-lg border border-line bg-muted/40 text-sm transition-all duration-base ease-out",
         "focus-within:bg-background focus-within:ring-1 focus-within:ring-[hsl(var(--soft-ring))]",
         "data-[invalid=true]:border-destructive/60 data-[invalid=true]:bg-danger-soft/30",
         className
       )}
     >
-      <span className="flex h-full select-none items-center border-r border-border/60 bg-black/[0.03] px-2.5 font-mono text-md font-medium tracking-wide text-muted-foreground dark:bg-white/[0.04]">
+      <span className="flex h-full select-none items-center border-r border-line-subtle bg-black/[0.03] px-2.5 font-mono text-md font-medium tracking-wide text-muted-foreground dark:bg-white/[0.04]">
         {prefix}
       </span>
       {children}

@@ -52,14 +52,14 @@ const buttonVariants = cva(
         // ✅ Surface (hero/secondary): medium by default (як у Linear)
         secondary: [
           "!font-medium",
-          "bg-muted/40 text-foreground border border-border/50",
+          "bg-muted/40 text-foreground border border-line-strong",
           "hover:bg-muted/80",
           "active:bg-muted active:scale-[0.972]",
         ].join(" "),
 
         outline: [
           "!font-medium",
-          "border border-border/50 bg-transparent text-foreground",
+          "border border-line-strong bg-transparent text-foreground",
           "hover:bg-muted/60",
           "active:bg-muted/80 active:scale-[0.972]",
         ].join(" "),
@@ -120,13 +120,13 @@ const buttonVariants = cva(
         segmented: [
           "!font-medium border border-transparent bg-transparent text-muted-foreground",
           "hover:bg-background/40 hover:text-foreground",
-          "aria-[pressed=true]:border-border aria-[pressed=true]:bg-background aria-[pressed=true]:text-foreground",
+          "aria-[pressed=true]:border-line-strong aria-[pressed=true]:bg-background aria-[pressed=true]:text-foreground",
           "disabled:bg-transparent disabled:border-transparent",
         ].join(" "),
 
         // ✅ Filter chip / pill toggle
         chip: [
-          "!font-semibold rounded-full border border-border/50",
+          "!font-semibold rounded-full border border-line-strong",
           "h-7 px-3",
           "bg-muted/40 text-muted-foreground",
           "hover:text-foreground hover:bg-muted/60",
@@ -136,7 +136,7 @@ const buttonVariants = cva(
         // ✅ Card-like action (list items, selection cards)
         card: [
           "!font-medium w-full justify-start text-left",
-          "rounded-xl border border-border/50 bg-card/60",
+          "rounded-xl border border-line-strong bg-card/60",
           "hover:bg-muted/40",
           "data-[state=active]:border-foreground/30 data-[state=active]:bg-foreground/5 data-[state=active]:ring-1 data-[state=active]:ring-foreground/10",
           "data-[status=unavailable]:border-dashed data-[status=unavailable]:border-danger-soft-border data-[status=unavailable]:bg-danger-soft data-[status=unavailable]:opacity-80",

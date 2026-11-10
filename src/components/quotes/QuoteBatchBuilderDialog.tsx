@@ -495,12 +495,12 @@ const ChipDropdown: React.FC<{
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-1",
             active
               ? "border-primary/30 bg-primary/10 text-primary hover:bg-primary/15"
-              : "border-border/40 bg-background/55 text-muted-foreground hover:border-border/50 hover:bg-background/70",
+              : "border-line bg-background/55 text-muted-foreground hover:border-line-strong hover:bg-background/70",
             disabled && "pointer-events-none opacity-50"
           )}
         >
           {selected?.imageUrl ? (
-            <span className="mr-2 flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/50 bg-muted/30">
+            <span className="mr-2 flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-md border border-line bg-muted/30">
               <img src={selected.imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
             </span>
           ) : (
@@ -537,11 +537,11 @@ const ChipDropdown: React.FC<{
               >
                 <span className="flex min-w-0 flex-1 items-center gap-3 text-left">
                   {option.imageUrl ? (
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/50 bg-muted/30">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md border border-line bg-muted/30">
                       <img src={option.imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
                     </span>
                   ) : (
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border/40 bg-muted/20 text-muted-foreground">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line bg-muted/20 text-muted-foreground">
                       {icon}
                     </span>
                   )}
@@ -566,7 +566,7 @@ const ChipDropdown: React.FC<{
 
 const SectionTitle: React.FC<{ icon: React.ReactNode; children: React.ReactNode }> = ({ icon, children }) => (
   <div className="flex items-center gap-2 text-base font-semibold text-foreground">
-    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-border/50 bg-background/55 text-muted-foreground [&>svg]:h-4 [&>svg]:w-4">
+    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-line bg-background/55 text-muted-foreground [&>svg]:h-4 [&>svg]:w-4">
       {icon}
     </span>
     <span>{children}</span>
@@ -590,7 +590,7 @@ const DesignTaskTypeChip: React.FC<{
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-1",
             value
               ? "border-primary/30 bg-primary/10 text-primary hover:bg-primary/15"
-              : "border-border/40 bg-background/55 text-muted-foreground hover:border-border/50 hover:bg-background/70"
+              : "border-line bg-background/55 text-muted-foreground hover:border-line-strong hover:bg-background/70"
           )}
         >
           <SelectedIcon className={cn("mr-2 h-3.5 w-3.5 shrink-0", value ? "text-primary" : "text-muted-foreground")} />
@@ -651,7 +651,7 @@ const TeamMemberChipDropdown: React.FC<{
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-1",
             selected
               ? "border-primary/30 bg-primary/10 text-primary hover:bg-primary/15"
-              : "border-border/40 bg-background/55 text-muted-foreground hover:border-border/50 hover:bg-background/70"
+              : "border-line bg-background/55 text-muted-foreground hover:border-line-strong hover:bg-background/70"
           )}
         >
           {selected ? (
@@ -661,7 +661,7 @@ const TeamMemberChipDropdown: React.FC<{
               fallback={getInitials(selected.label).toUpperCase()}
               size={18}
               inactive={isInactiveEmployment(selected.employmentStatus)}
-              className="mr-2 shrink-0 border-border/60"
+              className="mr-2 shrink-0 border-line"
               fallbackClassName="text-3xs font-semibold"
             />
           ) : (
@@ -715,7 +715,7 @@ const TeamMemberChipDropdown: React.FC<{
                     fallback={getInitials(member.label).toUpperCase()}
                     size={20}
                     inactive={isInactiveEmployment(member.employmentStatus)}
-                    className="shrink-0 border-border/60"
+                    className="shrink-0 border-line"
                     fallbackClassName="text-3xs font-semibold"
                   />
                   <span className="truncate">{member.label}</span>
@@ -750,7 +750,7 @@ const TeamMemberMultiChipDropdown: React.FC<{
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-1",
             selected.length > 0
               ? "border-primary/30 bg-primary/10 text-primary hover:bg-primary/15"
-              : "border-border/40 bg-background/55 text-muted-foreground hover:border-border/50 hover:bg-background/70"
+              : "border-line bg-background/55 text-muted-foreground hover:border-line-strong hover:bg-background/70"
           )}
         >
           {selected[0] ? (
@@ -760,7 +760,7 @@ const TeamMemberMultiChipDropdown: React.FC<{
               fallback={getInitials(selected[0].label).toUpperCase()}
               size={18}
               inactive={isInactiveEmployment(selected[0].employmentStatus)}
-              className="mr-2 shrink-0 border-border/60"
+              className="mr-2 shrink-0 border-line"
               fallbackClassName="text-3xs font-semibold"
             />
           ) : (
@@ -798,7 +798,7 @@ const TeamMemberMultiChipDropdown: React.FC<{
                     fallback={getInitials(member.label).toUpperCase()}
                     size={20}
                     inactive={isInactiveEmployment(member.employmentStatus)}
-                    className="shrink-0 border-border/60"
+                    className="shrink-0 border-line"
                     fallbackClassName="text-3xs font-semibold"
                   />
                   <span className="truncate">{member.label}</span>
@@ -1849,7 +1849,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="h-[88vh] w-[calc(100vw-1.5rem)] max-w-[1320px] overflow-hidden !animate-none !p-0 [&_*]:!animate-none [&_*]:!transition-none sm:!p-0">
         <div className="flex h-full min-h-0 flex-col">
-          <DialogHeader className="border-b border-border/60 px-4 py-3 pr-14">
+          <DialogHeader className="border-b border-line-subtle px-4 py-3 pr-14">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="min-w-0">
                 <DialogTitle className="flex items-center gap-2 text-base">
@@ -1897,7 +1897,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                           name={selectedManager.label}
                           fallback={getInitials(selectedManager.label).toUpperCase()}
                           size={20}
-                          className="shrink-0 border-border/60"
+                          className="shrink-0 border-line"
                           fallbackClassName="text-3xs font-semibold"
                         />
                         <span className="truncate">{selectedManager.label}</span>
@@ -1921,7 +1921,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                             name={member.label}
                             fallback={getInitials(member.label).toUpperCase()}
                             size={20}
-                            className="shrink-0 border-border/60"
+                            className="shrink-0 border-line"
                             fallbackClassName="text-3xs font-semibold"
                           />
                           <span className="truncate">{member.label}</span>
@@ -1999,7 +1999,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
           {contentReady ? (
           <>
           <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[340px_minmax(0,1fr)]">
-            <aside className="min-h-0 overflow-y-auto border-b border-border/60 bg-muted/10 p-3 lg:border-b-0 lg:border-r">
+            <aside className="min-h-0 overflow-y-auto border-b border-line-subtle bg-muted/10 p-3 lg:border-b-0 lg:border-r">
               <div className="mb-4 flex items-center justify-between gap-2">
                 <div>
                   <div className="text-sm font-semibold text-foreground">Товари</div>
@@ -2028,11 +2028,11 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                         "group relative w-full overflow-hidden rounded-xl border p-3 text-left transition-all",
                         selected
                           ? "border-primary/45 bg-primary/10 ring-1 ring-primary/15"
-                          : "border-border/60 bg-background/85 hover:border-border hover:bg-background"
+                          : "border-line bg-background/85 hover:border-line-strong hover:bg-background"
                       )}
                     >
                       <div className="flex gap-3">
-                        <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-border/60 bg-muted/30">
+                        <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-line bg-muted/30">
                           {imageUrl ? (
                             <img
                               src={imageUrl}
@@ -2069,10 +2069,10 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                             </Badge>
                           </div>
                           <div className="mt-2 flex flex-wrap gap-1.5">
-                            <span className="rounded-full border border-border/50 bg-background/70 px-2 py-0.5 text-2xs text-muted-foreground">
+                            <span className="rounded-full border border-line bg-background/70 px-2 py-0.5 text-2xs text-muted-foreground">
                               {runs.length > 0 ? runs.map((run) => run.quantity).join(" / ") : "Без тиражів"}
                             </span>
-                            <span className="rounded-full border border-border/50 bg-background/70 px-2 py-0.5 text-2xs text-muted-foreground">
+                            <span className="rounded-full border border-line bg-background/70 px-2 py-0.5 text-2xs text-muted-foreground">
                               {product.quoteType === "print" && productConfiguratorPreset
                                 ? "Поліграфія"
                                 : printCount > 0
@@ -2087,7 +2087,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                 })}
               </div>
 
-              <div className="mt-4 space-y-2 border-t border-border/60 pt-4">
+              <div className="mt-4 space-y-2 border-t border-line-subtle pt-4">
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-sm font-semibold text-foreground">Доповнення</div>
                   {notesDictation.button}
@@ -2125,7 +2125,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                     </div>
                   ) : null}
 
-                  <section className="space-y-3 rounded-lg border border-border/60 bg-background p-4">
+                  <section className="space-y-3 rounded-lg border border-line bg-background p-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0 space-y-3">
                         <SectionTitle icon={<Package />}>{getProductLabel(catalogTypes, activeProduct)}</SectionTitle>
@@ -2138,7 +2138,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                           однаково.
                         */}
                         <div
-                          className="inline-flex rounded-full border border-border/50 bg-background/40 p-1"
+                          className="inline-flex rounded-full border border-line bg-background/40 p-1"
                           role="radiogroup"
                           aria-label="Тип виробу"
                         >
@@ -2274,7 +2274,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                                       Вставте посилання Avanprint або заповніть вручну.
                                     </div>
                                   </div>
-                                  <div className="rounded-xl border border-border/60 bg-muted/10 p-2">
+                                  <div className="rounded-xl border border-line bg-muted/10 p-2">
                                     <div className="flex gap-2">
                                       <Input
                                         value={quickModelImportUrl}
@@ -2310,7 +2310,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                                     ) : null}
                                   </div>
                                   <div className="grid gap-3 sm:grid-cols-[112px_minmax(0,1fr)]">
-                                    <div className="aspect-square overflow-hidden rounded-xl border border-border/60 bg-muted/20">
+                                    <div className="aspect-square overflow-hidden rounded-xl border border-line bg-muted/20">
                                       {quickModelImageUrl.trim() && !quickModelImageErrored ? (
                                         <img
                                           src={quickModelImageUrl.trim()}
@@ -2392,7 +2392,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                     )}
 
                     {activeSpecPreset ? (
-                      <div className="mt-4 border-t border-border/40 pt-4">
+                      <div className="mt-4 border-t border-line-subtle pt-4">
                         <PrintSpecFields
                           preset={activeSpecPreset}
                           values={activeSpecValues}
@@ -2402,7 +2402,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                     ) : null}
                   </section>
 
-                  <section className={cn("space-y-3 rounded-lg border border-border/60 bg-background p-4", showPrintConfigurator && "hidden")}>
+                  <section className={cn("space-y-3 rounded-lg border border-line bg-background p-4", showPrintConfigurator && "hidden")}>
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <SectionTitle icon={<Palette />}>Нанесення</SectionTitle>
                         <div className="flex flex-wrap items-center gap-2">
@@ -2419,13 +2419,13 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                       </div>
 
                       {activeProduct.printApplications.length === 0 ? (
-                        <div className="rounded-lg border border-dashed border-border/70 px-4 py-8 text-center text-sm text-muted-foreground">
+                        <div className="rounded-lg border border-dashed border-line px-4 py-8 text-center text-sm text-muted-foreground">
                           Без нанесення
                         </div>
                       ) : (
                         <div className="space-y-3">
                           {activeProduct.printApplications.map((app, index) => (
-                            <div key={app.id} className="rounded-lg border border-border/60 bg-muted/10 p-3">
+                            <div key={app.id} className="rounded-lg border border-line bg-muted/10 p-3">
                               <div className="mb-3 flex items-center justify-between gap-2">
                                 <div className="flex items-center gap-2 text-sm font-semibold">
                                   <Palette className="h-4 w-4 text-muted-foreground" />
@@ -2503,7 +2503,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                       і дизайн-задача не створюється. Саме тому вона окрема
                       секція, а не ще одна дропзона всередині ТЗ. */}
                   <section
-                    className="relative space-y-3 rounded-lg border border-border/60 bg-background p-4"
+                    className="relative space-y-3 rounded-lg border border-line bg-background p-4"
                     {...projectDrop.dropHandlers}
                   >
                     <FileDropOverlay
@@ -2543,7 +2543,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                     ) : null}
                   </section>
 
-                  <section className={cn("space-y-3 rounded-lg border border-border/60 bg-background p-4", !activeHasDesignSurface && "hidden")}>
+                  <section className={cn("space-y-3 rounded-lg border border-line bg-background p-4", !activeHasDesignSurface && "hidden")}>
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <SectionTitle icon={<Wand2 />}>ТЗ дизайнеру</SectionTitle>
                         <div className="flex flex-wrap items-center gap-2">
@@ -2566,7 +2566,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                               "inline-flex h-9 items-center rounded-full border px-3.5 text-sm font-medium transition-all",
                               activeProduct.createDesignTask
                                 ? "border-primary/30 bg-primary/10 text-primary hover:bg-primary/15"
-                                : "border-border/40 bg-background/55 text-muted-foreground hover:border-border/50 hover:bg-background/70"
+                                : "border-line bg-background/55 text-muted-foreground hover:border-line-strong hover:bg-background/70"
                             )}
                           >
                             <Palette className={cn("mr-2 h-3.5 w-3.5", activeProduct.createDesignTask ? "text-primary" : "text-muted-foreground")} />
@@ -2666,7 +2666,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                       </div>
                   </section>
 
-                  <section className="space-y-3 rounded-lg border border-border/60 bg-background p-4">
+                  <section className="space-y-3 rounded-lg border border-line bg-background p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <SectionTitle icon={<Ruler />}>Тиражі</SectionTitle>
                       <div className="flex flex-wrap items-center gap-2">
@@ -2685,7 +2685,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                       {activeProduct.runs.map((run, index) => (
                         <div key={run.id} className="space-y-1.5">
                           <div className="text-xs text-muted-foreground">Тираж {index + 1}</div>
-                          <div className="flex h-9 items-center gap-1.5 rounded-full border border-border/50 bg-background/55 px-2">
+                          <div className="flex h-9 items-center gap-1.5 rounded-full border border-line bg-background/55 px-2">
                             <NumberInput
                               min={1}
                               emptyValue={null}
@@ -2726,7 +2726,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                     </div>
                   </section>
 
-                  <section className="space-y-3 rounded-lg border border-border/60 bg-background p-4">
+                  <section className="space-y-3 rounded-lg border border-line bg-background p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <SectionTitle icon={<Truck />}>Логістика</SectionTitle>
                       {activeDelivery ? (
@@ -2776,7 +2776,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
             </main>
           </div>
 
-          <DialogFooter className="flex-col items-stretch gap-3 border-t border-border/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <DialogFooter className="flex-col items-stretch gap-3 border-t border-line-subtle px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             {/* Розклад по прорахунках показуємо ДО збереження: раніше про те,
                 що товари розійшлись, людина дізнавалась із тосту постфактум. */}
             <div className="flex min-w-0 flex-col gap-1.5">

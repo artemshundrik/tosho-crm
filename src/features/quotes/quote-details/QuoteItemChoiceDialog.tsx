@@ -146,7 +146,7 @@ export function QuoteItemChoiceDialog({
                   key={item.id}
                   className={cn(
                     "rounded-lg border px-3 py-2 transition-colors",
-                    checked ? "border-border/50" : "border-border/30 bg-muted/20"
+                    checked ? "border-line" : "border-line bg-muted/20"
                   )}
                 >
                   {/* Мітка обіймає лише галочку з назвою, а перемикач тиражів
@@ -213,7 +213,7 @@ export function QuoteItemChoiceDialog({
             })}
           </div>
 
-          <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2 text-sm">
+          <div className="rounded-lg border border-line bg-muted/20 px-3 py-2 text-sm">
             {selected.size === 0 && pendingRunCount > 0 ? (
               <span className="text-foreground">
                 Оберіть тираж, який погодив клієнт: без нього позиція не піде в замовлення.

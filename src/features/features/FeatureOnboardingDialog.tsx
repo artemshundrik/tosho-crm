@@ -109,11 +109,11 @@ export function FeatureOnboardingDialog({ feature, open, onOpenChange }: Props) 
                 {feature.summary}
               </DialogDescription>
 
-              <ol className="mt-6 border-t border-border">
+              <ol className="mt-6 border-t border-line-subtle">
                 {feature.steps.map((step, index) => (
                   <li
                     key={step}
-                    className="grid grid-cols-[2rem_1fr] items-baseline gap-3 border-b border-border py-3 text-sm leading-6"
+                    className="grid grid-cols-[2rem_1fr] items-baseline gap-3 border-b border-line-subtle py-3 text-sm leading-6"
                   >
                     <span className="font-mono text-2xs tabular-nums text-muted-foreground">
                       {String(index + 1).padStart(2, "0")}
@@ -142,7 +142,7 @@ export function FeatureOnboardingDialog({ feature, open, onOpenChange }: Props) 
             </div>
 
             {/* ── Праворуч: вікно, у якому фіча працює ── */}
-            <div className="relative grid place-items-center border-t border-border bg-muted/40 p-6 md:border-l md:border-t-0 md:p-7">
+            <div className="relative grid place-items-center border-t border-line-subtle bg-muted/40 p-6 md:border-l md:border-t-0 md:p-7">
               <div
                 aria-hidden="true"
                 className="pointer-events-none absolute inset-0"
@@ -153,8 +153,8 @@ export function FeatureOnboardingDialog({ feature, open, onOpenChange }: Props) 
                 }}
               />
               {LIVE_DEMO_KEYS.includes(feature.key) ? (
-                <div className="relative w-full max-w-[360px] overflow-hidden rounded-xl border border-border bg-card">
-                  <div className="flex items-center gap-1.5 border-b border-border/40 bg-muted/60 px-3 py-2">
+                <div className="relative w-full max-w-[360px] overflow-hidden rounded-xl border border-line bg-card">
+                  <div className="flex items-center gap-1.5 border-b border-line-subtle bg-muted/60 px-3 py-2">
                     <span className="h-2 w-2 rounded-full bg-border" />
                     <span className="h-2 w-2 rounded-full bg-border" />
                     <span className="h-2 w-2 rounded-full bg-border" />
@@ -276,7 +276,7 @@ function PaletteDemo() {
       <Button type="button" size="sm" variant="outline" onClick={() => setOpen(true)}>
         <Search className="h-3.5 w-3.5" />
         Відкрити пошук
-        <kbd className="ml-1 rounded border border-border px-1 font-mono text-3xs">⌘K</kbd>
+        <kbd className="ml-1 rounded border border-line px-1 font-mono text-3xs">⌘K</kbd>
       </Button>
       <CommandPalette open={open} onOpenChange={setOpen} />
     </div>
@@ -492,7 +492,7 @@ function BotChatDemo() {
   };
 
   return (
-    <div className="grid gap-2 border-t border-border pt-2.5">
+    <div className="grid gap-2 border-t border-line-subtle pt-2.5">
       <div ref={feedRef} className="grid max-h-[196px] gap-1.5 overflow-y-auto pr-1">
         {/* Те, що бот присилає сам. */}
         {BOT_CHAT_SEED.map((item) => (
@@ -537,7 +537,7 @@ function BotChatDemo() {
       </div>
 
       {/* Питання — саме ті формулювання, які бот справді розуміє. */}
-      <div className="flex gap-1.5 overflow-x-auto border-t border-border pt-2">
+      <div className="flex gap-1.5 overflow-x-auto border-t border-line-subtle pt-2">
         {BOT_CHAT_PROMPTS.map((prompt) => (
           <button
             key={prompt.ask}
@@ -546,7 +546,7 @@ function BotChatDemo() {
             className={cn(
               "shrink-0 cursor-pointer rounded-full border px-2.5 py-1 text-3xs font-medium transition-colors",
               asked.includes(prompt.ask)
-                ? "border-border bg-card text-muted-foreground"
+                ? "border-line-strong bg-card text-muted-foreground"
                 : "border-primary/35 bg-primary/[0.07] text-primary hover:bg-primary/15"
             )}
           >
@@ -602,7 +602,7 @@ function DictationDemo() {
         Технічне завдання
       </p>
 
-      <div className="min-h-[82px] rounded-xl border border-border/60 bg-card p-2.5 text-xs leading-snug">
+      <div className="min-h-[82px] rounded-xl border border-line bg-card p-2.5 text-xs leading-snug">
         {text ? (
           <span className="whitespace-pre-wrap [overflow-wrap:anywhere]">{text}</span>
         ) : (
@@ -645,7 +645,7 @@ function DictationDemo() {
           )}
         </div>
       ) : (
-        <div className="flex min-h-[38px] items-center gap-1 rounded-xl border border-border/60 bg-card p-1 pl-1.5">
+        <div className="flex min-h-[38px] items-center gap-1 rounded-xl border border-line bg-card p-1 pl-1.5">
           <button
             type="button"
             aria-label="Продиктувати голосом"
@@ -796,8 +796,8 @@ function TaskChatDemo() {
         ) : null}
       </div>
 
-      <div className="border-t border-border/40 bg-card p-2.5">
-        <div className="flex min-h-[38px] items-end gap-1 rounded-xl border border-border/60 bg-card p-1 pl-1.5 focus-within:border-primary/50">
+      <div className="border-t border-line-subtle bg-card p-2.5">
+        <div className="flex min-h-[38px] items-end gap-1 rounded-xl border border-line bg-card p-1 pl-1.5 focus-within:border-primary/50">
           <textarea
             value={draft}
             rows={1}

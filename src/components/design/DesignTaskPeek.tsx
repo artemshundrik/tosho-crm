@@ -95,10 +95,10 @@ export function DesignTaskPeek<T extends PeekDesignTask>({
                 src={task.productImageUrl}
                 alt=""
                 loading="lazy"
-                className="size-12 shrink-0 rounded-md border border-border/60 bg-white object-contain"
+                className="size-12 shrink-0 rounded-md border border-line bg-white object-contain"
               />
             ) : (
-              <span className="grid size-12 shrink-0 place-items-center rounded-md border border-border/60 bg-muted/40 text-muted-foreground">
+              <span className="grid size-12 shrink-0 place-items-center rounded-md border border-line bg-muted/40 text-muted-foreground">
                 <Package className="size-5" />
               </span>
             )}

@@ -59,7 +59,7 @@ export function TeamTable({ requests, userId, managers, memberById, now, hours, 
         </Button>
       </div>
 
-      <section aria-label={`Цифри за ${STATS_WINDOW_DAYS} днів`} className="flex flex-wrap gap-8 rounded-xl border border-border bg-card px-4 py-3.5">
+      <section aria-label={`Цифри за ${STATS_WINDOW_DAYS} днів`} className="flex flex-wrap gap-8 rounded-xl border border-line bg-card px-4 py-3.5">
         {cards.map(([label, value]) => (
           <div key={label} className="flex flex-col gap-0.5">
             <SectionLabel>{label}</SectionLabel>
@@ -83,7 +83,7 @@ export function TeamTable({ requests, userId, managers, memberById, now, hours, 
         </button>
       </div>
 
-      <div className="rounded-xl border border-border bg-card">
+      <div className="rounded-xl border border-line bg-card">
         <Table className="min-w-[940px]">
           <TableHeader>
             <TableRow>

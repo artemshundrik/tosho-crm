@@ -4032,7 +4032,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             губилась серед них. Тепер активна тримається вагою тексту і тонкою
             рискою знизу — рядок вкладок перестав сперечатися зі смугою дій.
           */}
-          <div className="sticky top-[var(--page-chrome-offset,var(--app-header-height))] z-30 mb-4 -mx-4 border-b border-border/50 bg-background/95 px-4 backdrop-blur md:-mx-5 md:px-5 lg:-mx-6 lg:px-6 record-split:static record-split:mb-0 record-split:shrink-0 2xl:-mx-8 2xl:px-8">
+          <div className="sticky top-[var(--page-chrome-offset,var(--app-header-height))] z-30 mb-4 -mx-4 border-b border-line-subtle bg-background/95 px-4 backdrop-blur md:-mx-5 md:px-5 lg:-mx-6 lg:px-6 record-split:static record-split:mb-0 record-split:shrink-0 2xl:-mx-8 2xl:px-8">
             <TabBar value={activeQuoteTab}>
               {quotePageTabs.map((tab) => {
                 return (
@@ -4181,7 +4181,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               </div>
 
               {itemsLockedHint ? (
-                <div className="mb-4 flex items-start gap-2 rounded-xl border border-border/50 bg-card px-3 py-2.5 text-sm text-muted-foreground">
+                <div className="mb-4 flex items-start gap-2 rounded-xl border border-line bg-card px-3 py-2.5 text-sm text-muted-foreground">
                   <Lock className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>
                     {itemsLockedHint}{" "}
@@ -4214,7 +4214,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 // непрочитані тиражі виглядали як «собівартість не внесена».
                 <div className="py-4 text-sm text-destructive">{itemsError || runsError}</div>
               ) : items.length === 0 ? (
-                <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border/60 px-6 py-10 text-center">
+                <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-line px-6 py-10 text-center">
                   <Package className="h-10 w-10 text-muted-foreground/30" />
                   <div>
                     <p className="font-medium">Модель не обрана</p>
@@ -4359,7 +4359,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                              тримала сама лише дуга 22 px: порожній балон замість
                              аркуша. Мова «Економіки» — крок поверхні bg-card плюс
                              волосінь border/50 — тримає її кольором. */
-                          "overflow-hidden rounded-xl border border-border/50 bg-card",
+                          "overflow-hidden rounded-xl border border-line bg-card",
                           itemIndex > 0 && "mt-3",
                           /* Відхилена позиція ЛИШАЄТЬСЯ на сторінці, лише гасне
                              цілком — разом із мініатюрою й цінами, щоб жодне
@@ -4562,7 +4562,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           мініатюри) стає непотрібною: висоту ряду й так тримає
                           сама мініатюра.
                         */}
-                        <div className="border-t border-border/50 p-3 sm:p-4">
+                        <div className="border-t border-line-subtle p-3 sm:p-4">
                           {(() => {
                             const activeItemRun = getSelectedRunForItem(item.id);
                             const activeItemRunIndex = getRunIndex(activeItemRun);
@@ -4599,7 +4599,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 />
 
                                 {itemRuns.length === 0 ? (
-                                  <div className="rounded-xl border border-dashed border-border/60 px-4 py-8 text-center text-sm text-muted-foreground">
+                                  <div className="rounded-xl border border-dashed border-line px-4 py-8 text-center text-sm text-muted-foreground">
                                     Для цього товару ще немає тиражів
                                   </div>
                                 ) : activeItemRun && activeItemRunIndex >= 0 ? (
@@ -4608,7 +4608,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                      що його тримає, і тиснула смугу часток під ціною в
                                      половину доступної ширини. Ділять яруси риски, а не
                                      коробки: та сама мова, що в «Витратах» і «Огляді». */
-                                  <div className="-mx-3 border-t border-border/40 px-3 pt-4 sm:-mx-4 sm:px-4">
+                                  <div className="-mx-3 border-t border-line-subtle px-3 pt-4 sm:-mx-4 sm:px-4">
                                     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                                       <div className="flex min-w-0 flex-wrap items-center gap-2">
                                         {/* Синя блямба тут нічого не позначала — просто
@@ -4728,7 +4728,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                     />
                                   </div>
                                 ) : (
-                                  <div className="rounded-xl border border-dashed border-border/60 px-4 py-8 text-center text-sm text-muted-foreground">
+                                  <div className="rounded-xl border border-dashed border-line px-4 py-8 text-center text-sm text-muted-foreground">
                                     Оберіть або додайте тираж
                                   </div>
                                 )}
@@ -4760,7 +4760,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                     >
                       <CircleHelp className="h-3.5 w-3.5" />
                     </button>
-                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-border/60 bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
+                    <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-56 -translate-x-1/2 rounded-md border border-line bg-popover px-3 py-2 text-2xs text-muted-foreground opacity-0 transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
                       Тиражі для розрахунку цін і підсумкової суми по прорахунку.
                     </div>
                   </div>
@@ -4808,7 +4808,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 <>
                   <div className="space-y-4">
                     {runSections.map((section) => (
-                      <div key={section.key} className="rounded-xl border border-border/50 bg-background/40 p-3">
+                      <div key={section.key} className="rounded-xl border border-line bg-background/40 p-3">
                         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                           <div className="flex min-w-0 items-center gap-3">
                             {section.imageUrl ? (
@@ -4822,7 +4822,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 />
                               </div>
                             ) : (
-                              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border/50 bg-muted/30">
+                              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-line bg-muted/30">
                                 <Package className="h-5 w-5 text-muted-foreground/60" />
                               </div>
                             )}
@@ -4848,7 +4848,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         </div>
 
                         {section.runs.length === 0 ? (
-                          <div className="rounded-xl border border-dashed border-border/60 px-4 py-6 text-center text-sm text-muted-foreground">
+                          <div className="rounded-xl border border-dashed border-line px-4 py-6 text-center text-sm text-muted-foreground">
                             Для цього товару ще немає тиражів
                           </div>
                         ) : (
@@ -4886,7 +4886,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             "group cursor-pointer rounded-xl border px-3 py-2.5 transition-colors",
                             isSelected
                               ? "border-primary/30 bg-primary/[0.04]"
-                              : "border-border/40 hover:bg-muted/10"
+                              : "border-line hover:bg-muted/10"
                           )}
                         >
                           <div className="space-y-4 xl:hidden">
@@ -4921,7 +4921,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               <div className="space-y-1">
                                 <div className="text-2xs font-medium text-muted-foreground">Кількість</div>
                                 <NumberInput
-                                  className="h-10 cursor-text border-transparent bg-muted/15 px-3 tabular-nums text-base hover:border-border focus:border-border focus:bg-card"
+                                  className="h-10 cursor-text border-transparent bg-muted/15 px-3 tabular-nums text-base hover:border-line-strong focus:border-line-strong focus:bg-card"
                                   value={run.quantity}
                                   disabled={disabled}
                                   onClick={(e) => e.stopPropagation()}
@@ -4933,7 +4933,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               <div className="space-y-1">
                                 <div className="text-2xs font-medium text-muted-foreground">{`Модель · ${quote.currency}`}</div>
                                 <NumberInput
-                                  className={cn("h-10 cursor-text border-transparent bg-muted/15 px-3 tabular-nums text-base hover:border-border focus:border-border focus:bg-card", modelPriceVatRing)}
+                                  className={cn("h-10 cursor-text border-transparent bg-muted/15 px-3 tabular-nums text-base hover:border-line-strong focus:border-line-strong focus:bg-card", modelPriceVatRing)}
                                   value={run.unit_price_model}
                                   disabled={disabled}
                                   title={modelPriceVatHint}
@@ -4945,7 +4945,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               <div className="space-y-1">
                                 <div className="text-2xs font-medium text-muted-foreground">{`Нанесення · ${quote.currency}`}</div>
                                 <NumberInput
-                                  className="h-10 cursor-text border-transparent bg-muted/15 px-3 tabular-nums text-base hover:border-border focus:border-border focus:bg-card"
+                                  className="h-10 cursor-text border-transparent bg-muted/15 px-3 tabular-nums text-base hover:border-line-strong focus:border-line-strong focus:bg-card"
                                   value={run.unit_price_print}
                                   disabled={disabled}
                                   onClick={(e) => e.stopPropagation()}
@@ -4956,7 +4956,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               <div className="space-y-1">
                                 <div className="text-2xs font-medium text-muted-foreground">{`Логістика · ${quote.currency}`}</div>
                                 <NumberInput
-                                  className="h-10 cursor-text border-transparent bg-muted/15 px-3 tabular-nums text-base hover:border-border focus:border-border focus:bg-card placeholder:text-muted-foreground/40"
+                                  className="h-10 cursor-text border-transparent bg-muted/15 px-3 tabular-nums text-base hover:border-line-strong focus:border-line-strong focus:bg-card placeholder:text-muted-foreground/40"
                                   value={run.logistics_cost}
                                   disabled={disabled}
                                   onClick={(e) => e.stopPropagation()}
@@ -5011,7 +5011,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 <div className="space-y-1">
                                   <NumberInput
                                     controlSize="sm"
-                                    className="cursor-text border-transparent bg-muted/15 px-2 tabular-nums text-sm hover:border-border focus:border-border focus:bg-card"
+                                    className="cursor-text border-transparent bg-muted/15 px-2 tabular-nums text-sm hover:border-line-strong focus:border-line-strong focus:bg-card"
                                     value={run.quantity}
                                     disabled={disabled}
                                     onClick={(e) => e.stopPropagation()}
@@ -5024,7 +5024,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 <div className="space-y-1">
                                   <NumberInput
                                     controlSize="sm"
-                                    className={cn("cursor-text border-transparent bg-muted/15 px-2 tabular-nums text-sm hover:border-border focus:border-border focus:bg-card", modelPriceVatRing)}
+                                    className={cn("cursor-text border-transparent bg-muted/15 px-2 tabular-nums text-sm hover:border-line-strong focus:border-line-strong focus:bg-card", modelPriceVatRing)}
                                     value={run.unit_price_model}
                                     disabled={disabled}
                                     title={modelPriceVatHint}
@@ -5037,7 +5037,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 <div className="space-y-1">
                                   <NumberInput
                                     controlSize="sm"
-                                    className="cursor-text border-transparent bg-muted/15 px-2 tabular-nums text-sm hover:border-border focus:border-border focus:bg-card"
+                                    className="cursor-text border-transparent bg-muted/15 px-2 tabular-nums text-sm hover:border-line-strong focus:border-line-strong focus:bg-card"
                                     value={run.unit_price_print}
                                     disabled={disabled}
                                     onClick={(e) => e.stopPropagation()}
@@ -5048,7 +5048,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
                                 <div className="space-y-1">
                                   <NumberInput
-                                    className="h-8 cursor-text border-transparent bg-muted/15 px-2 tabular-nums text-sm hover:border-border focus:border-border focus:bg-card placeholder:text-muted-foreground/40"
+                                    className="h-8 cursor-text border-transparent bg-muted/15 px-2 tabular-nums text-sm hover:border-line-strong focus:border-line-strong focus:bg-card placeholder:text-muted-foreground/40"
                                     value={run.logistics_cost}
                                     disabled={disabled}
                                     onClick={(e) => e.stopPropagation()}
@@ -5574,7 +5574,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         }}
       >
         <DialogContent className="overflow-hidden p-0 sm:max-w-[560px]">
-          <DialogHeader className="border-b border-border/60 bg-muted/10 p-5">
+          <DialogHeader className="border-b border-line-subtle bg-muted/10 p-5">
             <DialogTitle className="text-lg">Зміна статусу</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 p-5">
@@ -5594,7 +5594,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                       "flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-all",
                       isActive
                         ? "border-primary/40 bg-primary/10 text-primary"
-                        : "border-border/60 hover:border-border"
+                        : "border-line hover:border-line-strong"
                     )}
                   >
                     <Icon className="h-4 w-4" />
@@ -5614,7 +5614,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               />
             </div>
           </div>
-          <DialogFooter className="border-t border-border/60 bg-muted/5 px-5 py-4">
+          <DialogFooter className="border-t border-line-subtle bg-muted/5 px-5 py-4">
             <Button
               size="sm"
               variant="outline"
@@ -5661,11 +5661,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         }}
       >
         <DialogContent className="overflow-hidden p-0 sm:max-w-[560px]">
-          <DialogHeader className="border-b border-border/60 bg-muted/10 p-5">
+          <DialogHeader className="border-b border-line-subtle bg-muted/10 p-5">
             <DialogTitle className="text-lg">Скасування прорахунку</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 p-5">
-            <div className="rounded-lg border border-border/50 bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
+            <div className="rounded-lg border border-line bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
               Вкажи причину скасування — вона збережеться в історії та допоможе аналізу.
             </div>
             <div className="grid gap-4">
@@ -5696,7 +5696,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             </div>
             {cancelError && <div className="text-xs text-destructive">{cancelError}</div>}
           </div>
-          <DialogFooter className="border-t border-border/60 bg-muted/5 px-5 py-4">
+          <DialogFooter className="border-t border-line-subtle bg-muted/5 px-5 py-4">
             <Button
               size="sm"
               variant="outline"

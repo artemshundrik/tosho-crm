@@ -153,10 +153,10 @@ export function DesignTasksTable<T extends DesignTableTask>({
                             src={task.productImageUrl}
                             alt=""
                             loading="lazy"
-                            className="size-8 shrink-0 rounded-md border border-border/60 bg-white object-contain"
+                            className="size-8 shrink-0 rounded-md border border-line bg-white object-contain"
                           />
                         ) : (
-                          <span className="grid size-8 shrink-0 place-items-center rounded-md border border-border/60 bg-muted/25 text-muted-foreground">
+                          <span className="grid size-8 shrink-0 place-items-center rounded-md border border-line bg-muted/25 text-muted-foreground">
                             <Package className="size-4" />
                           </span>
                         )
@@ -179,7 +179,7 @@ export function DesignTasksTable<T extends DesignTableTask>({
                     {task.assigneeUserId ? (
                       <AvatarBase src={assigneeAvatar(task)} name={assignee} fallback={getInitials(assignee)} size={24} />
                     ) : (
-                      <span className="grid size-6 shrink-0 place-items-center rounded-full border border-border/60 bg-muted/35 text-muted-foreground">
+                      <span className="grid size-6 shrink-0 place-items-center rounded-full border border-line bg-muted/35 text-muted-foreground">
                         <User className="size-3.5" />
                       </span>
                     )}
@@ -194,7 +194,7 @@ export function DesignTasksTable<T extends DesignTableTask>({
       </Table>
       </div>
       {onMore ? (
-        <div className="flex justify-center border-t border-border/50 p-3">
+        <div className="flex justify-center border-t border-line-subtle p-3">
           <Button variant="outline" size="sm" onClick={onMore} disabled={moreBusy}>
             {moreBusy ? "Завантаження..." : "Показати ще"}
           </Button>

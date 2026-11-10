@@ -38,7 +38,7 @@ export function PartyDrawer(props: {
         aria-describedby={undefined}
       >
         <SheetTitle className="sr-only">{props.title}</SheetTitle>
-        <header className="flex shrink-0 items-start gap-3 border-b border-border px-5 pb-4 pt-5">
+        <header className="flex shrink-0 items-start gap-3 border-b border-line-subtle px-5 pb-4 pt-5">
           <div className="min-w-0 flex-1">{props.header}</div>
           <div className="flex shrink-0 items-center gap-1">
             {props.onExpand ? (
@@ -60,7 +60,7 @@ export function PartyDrawer(props: {
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto">{props.children}</div>
         {props.footer ? (
-          <footer className="flex shrink-0 items-center gap-2 border-t border-border px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <footer className="flex shrink-0 items-center gap-2 border-t border-line-subtle px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             {props.footer}
           </footer>
         ) : null}

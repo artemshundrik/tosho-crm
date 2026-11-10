@@ -29,7 +29,7 @@ export function getNotificationToneClasses(tone: NotificationVisualTone) {
   if (tone === "warning") {
     return "border-warning-soft-border bg-warning-soft text-warning-foreground";
   }
-  return "border-border/70 bg-muted/50 text-foreground";
+  return "border-line bg-muted/50 text-foreground";
 }
 
 export function extractNotificationName(title: string) {

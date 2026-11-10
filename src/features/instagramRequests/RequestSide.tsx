@@ -147,7 +147,7 @@ export function RequestSide({ request, events, actor, teamId, nameOf, now, hours
           </Button>
           {leadError ? <p className="text-xs text-danger-foreground">{leadError}</p> : null}
           {duplicate ? (
-            <div className="flex flex-col gap-2 rounded-lg border border-border p-2.5">
+            <div className="flex flex-col gap-2 rounded-lg border border-line p-2.5">
               <p className="text-xs">
                 «{duplicate.name}» уже є в базі як {duplicate.kind === "lead" ? "лід" : "замовник"}.
               </p>
@@ -207,7 +207,7 @@ export function RequestSide({ request, events, actor, teamId, nameOf, now, hours
 
       {request.is_test && actor.isOwnerOrCeo ? <TestPanel request={request} /> : null}
 
-      <div className="flex flex-col gap-2 border-t border-border pt-3">
+      <div className="flex flex-col gap-2 border-t border-line-subtle pt-3">
         <SectionLabel>Історія</SectionLabel>
         {events.flatMap((event) => {
           const text = eventText(event, nameOf);
@@ -311,7 +311,7 @@ function TestPanel({ request }: { request: RequestRow }) {
   const [text, setText] = React.useState("Це повідомлення від клієнта");
   const run = (payload: Record<string, unknown> & { action: string }) => action.mutate({ requestId: request.id, ...payload });
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-dashed border-border p-2.5">
+    <div className="flex flex-col gap-2 rounded-lg border border-dashed border-line p-2.5">
       <SectionLabel>Перевірка</SectionLabel>
       <Input aria-label="Текст тестового повідомлення" value={text} maxLength={1000} onChange={(event) => setText(event.target.value)} />
       <div className="grid grid-cols-2 gap-1.5">

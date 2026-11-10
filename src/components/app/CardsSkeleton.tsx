@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
  * руками, воно розходилось.
  */
 export const ENTITY_CARD_FRAME =
-  "grid w-full gap-3 rounded-section border border-border/60 bg-card p-4 text-left";
+  "grid w-full gap-3 rounded-section border border-line bg-card p-4 text-left";
 export const ENTITY_CARD_ROWS = "grid-rows-[36px_18px_46px_65px_32px]";
 
 /**
@@ -57,7 +57,7 @@ export function CardsSkeleton({ count = 6, className }: { count?: number; classN
           </div>
 
           {/* 4. Відбита смуга з поясненням. */}
-          <div className="space-y-1.5 self-center rounded-inner border border-border/50 px-2.5 py-2">
+          <div className="space-y-1.5 self-center rounded-inner border border-line px-2.5 py-2">
             <Skeleton className="h-2.5 w-full rounded-full opacity-60" />
             <Skeleton className="h-2.5 w-[68%] rounded-full opacity-60" />
           </div>

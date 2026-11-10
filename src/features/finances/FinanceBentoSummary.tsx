@@ -100,7 +100,7 @@ export function FinanceBentoSummary({
 }) {
   const deltaBadge =
     deltaPct === null || deltaPct === undefined || !deltaVs ? null : Math.abs(deltaPct) < 0.5 ? (
-      <span className="inline-flex items-center rounded-full border border-border/60 px-2.5 py-1 text-2xs font-medium text-muted-foreground">
+      <span className="inline-flex items-center rounded-full border border-line px-2.5 py-1 text-2xs font-medium text-muted-foreground">
         ≈ рівень {deltaVs}
       </span>
     ) : (
@@ -131,7 +131,7 @@ export function FinanceBentoSummary({
   );
 
   return (
-    <div className="rounded-xl border border-border/40 bg-card p-4 sm:p-5">
+    <div className="rounded-xl border border-line bg-card p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
         <div>
           <div className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">{title}</div>
@@ -191,7 +191,7 @@ export function FinanceBentoSummary({
       ) : null}
 
       {footnote ? (
-        <div className="mt-3.5 flex flex-wrap gap-x-4 gap-y-1 border-t border-border/40 pt-2.5 text-2xs text-muted-foreground">
+        <div className="mt-3.5 flex flex-wrap gap-x-4 gap-y-1 border-t border-line-subtle pt-2.5 text-2xs text-muted-foreground">
           {footnote}
         </div>
       ) : null}

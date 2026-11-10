@@ -25,13 +25,13 @@ const SHIMMER = "rounded-full";
 
 function RowLines({ rows, className }: { rows: number; className?: string }) {
   return (
-    <div className={cn("rounded-xl border border-border/50", className)}>
+    <div className={cn("rounded-xl border border-line", className)}>
       {Array.from({ length: rows }).map((_, index) => (
         <div
           key={index}
           className={cn(
             "flex items-center gap-4 px-4 py-3.5",
-            index > 0 && "border-t border-border/30"
+            index > 0 && "border-t border-line-subtle"
           )}
         >
           <Skeleton className={cn(SHIMMER, "h-8 w-8 shrink-0 rounded-full")} />
@@ -56,7 +56,7 @@ export function FinanceSkeleton({
   return (
     <div className="space-y-4" role="status" aria-live="polite" aria-busy="true" aria-label="Завантаження">
       {variant === "bento" ? (
-        <div className="rounded-xl border border-border/50 p-5">
+        <div className="rounded-xl border border-line p-5">
           <Skeleton className={cn(SHIMMER, "h-3 w-40 opacity-70")} />
           <Skeleton className={cn(SHIMMER, "mt-3 h-8 w-56")} />
           <Skeleton className={cn(SHIMMER, "mt-4 h-2 w-full opacity-60")} />
@@ -70,7 +70,7 @@ export function FinanceSkeleton({
       {variant === "stats" ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 3 }).map((_, index) => (
-            <div key={index} className="rounded-xl border border-border/50 p-4">
+            <div key={index} className="rounded-xl border border-line p-4">
               <Skeleton className={cn(SHIMMER, "h-3 w-24 opacity-70")} />
               <Skeleton className={cn(SHIMMER, "mt-3 h-6 w-32")} />
             </div>

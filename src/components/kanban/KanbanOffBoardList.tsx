@@ -61,11 +61,11 @@ export function KanbanOffBoardList({
   return (
     <div className={cn("px-4 py-4 md:px-5 md:py-5 lg:px-6", className)}>
       {entries.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-border/60 px-4 py-10 text-center text-sm text-muted-foreground">
+        <p className="rounded-xl border border-dashed border-line px-4 py-10 text-center text-sm text-muted-foreground">
           {emptyText}
         </p>
       ) : (
-        <ul className="divide-y divide-border/50 overflow-hidden rounded-xl border border-border/60 bg-card">
+        <ul className="divide-y divide-line-subtle overflow-hidden rounded-xl border border-line bg-card">
           {entries.map((entry) => {
             const busy = busyId === entry.id;
             return (

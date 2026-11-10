@@ -47,7 +47,7 @@ const HomeIcon = ABSENCE_KIND_ICONS.wfh;
  */
 const REMOTE_PILL =
   "border-[1.5px] border-[hsl(var(--success-foreground)/0.45)] bg-transparent text-[hsl(var(--success-foreground))]";
-const OFFICE_PILL = "border border-border/60 bg-transparent text-muted-foreground";
+const OFFICE_PILL = "border border-line bg-transparent text-muted-foreground";
 
 /** Пігулка одного дня: у перегляді — підпис, у редакторі — кнопка. */
 function DayPill({
@@ -200,7 +200,7 @@ export function WorkScheduleCard({
   }
 
   return (
-    <div className="flex flex-col gap-2 border-t border-border/40 py-2">
+    <div className="flex flex-col gap-2 border-t border-line-subtle py-2">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
         <span className="w-[8.5rem] shrink-0 text-2xs leading-5 text-muted-foreground">Графік роботи</span>
         <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
@@ -232,7 +232,7 @@ export function WorkScheduleCard({
       </div>
 
       {editing ? (
-        <div className="flex flex-col gap-2.5 rounded-md border border-border/50 p-3">
+        <div className="flex flex-col gap-2.5 rounded-md border border-line p-3">
           <p className="text-2xs leading-relaxed text-muted-foreground">
             Тисніть день, щоб перемкнути його між офісом і домом. Графік діє одразу й до скасування;
             свята й відпустки його перекривають.

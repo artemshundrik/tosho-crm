@@ -122,8 +122,8 @@ export function FinanceAccountsView({ teamId, canSeeSensitive }: FinanceAccounts
       />
 
       {visibleAccounts.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border/60 bg-muted/10 p-8 text-center">
-          <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-background">
+        <div className="rounded-xl border border-dashed border-line bg-muted/10 p-8 text-center">
+          <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-background">
             <Wallet className="h-5 w-5 text-muted-foreground" />
           </div>
           <p className="text-sm text-muted-foreground">Ще немає кас. Додайте в налаштуваннях.</p>
@@ -139,12 +139,12 @@ export function FinanceAccountsView({ teamId, canSeeSensitive }: FinanceAccounts
                 key={account.id}
                 /* Чутливість НЕ фарбує весь ряд (жовта заливка на широкій площі —
                    бруд): сигнал несе бейдж «Топ-ролі». */
-                className="flex items-center justify-between gap-3 rounded-xl border border-border/40 bg-card px-4 py-3"
+                className="flex items-center justify-between gap-3 rounded-xl border border-line bg-card px-4 py-3"
               >
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-medium text-foreground">{account.name}</span>
-                    <span className="rounded-full border border-border/60 px-2 py-0.5 text-3xs text-muted-foreground">
+                    <span className="rounded-full border border-line px-2 py-0.5 text-3xs text-muted-foreground">
                       {ACCOUNT_KIND_LABELS[account.kind]}
                     </span>
                     <span className="text-3xs text-muted-foreground">{account.currency}</span>

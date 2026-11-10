@@ -254,7 +254,7 @@ function ChartTooltipView({ tip }: { tip: TipState }) {
         zIndex: 60,
         pointerEvents: "none",
       }}
-      className="w-max max-w-[min(88vw,360px)] rounded-lg border border-border bg-popover px-3 py-2 text-xs leading-snug"
+      className="w-max max-w-[min(88vw,360px)] rounded-lg border border-line bg-popover px-3 py-2 text-xs leading-snug"
     >
       {tip.title ? <div className="mb-1 font-semibold text-foreground">{tip.title}</div> : null}
       <div className="flex flex-col gap-1">
@@ -388,7 +388,7 @@ const analyticsCache = new Map<string, AnalyticsCacheEntry>();
 function DashboardSkeleton() {
   return (
     <div className="space-y-3 px-4 pt-4 pb-2 sm:px-5" aria-busy="true" aria-label="Завантажуємо аналітику">
-      <section className="overflow-hidden rounded-xl border border-border/60 bg-background/70">
+      <section className="overflow-hidden rounded-xl border border-line bg-background/70">
         <div className="flex flex-wrap items-center gap-2 px-4 pt-4">
           <Skeleton className="h-9 w-64 rounded-xl" />
           <Skeleton className="ml-auto h-9 w-[180px] rounded-lg" />
@@ -396,7 +396,7 @@ function DashboardSkeleton() {
         <div className="px-4 pt-3">
           <Skeleton className="h-3.5 w-72 rounded-full" />
         </div>
-        <div className="mt-3 grid grid-cols-2 gap-px border-t border-border/50 bg-border/50 sm:grid-cols-3 xl:grid-cols-5">
+        <div className="mt-3 grid grid-cols-2 gap-px border-t border-line-subtle bg-border/50 sm:grid-cols-3 xl:grid-cols-5">
           {Array.from({ length: 5 }).map((_, index) => (
             <div key={index} className="bg-background/70 p-3.5">
               <Skeleton className="h-3 w-24 rounded-full" />
@@ -413,7 +413,7 @@ function DashboardSkeleton() {
       </section>
 
       <div className="grid gap-3 lg:grid-cols-3">
-        <section className="rounded-xl border border-border/60 bg-background/70 p-5 lg:col-span-2">
+        <section className="rounded-xl border border-line bg-background/70 p-5 lg:col-span-2">
           <Skeleton className="h-4 w-56 rounded-full" />
           <Skeleton className="mt-2 h-3 w-80 rounded-full opacity-70" />
           <div className="mt-4 space-y-3.5">
@@ -429,7 +429,7 @@ function DashboardSkeleton() {
             ))}
           </div>
         </section>
-        <section className="rounded-xl border border-border/60 bg-background/70 p-5">
+        <section className="rounded-xl border border-line bg-background/70 p-5">
           <Skeleton className="h-4 w-36 rounded-full" />
           <div className="mt-4 space-y-3">
             {Array.from({ length: 4 }).map((_, index) => (
@@ -446,7 +446,7 @@ function DashboardSkeleton() {
         </section>
       </div>
 
-      <section className="rounded-xl border border-border/60 bg-background/70 p-5">
+      <section className="rounded-xl border border-line bg-background/70 p-5">
         <div className="flex items-center gap-2">
           <Skeleton className="h-4 w-28 rounded-full" />
           <Skeleton className="ml-auto h-8 w-56 rounded-full" />
@@ -653,7 +653,7 @@ export function DesignersDashboard({
   if (loadError || !analytics) {
     return (
       <div className="px-4 pt-4 pb-4 sm:px-5">
-        <div className="rounded-section border border-dashed border-border/60 bg-muted/5 px-4 py-10 text-center text-sm text-muted-foreground">
+        <div className="rounded-section border border-dashed border-line bg-muted/5 px-4 py-10 text-center text-sm text-muted-foreground">
           {loadError ? "Не вдалося порахувати аналітику. Спробуйте оновити сторінку." : "Немає даних для аналітики."}
         </div>
       </div>
@@ -1010,7 +1010,7 @@ export function DesignersDashboard({
     /* Менеджер/інші без власного рядка: як і раніше, бачать лише баланс команди. */
     return (
       <div className="space-y-3 px-4 pt-4 pb-2 sm:px-5">
-        <section className="rounded-xl border border-border/60 bg-background/70 p-5">
+        <section className="rounded-xl border border-line bg-background/70 p-5">
           <div className="flex items-center justify-between gap-2">
             <h3 className="inline-flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
               <Users className="h-4 w-4 text-primary" />
@@ -1018,7 +1018,7 @@ export function DesignersDashboard({
             </h3>
             <span className="text-2xs text-muted-foreground">Кому можна ставити нову задачу зараз</span>
           </div>
-          <div className="mt-2 divide-y divide-border/50">
+          <div className="mt-2 divide-y divide-line-subtle">
             {balanceSorted.map((row, index) => {
               const label = labelById.get(row.designerId) ?? row.designerId.slice(0, 8);
               return (
@@ -1028,7 +1028,7 @@ export function DesignersDashboard({
                     name={label}
                     fallback={getInitials(label)}
                     size={32}
-                    className="shrink-0 border-border/70"
+                    className="shrink-0 border-line"
                     inactive={memberInactiveById[row.designerId] ?? false}
                   />
                   <div className="min-w-0 flex-1">
@@ -1064,10 +1064,10 @@ export function DesignersDashboard({
   return (
     <div className="space-y-3 px-4 pt-4 pb-2 sm:px-5">
       {/* ---------- єдина панель: скоуп-перемикач + місяць + контекст + KPI ---------- */}
-      <section className="overflow-hidden rounded-xl border border-border/60 bg-background/70">
+      <section className="overflow-hidden rounded-xl border border-line bg-background/70">
         {/* Ряд 1 — перемикач скоупу + місяць */}
         <div className="flex flex-wrap items-center gap-2 px-4 pt-4">
-          <div className="inline-flex flex-wrap items-center gap-1 rounded-xl border border-border/50 bg-muted/40 p-1">
+          <div className="inline-flex flex-wrap items-center gap-1 rounded-xl border border-line bg-muted/40 p-1">
             {canSeeAll ? (
               <button
                 type="button"
@@ -1102,7 +1102,7 @@ export function DesignersDashboard({
                     name={designer.label}
                     fallback={getInitials(designer.label)}
                     size={22}
-                    className="shrink-0 border-border/70"
+                    className="shrink-0 border-line"
                     inactive={memberInactiveById[designer.id] ?? false}
                   />
                   {firstName(designer.label)}
@@ -1113,7 +1113,7 @@ export function DesignersDashboard({
           <div className="ml-auto flex items-center gap-2">
             {/* Пояснення, чому цифри неповні, а не попередження — нейтральний тон. */}
             {isCurrentMonth ? (
-              <span className="hidden items-center gap-1.5 rounded-full border border-border bg-muted/50 px-2.5 py-1 text-3xs font-medium text-muted-foreground sm:inline-flex">
+              <span className="hidden items-center gap-1.5 rounded-full border border-line bg-muted/50 px-2.5 py-1 text-3xs font-medium text-muted-foreground sm:inline-flex">
                 <CalendarIcon className="h-3 w-3" />
                 поточний місяць
               </span>
@@ -1124,7 +1124,7 @@ export function DesignersDashboard({
                 onClick={() => setRefreshNonce((value) => value + 1)}
                 disabled={refreshing}
                 className={cn(
-                  "inline-flex h-(--control-h) cursor-pointer items-center gap-1.5 rounded-lg border border-border bg-background/60 px-2.5 text-2xs font-medium text-muted-foreground transition-colors",
+                  "inline-flex h-(--control-h) cursor-pointer items-center gap-1.5 rounded-lg border border-line-strong bg-background/60 px-2.5 text-2xs font-medium text-muted-foreground transition-colors",
                   "hover:text-foreground disabled:cursor-default disabled:opacity-60"
                 )}
                 aria-label="Перерахувати з бази"
@@ -1242,7 +1242,7 @@ export function DesignersDashboard({
         </div>
 
         {/* Ряд 3 — KPI-комірки (завжди 5, дільники через 1px-гап) */}
-        <div className="mt-3 grid grid-cols-2 gap-px border-t border-border/50 bg-border/50 sm:grid-cols-3 xl:grid-cols-5">
+        <div className="mt-3 grid grid-cols-2 gap-px border-t border-line-subtle bg-border/50 sm:grid-cols-3 xl:grid-cols-5">
           {kpis.map((kpi) => (
             <div key={kpi.label} className="bg-background/70 p-3.5">
               <div className="flex items-center gap-1.5 text-2xs font-medium text-muted-foreground">
@@ -1280,14 +1280,14 @@ export function DesignersDashboard({
       </section>
 
       {analytics.truncated ? (
-        <div className="rounded-section border border-border bg-muted/50 px-4 py-2 text-xs text-muted-foreground">
+        <div className="rounded-section border border-line bg-muted/50 px-4 py-2 text-xs text-muted-foreground">
           Даних дуже багато — найстаріші місяці можуть бути неповними (уперлись у ліміт вибірки).
         </div>
       ) : null}
 
       {/* ---------- типи + баланс/динаміка ---------- */}
       <div className="grid gap-3 lg:grid-cols-3">
-        <section className="rounded-xl border border-border/60 bg-background/70 p-5 lg:col-span-2">
+        <section className="rounded-xl border border-line bg-background/70 p-5 lg:col-span-2">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <h3 className="inline-flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
               {typesMetric === "time" ? (
@@ -1325,7 +1325,7 @@ export function DesignersDashboard({
               ) : null}
               {showPeers ? (
                 <span className="inline-flex items-center gap-1.5">
-                  <span className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border border-border/70 bg-muted/40" aria-hidden="true" />
+                  <span className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border border-line bg-muted/40" aria-hidden="true" />
                   колеги
                 </span>
               ) : null}
@@ -1375,7 +1375,7 @@ export function DesignersDashboard({
             </p>
           </div>
           {typesMetric === "time" ? (
-          <div className="mt-2 divide-y divide-border/50">
+          <div className="mt-2 divide-y divide-line-subtle">
             {typeRows.map((row) => {
               const Icon = DESIGN_TASK_TYPE_ICONS[row.type];
               const currentWidth = row.current == null ? 0 : Math.max(2, (row.current / typeScaleMax) * 100);
@@ -1527,7 +1527,7 @@ export function DesignersDashboard({
           <div className="mt-2">
             {/* Блок норм: тільки для тих, кому RLS віддала ставки. */}
             {normRows.length > 0 ? (
-              <div className="divide-y divide-border/50">
+              <div className="divide-y divide-line-subtle">
                 {normRows.map((row) => {
                   const color = row.kind === "visualization" ? FILE_KIND_META[0].color : FILE_KIND_META[1].color;
                   // Тінь попереднього місяця теж має влазити у трек, інакше вона
@@ -1682,11 +1682,11 @@ export function DesignersDashboard({
               </div>
             ) : null}
 
-            <div className={cn(normRows.length > 0 && "mt-3 border-t border-border/50 pt-2")}>
+            <div className={cn(normRows.length > 0 && "mt-3 border-t border-line-subtle pt-2")}>
               <span className="text-3xs font-semibold uppercase tracking-caps text-muted-foreground/70">
                 За типами задач
               </span>
-              <div className="divide-y divide-border/50">
+              <div className="divide-y divide-line-subtle">
                 {countRows.map((row) => {
                   const Icon = DESIGN_TASK_TYPE_ICONS[row.type];
                   const works = row.current?.works ?? 0;
@@ -1822,7 +1822,7 @@ export function DesignersDashboard({
           )}
         </section>
 
-        <section className="rounded-xl border border-border/60 bg-background/70 p-5">
+        <section className="rounded-xl border border-line bg-background/70 p-5">
           {scopedDesigner ? (
             <>
               <h3 className="inline-flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
@@ -1910,7 +1910,7 @@ export function DesignersDashboard({
                 </h3>
                 <span className="text-2xs text-muted-foreground">зараз</span>
               </div>
-              <div className="mt-2 divide-y divide-border/50">
+              <div className="mt-2 divide-y divide-line-subtle">
                 {balanceSorted.map((row, index) => {
                   const label = labelById.get(row.designerId) ?? row.designerId.slice(0, 8);
                   return (
@@ -1920,7 +1920,7 @@ export function DesignersDashboard({
                         name={label}
                         fallback={getInitials(label)}
                         size={32}
-                        className="shrink-0 border-border/70"
+                        className="shrink-0 border-line"
                         inactive={memberInactiveById[row.designerId] ?? false}
                       />
                       <div className="min-w-0 flex-1">
@@ -1952,7 +1952,7 @@ export function DesignersDashboard({
 
       {/* ---------- таблиця: Місяць | По місяцях ---------- */}
       {visibleDesigners.length > 0 ? (
-        <section className="rounded-xl border border-border/60 bg-background/70">
+        <section className="rounded-xl border border-line bg-background/70">
           <div className="flex flex-wrap items-center gap-2 px-5 pt-4">
             <h3 className="inline-flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
               <Users className="h-4 w-4 text-primary" />
@@ -2013,7 +2013,7 @@ export function DesignersDashboard({
                       onClick={() => setMetricKey(entry.key)}
                       aria-pressed={active}
                       className={cn(
-                        "inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-border/70 bg-background px-2.5 py-1 text-2xs font-medium text-muted-foreground transition-colors",
+                        "inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-line-strong bg-background px-2.5 py-1 text-2xs font-medium text-muted-foreground transition-colors",
                         "hover:border-foreground/40 hover:text-foreground",
                         active && "border-primary bg-primary text-primary-foreground hover:border-primary hover:text-primary-foreground"
                       )}
@@ -2036,7 +2036,7 @@ export function DesignersDashboard({
           <div className="overflow-x-auto px-3 pb-2 pt-2">
             {tableMode === "month" ? (
               <div className="min-w-[960px] px-2">
-                <div className="grid grid-cols-[26px_minmax(190px,1.4fr)_60px_60px_78px_92px_minmax(150px,1fr)_22px] items-center gap-3 border-b border-border/50 px-2 py-2 text-xs font-medium text-muted-foreground">
+                <div className="grid grid-cols-[26px_minmax(190px,1.4fr)_60px_60px_78px_92px_minmax(150px,1fr)_22px] items-center gap-3 border-b border-line-subtle px-2 py-2 text-xs font-medium text-muted-foreground">
                   <span>#</span>
                   <span>Дизайнер</span>
                   <span title="Усі задачі / з них із таймером">У роботі</span>
@@ -2072,7 +2072,7 @@ export function DesignersDashboard({
                           name={designer.label}
                           fallback={getInitials(designer.label)}
                           size={34}
-                          className="shrink-0 border-border/70"
+                          className="shrink-0 border-line"
                           inactive={memberInactiveById[designer.id] ?? false}
                         />
                         <span className="min-w-0">
@@ -2186,7 +2186,7 @@ export function DesignersDashboard({
                               name={designer.label}
                               fallback={getInitials(designer.label)}
                               size={28}
-                              className="shrink-0 border-border/70"
+                              className="shrink-0 border-line"
                               inactive={memberInactiveById[designer.id] ?? false}
                             />
                             <span className="truncate text-xs font-semibold text-foreground">{designer.label}</span>
@@ -2198,7 +2198,7 @@ export function DesignersDashboard({
                           return (
                             <td key={months[index].value}>
                               {value == null ? (
-                                <div className="flex h-10 items-center justify-center rounded-lg border border-dashed border-border/60 text-2xs text-muted-foreground/70">
+                                <div className="flex h-10 items-center justify-center rounded-lg border border-dashed border-line text-2xs text-muted-foreground/70">
                                   —
                                 </div>
                               ) : (
@@ -2256,7 +2256,7 @@ export function DesignersDashboard({
                     <tr>
                       <td className="pr-1">
                         <div className="flex min-w-[170px] items-center gap-2 px-1.5 py-1">
-                          <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/70 bg-muted/30 text-muted-foreground">
+                          <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line bg-muted/30 text-muted-foreground">
                             <Users className="h-3.5 w-3.5" />
                           </span>
                           <span className="truncate text-xs font-semibold text-muted-foreground">
@@ -2269,7 +2269,7 @@ export function DesignersDashboard({
                         const value = teamAgg ? metric.get(teamAgg) : null;
                         return (
                           <td key={month.value}>
-                            <div className="flex h-10 items-center justify-center rounded-lg border border-dashed border-border/70 text-md font-semibold tabular-nums text-muted-foreground">
+                            <div className="flex h-10 items-center justify-center rounded-lg border border-dashed border-line text-md font-semibold tabular-nums text-muted-foreground">
                               {value == null ? "—" : metric.format(value)}
                             </div>
                           </td>
@@ -2281,7 +2281,7 @@ export function DesignersDashboard({
                 </tbody>
               </table>
             ) : filesRows.length === 0 ? (
-              <div className="mx-2 rounded-section border border-dashed border-border/60 bg-muted/5 px-4 py-10 text-center text-sm text-muted-foreground">
+              <div className="mx-2 rounded-section border border-dashed border-line bg-muted/5 px-4 py-10 text-center text-sm text-muted-foreground">
                 За {monthShort(months[mi].value)} немає завантажених файлів.
               </div>
             ) : (
@@ -2310,7 +2310,7 @@ export function DesignersDashboard({
                       const bucket = filesHeatBucket(value);
                       if (bucket < 0) {
                         return (
-                          <div className="flex h-10 items-center justify-center rounded-lg border border-dashed border-border/60 text-2xs text-muted-foreground/50">
+                          <div className="flex h-10 items-center justify-center rounded-lg border border-dashed border-line text-2xs text-muted-foreground/50">
                             ·
                           </div>
                         );
@@ -2344,7 +2344,7 @@ export function DesignersDashboard({
                               name={designer.label}
                               fallback={getInitials(designer.label)}
                               size={28}
-                              className="shrink-0 border-border/70"
+                              className="shrink-0 border-line"
                               inactive={memberInactiveById[designer.id] ?? false}
                             />
                             <span className="truncate text-xs font-semibold text-foreground">{designer.label}</span>
@@ -2392,7 +2392,7 @@ export function DesignersDashboard({
                     <tr>
                       <td className="pr-1">
                         <div className="flex min-w-[170px] items-center gap-2 px-1.5 py-1">
-                          <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/70 bg-muted/30 text-muted-foreground">
+                          <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line bg-muted/30 text-muted-foreground">
                             <Users className="h-3.5 w-3.5" />
                           </span>
                           <span className="truncate text-xs font-semibold text-muted-foreground">Команда · разом</span>
@@ -2400,20 +2400,20 @@ export function DesignersDashboard({
                       </td>
                       {fileExtColumns.map((ext) => (
                         <td key={ext}>
-                          <div className="flex h-10 items-center justify-center rounded-lg border border-dashed border-border/70 text-md font-semibold tabular-nums text-muted-foreground">
+                          <div className="flex h-10 items-center justify-center rounded-lg border border-dashed border-line text-md font-semibold tabular-nums text-muted-foreground">
                             {teamFilesByExt(ext) || "—"}
                           </div>
                         </td>
                       ))}
                       {hasOtherExts ? (
                         <td>
-                          <div className="flex h-10 items-center justify-center rounded-lg border border-dashed border-border/70 text-md font-semibold tabular-nums text-muted-foreground">
+                          <div className="flex h-10 items-center justify-center rounded-lg border border-dashed border-line text-md font-semibold tabular-nums text-muted-foreground">
                             {filesRows.reduce((sum, { agg }) => sum + otherFiles(agg), 0) || "—"}
                           </div>
                         </td>
                       ) : null}
                       <td>
-                        <div className="flex h-10 items-center justify-center rounded-lg border border-dashed border-border/70 text-md font-bold tabular-nums text-muted-foreground">
+                        <div className="flex h-10 items-center justify-center rounded-lg border border-dashed border-line text-md font-bold tabular-nums text-muted-foreground">
                           {teamFilesTotal}
                         </div>
                       </td>
@@ -2425,7 +2425,7 @@ export function DesignersDashboard({
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border/50 px-5 py-3">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line-subtle px-5 py-3">
             {tableMode === "month" ? (
               <>
                 <span className="text-3xs font-semibold uppercase tracking-caps text-muted-foreground/70">Типи:</span>
@@ -2481,7 +2481,7 @@ export function DesignersDashboard({
 
       {/* ---------- роботи ---------- */}
       {scopedDesigner ? (
-        <section className="rounded-xl border border-border/60 bg-background/70 p-5">
+        <section className="rounded-xl border border-line bg-background/70 p-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="inline-flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
               <FileText className="h-4 w-4 text-primary" />
@@ -2519,7 +2519,7 @@ export function DesignersDashboard({
                       "inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-2xs font-medium transition-colors",
                       active
                         ? "border-primary/40 bg-primary/10 text-primary"
-                        : "border-border/60 bg-background/60 text-muted-foreground hover:text-foreground"
+                        : "border-line-strong bg-background/60 text-muted-foreground hover:text-foreground"
                     )}
                   >
                     {option.key === "untimed" ? <TimerOff className="h-3 w-3" /> : null}
@@ -2532,7 +2532,7 @@ export function DesignersDashboard({
             </div>
           ) : null}
           {worksList.length === 0 ? (
-            <div className="mt-3 rounded-section border border-dashed border-border/60 bg-muted/5 px-4 py-8 text-center text-sm text-muted-foreground">
+            <div className="mt-3 rounded-section border border-dashed border-line bg-muted/5 px-4 py-8 text-center text-sm text-muted-foreground">
               За цей місяць немає завантажених файлів.
             </div>
           ) : (
@@ -2543,7 +2543,7 @@ export function DesignersDashboard({
                   return (
                     <div
                       key={group.taskId}
-                      className="relative rounded-section border border-border/60 bg-card/70 p-3.5 transition-colors hover:border-primary/30"
+                      className="relative rounded-section border border-line bg-card/70 p-3.5 transition-colors hover:border-primary/30"
                     >
                       <Link
                         to={`/design/${group.taskId}`}
@@ -2579,7 +2579,7 @@ export function DesignersDashboard({
                              а не аварія. Але позначка мусить бути, інакше така
                              картка виглядає як задача без роботи. */
                           <span
-                            className="inline-flex items-center gap-1 rounded-full border border-dashed border-border/70 bg-background/40 px-2 py-0.5 text-3xs font-medium text-muted-foreground"
+                            className="inline-flex items-center gap-1 rounded-full border border-dashed border-line bg-background/40 px-2 py-0.5 text-3xs font-medium text-muted-foreground"
                             title="Таймер не вівся — ця задача не входить у середній час і структуру часу"
                           >
                             <TimerOff className="h-3 w-3" />
@@ -2627,13 +2627,13 @@ export function DesignersDashboard({
                               alt={file.fileName}
                               variant="thumb"
                               hoverPreview
-                              className="h-10 w-10 shrink-0 rounded-md border border-border/60 bg-muted/30"
+                              className="h-10 w-10 shrink-0 rounded-md border border-line bg-muted/30"
                             />
                           ) : (
                             <span
                               key={file.id}
                               className={cn(
-                                "flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/25 text-3xs font-semibold uppercase text-muted-foreground",
+                                "flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-line bg-muted/25 text-3xs font-semibold uppercase text-muted-foreground",
                                 file.deleted && "opacity-60 line-through"
                               )}
                               title={file.deleted ? `${file.fileName} · видалено пізніше` : file.fileName}
@@ -2643,7 +2643,7 @@ export function DesignersDashboard({
                           );
                         })}
                         {group.files.length > 8 ? (
-                          <span className="flex h-10 items-center rounded-md border border-border/60 bg-muted/25 px-2 text-3xs font-medium tabular-nums text-muted-foreground">
+                          <span className="flex h-10 items-center rounded-md border border-line bg-muted/25 px-2 text-3xs font-medium tabular-nums text-muted-foreground">
                             +{group.files.length - 8}
                           </span>
                         ) : null}

@@ -23,7 +23,7 @@ export function PageHeader({
   return (
     <section
       className={cn(
-        "rounded-xl border border-border/60 bg-gradient-to-r from-card/95 via-card/85 to-primary/5",
+        "rounded-xl border border-line bg-gradient-to-r from-card/95 via-card/85 to-primary/5",
         "p-4 md:p-5",
         className
       )}

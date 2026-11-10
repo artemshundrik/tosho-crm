@@ -59,7 +59,7 @@ export function SurfaceSkeleton({
           <span>{label}</span>
         </div>
 
-        <div className="border-y border-border/40">
+        <div className="border-y border-line-subtle">
           <div className="grid h-11 grid-cols-[1.2fr_1.5fr_1fr_0.9fr_0.8fr] items-center gap-6 bg-muted/45 px-6">
             <Skeleton className="h-3 w-16 rounded-full opacity-80" />
             <Skeleton className="h-3 w-20 rounded-full opacity-70" />
@@ -71,7 +71,7 @@ export function SurfaceSkeleton({
           {Array.from({ length: rows }).map((_, index) => (
             <div
               key={index}
-              className="grid min-h-14 grid-cols-[1.2fr_1.5fr_1fr_0.9fr_0.8fr] items-center gap-6 border-t border-border/30 px-6 py-3"
+              className="grid min-h-14 grid-cols-[1.2fr_1.5fr_1fr_0.9fr_0.8fr] items-center gap-6 border-t border-line-subtle px-6 py-3"
             >
               <div className="space-y-2">
                 <Skeleton className={cn("h-3.5 rounded-full", index % 3 === 0 ? "w-[58%]" : "w-[46%]")} />
@@ -99,7 +99,7 @@ export function SurfaceSkeleton({
       aria-live="polite"
       aria-busy="true"
       className={cn(
-        "rounded-xl border border-border/60 bg-card/82 p-4",
+        "rounded-xl border border-line bg-card/82 p-4",
         compact ? "space-y-3" : "space-y-4",
         className
       )}
@@ -117,7 +117,7 @@ export function SurfaceSkeleton({
           <div
             key={index}
             className={cn(
-              "flex items-center gap-3 rounded-xl border border-border/40 bg-background/60 px-3 py-3",
+              "flex items-center gap-3 rounded-xl border border-line bg-background/60 px-3 py-3",
               compact && "rounded-xl py-2.5"
             )}
           >

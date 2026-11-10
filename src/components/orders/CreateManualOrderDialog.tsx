@@ -127,7 +127,7 @@ function revealIssueField(root: HTMLElement | null, id: string) {
 function SideSection({ title, hidden, children }: { title: string; hidden?: boolean; children: ReactNode }) {
   if (hidden) return null;
   return (
-    <section className="space-y-2.5 border-b border-border/60 px-4 py-3.5 last:border-b-0">
+    <section className="space-y-2.5 border-b border-line-subtle px-4 py-3.5 last:border-b-0">
       <h3 className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</h3>
       {children}
     </section>
@@ -544,7 +544,7 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
         isDirty={isDirty}
         className="flex max-h-[92vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[1120px] sm:p-0 lg:h-[min(92vh,47.5rem)]"
       >
-        <DialogHeader className="flex flex-col gap-1 space-y-0 border-b border-border/60 px-5 py-3 text-left lg:flex-row lg:items-baseline lg:gap-4 lg:pr-12">
+        <DialogHeader className="flex flex-col gap-1 space-y-0 border-b border-line-subtle px-5 py-3 text-left lg:flex-row lg:items-baseline lg:gap-4 lg:pr-12">
           <DialogTitle>Замовлення без прорахунку</DialogTitle>
           <DialogDescription className="sr-only">
             Пряме замовлення: ліворуч замовник, оплата, дизайн і логістика, праворуч товари.
@@ -555,7 +555,7 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
         </DialogHeader>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
-          <aside className="shrink-0 border-b border-border/60 lg:w-80 lg:overflow-y-auto lg:border-b-0 lg:border-r">
+          <aside className="shrink-0 border-b border-line-subtle lg:w-80 lg:overflow-y-auto lg:border-b-0 lg:border-r">
             <SideSection title="Замовник">
               <div
                 data-issue="customer"
@@ -598,7 +598,7 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
                             name={manager.label}
                             fallback={manager.label.slice(0, 1).toUpperCase()}
                             size={18}
-                            className="border-border/60"
+                            className="border-line"
                             fallbackClassName="text-3xs font-semibold"
                           />
                           <span className="truncate">{manager.label}</span>
@@ -675,7 +675,7 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
             </SideSection>
 
             {serviceOnly ? (
-              <p className="mx-4 my-3.5 rounded-lg border border-dashed border-border/70 p-3 text-xs text-muted-foreground">
+              <p className="mx-4 my-3.5 rounded-lg border border-dashed border-line p-3 text-xs text-muted-foreground">
                 Дизайн, логістика й пакування сховані: у замовленні лише послуги.
               </p>
             ) : null}
@@ -836,7 +836,7 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border/60 px-5 py-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line-subtle px-5 py-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-baseline gap-x-2 text-sm">
               <span className="text-lg font-semibold tabular-nums">
@@ -864,7 +864,7 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
               <label
                 data-issue="check"
                 className={cn(
-                  "flex max-w-80 cursor-pointer items-start gap-2 rounded-lg border border-border/60 px-2.5 py-1.5 text-xs",
+                  "flex max-w-80 cursor-pointer items-start gap-2 rounded-lg border border-line px-2.5 py-1.5 text-xs",
                   issueRing(issueId === "check")
                 )}
               >

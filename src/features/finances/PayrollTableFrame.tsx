@@ -101,7 +101,7 @@ const STICKY_HEAD_BOX =
  * «ДО ВИПЛАТИ» на пів пікселя ширший за свою клітинку й без цього ламався на
  * два рядки. Пів пікселя заходить у відступ клітинки, оком цього не видно.
  */
-const HEAD_CELL = "whitespace-nowrap border-b border-border/40 bg-background";
+const HEAD_CELL = "whitespace-nowrap border-b border-line-subtle bg-background";
 
 /**
  * Тринадцять колонок замість дев'яти: відступ у клітинці 8px замість 16
@@ -177,7 +177,7 @@ export function frameCellClass(column: PayrollFrameColumn): string | undefined {
 }
 
 const GROUP_CELL =
-  "!h-[30px] border-b border-border/40 bg-background text-center text-3xs font-semibold uppercase " +
+  "!h-[30px] border-b border-line-subtle bg-background text-center text-3xs font-semibold uppercase " +
   "tracking-caps text-muted-foreground/70 whitespace-nowrap";
 
 type PayrollTableFrameProps = Omit<React.HTMLAttributes<HTMLDivElement>, "children"> & {
@@ -276,7 +276,7 @@ export function PayrollTableFrame({ columns, groups, children, className, ...box
     // панелі, а не від нього.
     <div
       ref={boxRef}
-      className={cn("group/box overflow-clip rounded-xl border border-border/60", className)}
+      className={cn("group/box overflow-clip rounded-xl border border-line", className)}
       {...boxProps}
     >
       <div ref={headRef} className={STICKY_HEAD_BOX} aria-hidden="true">
@@ -292,7 +292,7 @@ export function PayrollTableFrame({ columns, groups, children, className, ...box
                     colSpan={group.span}
                     className={cn(
                       GROUP_CELL,
-                      index > 0 && "border-l border-border/40",
+                      index > 0 && "border-l border-line-subtle",
                       group.frozen === "right" && cn(FROZEN_SUMMARY, "right-0", FROZEN_SUMMARY_EDGE, FROZEN_HEAD)
                     )}
                   >
@@ -310,7 +310,7 @@ export function PayrollTableFrame({ columns, groups, children, className, ...box
               {headColumns.map((column, index) =>
                 headCell(
                   column,
-                  groups && index > 0 && isGroupStart(groups, index) ? "border-l border-border/40" : undefined
+                  groups && index > 0 && isGroupStart(groups, index) ? "border-l border-line-subtle" : undefined
                 )
               )}
             </TableRow>

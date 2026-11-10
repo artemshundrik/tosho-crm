@@ -23,7 +23,7 @@ export function SpecificationTemplateField({ state }: { state: SpecificationItem
   const { template, setTemplate, texts, loading } = state;
   const warning = specTemplateWarning(texts, template);
   return (
-    <div className="space-y-2 rounded-md border border-border/60 p-3">
+    <div className="space-y-2 rounded-md border border-line p-3">
       <Label htmlFor="spec-template">Вид специфікації</Label>
       <Select
         value={template}

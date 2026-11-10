@@ -43,16 +43,16 @@ const isUndelivered = (message: MessageRow, now: Date) =>
 
 function bubbleFor(message: MessageRow, actorId: string, nameOf: (userId: string | null) => string | null, now: Date) {
   const time = messageTime(message.created_at, now);
-  if (message.direction === "in") return { own: false, tint: "border-border bg-card", meta: `Клієнт, ${time}` };
+  if (message.direction === "in") return { own: false, tint: "border-line bg-card", meta: `Клієнт, ${time}` };
   if (message.source === "auto_reply" && isUndelivered(message, now)) {
     return { own: true, tint: "border-transparent " + toneBadgeClass.danger, meta: "Автовідповідь не надіслана" };
   }
   if (isUndelivered(message, now)) {
     return { own: true, tint: "border-transparent " + toneBadgeClass.danger, meta: "Не надіслано. Натисніть, щоб повторити" };
   }
-  if (message.send_status === "pending") return { own: true, tint: "border-border bg-primary/10", meta: "Надсилається…" };
-  if (message.source === "ig_app") return { own: true, tint: "border-border bg-muted", meta: `Із застосунку Instagram, ${time}` };
-  if (message.source === "auto_reply") return { own: true, tint: "border-border bg-muted", meta: `Автовідповідь, ${time}` };
+  if (message.send_status === "pending") return { own: true, tint: "border-line bg-primary/10", meta: "Надсилається…" };
+  if (message.source === "ig_app") return { own: true, tint: "border-line bg-muted", meta: `Із застосунку Instagram, ${time}` };
+  if (message.source === "auto_reply") return { own: true, tint: "border-line bg-muted", meta: `Автовідповідь, ${time}` };
   const who = message.sender_user_id === actorId ? "Ви" : (nameOf(message.sender_user_id) ?? "Менеджер");
   return { own: true, tint: "border-primary/20 bg-primary/10", meta: `${who}, ${time}` };
 }
@@ -118,7 +118,7 @@ export function Conversation({ request, messages, actor, assignee, nameOf, banne
 
   return (
     <section aria-label="Розмова" className={cn("flex min-h-0 min-w-0 flex-col", className)}>
-      <header className="flex flex-wrap items-center justify-between gap-2.5 border-b border-border bg-card px-4 py-3 md:px-5">
+      <header className="flex flex-wrap items-center justify-between gap-2.5 border-b border-line-subtle bg-card px-4 py-3 md:px-5">
         <div className="flex min-w-0 flex-col">
           <Link to={ROUTES.requests} className="mb-0.5 text-xs text-primary md:hidden">
             Усі заявки
@@ -204,7 +204,7 @@ export function Conversation({ request, messages, actor, assignee, nameOf, banne
         {blocked ? (
           <div className="rounded-xl bg-muted p-3 text-md text-muted-foreground">{blocked}</div>
         ) : (
-          <div className="flex flex-col gap-2 rounded-xl border border-border bg-card px-3 py-2.5">
+          <div className="flex flex-col gap-2 rounded-xl border border-line bg-card px-3 py-2.5">
             <label htmlFor="request-reply" className="text-xs text-muted-foreground">
               Відповідь клієнту в Direct
             </label>

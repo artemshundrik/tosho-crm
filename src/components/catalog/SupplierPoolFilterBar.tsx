@@ -78,7 +78,7 @@ export function SupplierPoolFilterBar({
   const withoutPrice = products.some((product) => product.priceMin === null);
 
   return (
-    <div className="flex items-center gap-1.5 border-b border-border/60 px-2 py-2">
+    <div className="flex items-center gap-1.5 border-b border-line-subtle px-2 py-2">
       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
         <button
           type="button"
@@ -86,7 +86,7 @@ export function SupplierPoolFilterBar({
           onClick={() => onChange({ ...filter, source: null })}
           className={cn(chip, filter.source === null
             ? "border-foreground bg-foreground text-background"
-            : "border-border/60 text-muted-foreground hover:text-foreground")}
+            : "border-line-strong text-muted-foreground hover:text-foreground")}
         >
           Усі
           <span className={cn("tabular-nums", filter.source === null ? "text-background/70" : "text-muted-foreground/70")}>
@@ -103,7 +103,7 @@ export function SupplierPoolFilterBar({
               onClick={() => onChange({ ...filter, source: on ? null : option.slug })}
               className={cn(chip, on
                 ? "border-foreground bg-foreground text-background"
-                : "border-border/60 text-muted-foreground hover:text-foreground")}
+                : "border-line-strong text-muted-foreground hover:text-foreground")}
             >
               {option.name}
               <span className={cn("tabular-nums", on ? "text-background/70" : "text-muted-foreground/70")}>
@@ -122,7 +122,7 @@ export function SupplierPoolFilterBar({
           onClick={() => onChange({ ...filter, pricedOnly: !filter.pricedOnly })}
           aria-pressed={filter.pricedOnly}
           className={cn(chip, "shrink-0",
-            filter.pricedOnly ? "border-border bg-muted text-foreground" : "border-border/60 text-muted-foreground hover:text-foreground")}
+            filter.pricedOnly ? "border-line-strong bg-muted text-foreground" : "border-line-strong text-muted-foreground hover:text-foreground")}
         >
           <Check className={cn("h-3 w-3", !filter.pricedOnly && "opacity-30")} />
           лише з ціною
@@ -143,7 +143,7 @@ export function SupplierPoolFilterBar({
  */
 export function SuggestListFooter({ shown, total }: { shown: number; total: number }) {
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/60 px-2.5 py-1.5 text-2xs text-muted-foreground/80">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line-subtle px-2.5 py-1.5 text-2xs text-muted-foreground/80">
       <span className="tabular-nums">
         показано {shown}
         {total > shown ? ` із ${total}` : null}
@@ -168,7 +168,7 @@ export function SuggestListFooter({ shown, total }: { shown: number; total: numb
 
 function Kbd({ children }: { children: React.ReactNode }) {
   return (
-    <kbd className="rounded border border-b-2 border-border bg-background px-1 py-px text-[0.625rem] font-medium leading-none text-muted-foreground">
+    <kbd className="rounded border border-b-2 border-line bg-background px-1 py-px text-[0.625rem] font-medium leading-none text-muted-foreground">
       {children}
     </kbd>
   );

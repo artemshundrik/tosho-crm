@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 export const QUICK_SERVICES = ["Розробка дизайну", "Адаптація макета", "Фотозйомка", "Доставка"] as const;
 
 const chipClass =
-  "inline-flex h-7 items-center gap-1 rounded-full border border-border/70 px-2.5 text-xs text-foreground transition-colors hover:bg-muted/60 disabled:pointer-events-none disabled:opacity-50";
+  "inline-flex h-7 items-center gap-1 rounded-full border border-line-strong px-2.5 text-xs text-foreground transition-colors hover:bg-muted/60 disabled:pointer-events-none disabled:opacity-50";
 
 export function ManualOrderQuickServices({
   onAdd,
@@ -41,13 +41,13 @@ export function ManualOrderEmptyStart({
   disabled?: boolean;
 }) {
   const cardClass =
-    "flex flex-col items-start gap-2 rounded-xl border border-border/70 bg-card p-4 text-left transition-colors hover:border-border hover:bg-muted/40 disabled:pointer-events-none disabled:opacity-50";
+    "flex flex-col items-start gap-2 rounded-xl border border-line bg-card p-4 text-left transition-colors hover:border-line-strong hover:bg-muted/40 disabled:pointer-events-none disabled:opacity-50";
   return (
     <div className="flex flex-1 flex-col justify-center gap-3 py-6">
       <p className="text-center text-sm font-medium">Що замовляють?</p>
       <div className="grid gap-3 sm:grid-cols-2">
         <button type="button" className={cardClass} disabled={disabled} onClick={onProduct}>
-          <span className="grid h-9 w-9 place-items-center rounded-md border border-border/70">
+          <span className="grid h-9 w-9 place-items-center rounded-md border border-line">
             <Package className="h-4.5 w-4.5" aria-hidden />
           </span>
           <span className="text-sm font-semibold">Товар</span>

@@ -85,7 +85,7 @@ function HoverBody(props: { teamId: string | null; userId: string | null; custom
 
   return (
     <div data-testid="customer-hover" className="flex max-h-[min(70vh,560px)] flex-col">
-      <header className="flex items-center gap-2.5 border-b border-border px-5 py-3">
+      <header className="flex items-center gap-2.5 border-b border-line-subtle px-5 py-3">
         <EntityAvatar src={form?.logoUrl || null} name={name} size={32} />
         <div className="flex min-w-0 flex-1 flex-col">
           <span className="truncate text-sm font-semibold">{name}</span>
@@ -130,7 +130,7 @@ function HoverBody(props: { teamId: string | null; userId: string | null; custom
           </>
         ) : null}
       </div>
-      <footer className="flex shrink-0 gap-2 border-t border-border px-5 py-3">
+      <footer className="flex shrink-0 gap-2 border-t border-line-subtle px-5 py-3">
         <Button type="button" variant="outline" size="sm" className="flex-1" onClick={props.onOpenPanel}>
           Відкрити панель
         </Button>

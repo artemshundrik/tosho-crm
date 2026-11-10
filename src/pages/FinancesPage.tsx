@@ -221,7 +221,7 @@ export default function FinancesPage() {
   return (
     <div className="w-full">
         {/* Мобільний перемикач — горизонтальні пілюлі; сайдбар ховаємо на вузьких. */}
-        <div className="flex gap-1.5 overflow-x-auto border-b border-border/60 px-4 py-3 lg:hidden [scrollbar-width:thin]">
+        <div className="flex gap-1.5 overflow-x-auto border-b border-line-subtle px-4 py-3 lg:hidden [scrollbar-width:thin]">
           {visibleSections.map((section) => {
             const Icon = section.icon;
             const active = activeSection === section.id;
@@ -254,7 +254,7 @@ export default function FinancesPage() {
           className="lg:grid lg:grid-cols-[208px_minmax(0,1fr)]"
           style={panesTop != null ? ({ ["--fin-panes-h" as string]: `calc(100dvh - ${panesTop}px)` }) : undefined}
         >
-          <aside className="hidden border-r border-border/60 lg:block lg:h-[var(--fin-panes-h,auto)] lg:overflow-y-auto">
+          <aside className="hidden border-r border-line-subtle lg:block lg:h-[var(--fin-panes-h,auto)] lg:overflow-y-auto">
             <nav className="flex flex-col gap-0.5 px-1.5 py-3">
               {sectionGroups.map((group) => (
                 <div key={group.label ?? "main"} className="flex flex-col gap-0.5">
@@ -314,13 +314,13 @@ export default function FinancesPage() {
 function PlaceholderSection({ section }: { section: FinanceSection }) {
   const Icon = section.icon;
   return (
-    <div className="rounded-xl border border-dashed border-border/60 bg-muted/10 p-10 text-center">
-      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl border border-border/60 bg-background">
+    <div className="rounded-xl border border-dashed border-line bg-muted/10 p-10 text-center">
+      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl border border-line bg-background">
         <Icon className="h-5 w-5 text-muted-foreground" />
       </div>
       <div className="text-base font-semibold text-foreground">{section.label}</div>
       <div className="mx-auto mt-1.5 max-w-xl text-sm text-muted-foreground">{section.description}</div>
-      <div className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/80 px-3 py-1 text-xs text-muted-foreground">
+      <div className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-line bg-background/80 px-3 py-1 text-xs text-muted-foreground">
         Розділ у розробці
       </div>
     </div>

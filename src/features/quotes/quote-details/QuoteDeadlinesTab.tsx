@@ -117,7 +117,7 @@ function DateTile({ value, tone, empty }: { value: string | null; tone: Tone; em
   const date = parseDeadlineDate(value);
   if (empty || !date) {
     return (
-      <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl border border-dashed border-border text-muted-foreground">
+      <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl border border-dashed border-line text-muted-foreground">
         <Calendar className="h-6 w-6" />
       </div>
     );
@@ -126,7 +126,7 @@ function DateTile({ value, tone, empty }: { value: string | null; tone: Tone; em
     <div
       className={cn(
         "flex h-20 w-20 shrink-0 flex-col items-center justify-center rounded-xl border leading-none",
-        tone === "neutral" ? "border-border/50 bg-muted/40" : toneSubtleClass[tone]
+        tone === "neutral" ? "border-line bg-muted/40" : toneSubtleClass[tone]
       )}
     >
       <span
@@ -249,7 +249,7 @@ export function QuoteDeadlinesTab({
               <article
                 className={cn(
                   "overflow-hidden rounded-xl border bg-card",
-                  isEditing ? "border-border" : "border-border/50"
+                  isEditing ? "border-line" : "border-line"
                 )}
               >
                 <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:gap-4 sm:p-4">
@@ -306,7 +306,7 @@ export function QuoteDeadlinesTab({
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-auto gap-1.5 border border-dashed border-border px-3 py-2 text-xs"
+                          className="h-auto gap-1.5 border border-dashed border-line-strong px-3 py-2 text-xs"
                           onClick={() => startEditing(step.key)}
                         >
                           <Calendar className="h-3.5 w-3.5" />
@@ -330,7 +330,7 @@ export function QuoteDeadlinesTab({
                 </div>
 
                 {isEditing ? (
-                  <div className="space-y-4 border-t border-border/40 bg-muted/[0.03] p-3 sm:p-4 sm:pl-[112px]">
+                  <div className="space-y-4 border-t border-line-subtle bg-muted/[0.03] p-3 sm:p-4 sm:pl-[112px]">
                     <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_140px]">
                       <div className="space-y-1.5">
                         <div className="text-xs text-muted-foreground">Дата</div>

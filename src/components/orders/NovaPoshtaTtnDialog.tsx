@@ -629,7 +629,7 @@ export function NovaPoshtaTtnDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* Шапка й кнопки зафіксовані, скролиться лише тіло форми — вона довга. */}
       <DialogContent className="max-w-2xl max-h-[90vh] gap-0 p-0 sm:gap-0 sm:p-0">
-        <DialogHeader className="shrink-0 border-b border-border/60 px-5 pb-4 pt-5">
+        <DialogHeader className="shrink-0 border-b border-line-subtle px-5 pb-4 pt-5">
           <DialogTitle className="flex items-center gap-2">
             <PackageCheck className="h-5 w-5" />
             {shownTtn ? "Експрес-накладна" : "Створити ТТН"}
@@ -652,7 +652,7 @@ export function NovaPoshtaTtnDialog({
           </div>
         ) : shownTtn ? (
           <div className="space-y-4 px-5 py-4">
-            <div className="rounded-xl border border-border/60 bg-muted/30 p-4">
+            <div className="rounded-xl border border-line bg-muted/30 p-4">
               <div className="text-xs uppercase tracking-wide text-muted-foreground">Номер ТТН</div>
               <div className="mt-1 font-mono text-2xl font-semibold tracking-wide">{shownTtn.number}</div>
               <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground">
@@ -719,9 +719,9 @@ export function NovaPoshtaTtnDialog({
             </div>
           </div>
         ) : recipient && cargo ? (
-          <div className="divide-y divide-border/60">
+          <div className="divide-y divide-line-subtle">
             {isAddressDelivery ? (
-              <div className="tone-warning-subtle flex items-start gap-3 border-b border-border/60 p-3 text-sm">
+              <div className="tone-warning-subtle flex items-start gap-3 border-b border-line-subtle p-3 text-sm">
                 <AlertTriangle className="tone-text-warning mt-0.5 h-4 w-4 shrink-0" />
                 <div>
                   У замовленні вказана <b>адресна доставка</b>, а тут поки можна оформити лише на відділення чи
@@ -863,7 +863,7 @@ export function NovaPoshtaTtnDialog({
               <div className="mt-4 grid gap-2">
                 <Label>Місця</Label>
                 {seatGroups.map((group, index) => (
-                  <div key={group.id} className="rounded-lg border border-border/60 p-2.5">
+                  <div key={group.id} className="rounded-lg border border-line p-2.5">
                     <div className="flex flex-wrap items-center gap-2">
                       <Input controlSize="sm"
                         value={group.count}
@@ -1062,7 +1062,7 @@ export function NovaPoshtaTtnDialog({
         </div>
 
         {!loading && !shownTtn && !notConfigured && senderReady && recipient && cargo ? (
-          <div className="shrink-0 border-t border-border/60 bg-muted/20 px-5 py-3">
+          <div className="shrink-0 border-t border-line-subtle bg-muted/20 px-5 py-3">
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div className="min-w-0">
                 {preview ? (

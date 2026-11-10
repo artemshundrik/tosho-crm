@@ -201,7 +201,7 @@ export function HoverTip({
             }
           : {})}
         className={cn(
-          "w-auto max-w-[240px] rounded-md border-border/60 px-2.5 py-1.5 text-xs leading-snug text-popover-foreground shadow-menu",
+          "w-auto max-w-[240px] rounded-md border-line px-2.5 py-1.5 text-xs leading-snug text-popover-foreground shadow-menu",
           !interactive && "pointer-events-none",
           contentClassName
         )}

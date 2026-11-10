@@ -61,7 +61,7 @@ export function SidebarSubLinks({
     // Риска зліва тримає підпункти разом і показує, кому вони належать.
     // Активний забирає свій відрізок риски, а не заливку: плашка тут
     // сперечалася б із батьківським рядком, який теж підсвічений.
-    <div className="ml-[18px] space-y-0.5 border-l border-border/60 pl-2.5">
+    <div className="ml-[18px] space-y-0.5 border-l border-line-subtle pl-2.5">
       {items.map((item) => (
         <Link
           key={item.to}

@@ -994,9 +994,9 @@ export default function MarketingPage() {
         <article
           key={group.key}
           className={cn(
-            "group/card relative flex cursor-pointer flex-col overflow-hidden rounded-xl border border-border/60 bg-card",
+            "group/card relative flex cursor-pointer flex-col overflow-hidden rounded-xl border border-line-strong bg-card",
             "transition-[border-color,box-shadow] duration-base ease-out",
-            "hover:border-border",
+            "hover:border-line-strong",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
             record.isHidden && "opacity-70",
             options?.className
@@ -1090,7 +1090,7 @@ export default function MarketingPage() {
                   {record.tags.slice(0, 3).map((tag) => (
                     <span
                       key={tag}
-                      className="rounded-full border border-border/50 bg-muted/40 px-2 py-0.5 text-3xs font-medium text-muted-foreground"
+                      className="rounded-full border border-line bg-muted/40 px-2 py-0.5 text-3xs font-medium text-muted-foreground"
                     >
                       {tag}
                     </span>
@@ -1306,7 +1306,7 @@ export default function MarketingPage() {
       ) : loading ? (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {Array.from({ length: 10 }).map((_, index) => (
-            <div key={index} className="overflow-hidden rounded-xl border border-border/60 bg-card">
+            <div key={index} className="overflow-hidden rounded-xl border border-line bg-card">
               <Skeleton className={cn("w-full rounded-none", VISUAL_ASPECT_CLASS)} />
               <div className="space-y-2 p-3.5">
                 <Skeleton className="h-3.5 w-2/3" />
@@ -1423,7 +1423,7 @@ export default function MarketingPage() {
                 </div>
                 {activeGroupItems.length > 1 ? (
                   <div
-                    className="flex shrink-0 items-center gap-2 overflow-x-auto border-t border-border/60 bg-card/60 p-2.5 [scrollbar-width:thin]"
+                    className="flex shrink-0 items-center gap-2 overflow-x-auto border-t border-line-subtle bg-card/60 p-2.5 [scrollbar-width:thin]"
                     role="listbox"
                     aria-label="Візуали цього проєкту"
                   >
@@ -1484,7 +1484,7 @@ export default function MarketingPage() {
                     <button
                       type="button"
                       aria-label={selectedRecord.isFavorite ? "Прибрати з обраного" : "Додати в обране"}
-                      className="inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-border/60 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
+                      className="inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-line-strong text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
                       onClick={() => handleToggleFavorite(selected)}
                     >
                       <Star
@@ -1565,7 +1565,7 @@ export default function MarketingPage() {
                   ) : null}
 
                   {/* Meta */}
-                  <div className="grid grid-cols-1 gap-x-4 gap-y-2 rounded-xl border border-border/50 bg-muted/20 p-3.5 text-xs sm:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-x-4 gap-y-2 rounded-xl border border-line bg-muted/20 p-3.5 text-xs sm:grid-cols-2">
                     <span className="inline-flex items-center gap-1.5 text-muted-foreground">
                       <CalendarDays className="h-3.5 w-3.5" />
                       {formatDate(selected.createdAt)}
@@ -1623,7 +1623,7 @@ export default function MarketingPage() {
                       {selectedRecord.tags.map((tag) => (
                         <span
                           key={tag}
-                          className="inline-flex items-center gap-1 rounded-full border border-border/50 bg-muted/40 py-0.5 pl-2.5 pr-1 text-xs font-medium text-foreground"
+                          className="inline-flex items-center gap-1 rounded-full border border-line bg-muted/40 py-0.5 pl-2.5 pr-1 text-xs font-medium text-foreground"
                         >
                           {tag}
                           <button
@@ -1777,7 +1777,7 @@ export default function MarketingPage() {
                   </div>
 
                   {/* Footer actions */}
-                  <div className="flex items-center justify-between gap-2 border-t border-border/50 pt-3">
+                  <div className="flex items-center justify-between gap-2 border-t border-line-subtle pt-3">
                     <span className="truncate text-2xs text-muted-foreground/80">{selected.fileName}</span>
                     <Button
                       variant="ghost"

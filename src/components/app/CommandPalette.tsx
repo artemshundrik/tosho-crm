@@ -181,7 +181,7 @@ function getKindBadgeClass(kindLabel: string) {
     case "Дизайн":
       return "cmd-kind-design";
     default:
-      return "border-border bg-muted text-muted-foreground";
+      return "border-line bg-muted text-muted-foreground";
   }
 }
 
@@ -1230,7 +1230,7 @@ export function CommandPalette({ open, onOpenChange, onAskAi }: CommandPalettePr
             "mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border",
             tone === "lead"
               ? "border-ai-accent/40 bg-ai-accent/10 text-ai-accent"
-              : "border-border/60 bg-muted/35 text-muted-foreground"
+              : "border-line bg-muted/35 text-muted-foreground"
           )}
         >
           <ToShoAiMark className="h-4 w-4" />
@@ -1265,7 +1265,7 @@ export function CommandPalette({ open, onOpenChange, onAskAi }: CommandPalettePr
             fallbackClassName="text-3xs font-semibold"
           />
         ) : (
-          <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/35 text-muted-foreground">
+          <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line bg-muted/35 text-muted-foreground">
             <Icon className="h-4 w-4" />
           </span>
         )}
@@ -1290,7 +1290,7 @@ export function CommandPalette({ open, onOpenChange, onAskAi }: CommandPalettePr
                     src={result.managerAvatarUrl ?? null}
                     name={result.managerLabel}
                     size={16}
-                    className="shrink-0 border-border/60"
+                    className="shrink-0 border-line"
                     fallbackClassName="text-[8px] font-semibold"
                   />
                   <span className="truncate">{renderHighlightedText(result.managerLabel, query)}</span>
@@ -1357,7 +1357,7 @@ export function CommandPalette({ open, onOpenChange, onAskAi }: CommandPalettePr
 
             {/* Підказка клавіш лише там, де є клавіатура: на телефоні вона
                 нічого не пояснює, а місце в полі забирає. */}
-            <kbd className="hidden sm:inline-flex h-7 select-none items-center gap-1 rounded-md border border-border bg-muted px-2 font-mono text-3xs font-medium text-muted-foreground">
+            <kbd className="hidden sm:inline-flex h-7 select-none items-center gap-1 rounded-md border border-line bg-muted px-2 font-mono text-3xs font-medium text-muted-foreground">
               <span className="text-2xs">⌘</span>K
               <span className="opacity-60">/</span>
               <span>Shift+K</span>
@@ -1487,7 +1487,7 @@ export function CommandPalette({ open, onOpenChange, onAskAi }: CommandPalettePr
                 disabled
                 className="opacity-100"
               >
-                <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/35 text-muted-foreground">
+                <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line bg-muted/35 text-muted-foreground">
                   <Search className="h-4 w-4" />
                 </span>
                 <div className="min-w-0 flex-1">
@@ -1507,7 +1507,7 @@ export function CommandPalette({ open, onOpenChange, onAskAi }: CommandPalettePr
                 disabled
                 className="opacity-100"
               >
-                <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/20" />
+                <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line bg-muted/20" />
                 <div className="min-w-0 flex-1">
                   <div className="h-4 w-44 animate-pulse rounded-full bg-muted/70" />
                   <div className="mt-2 h-3 w-64 animate-pulse rounded-full bg-muted/50" />
@@ -1518,7 +1518,7 @@ export function CommandPalette({ open, onOpenChange, onAskAi }: CommandPalettePr
                 disabled
                 className="opacity-100"
               >
-                <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/20" />
+                <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line bg-muted/20" />
                 <div className="min-w-0 flex-1">
                   <div className="h-4 w-36 animate-pulse rounded-full bg-muted/70" />
                   <div className="mt-2 h-3 w-52 animate-pulse rounded-full bg-muted/50" />
@@ -1556,14 +1556,14 @@ export function CommandPalette({ open, onOpenChange, onAskAi }: CommandPalettePr
                 value={buildCommandSearchValue([r.label, r.description, r.kindLabel, r.to])}
                 onSelect={() => go(r.to)}
               >
-                  <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/35 text-muted-foreground">
+                  <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line bg-muted/35 text-muted-foreground">
                     <History className="h-4 w-4" />
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="truncate">{r.label}</span>
                       {r.kindLabel ? (
-                        <span className="shrink-0 rounded-full border border-border/60 bg-muted/35 px-2 py-0.5 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        <span className="shrink-0 rounded-full border border-line bg-muted/35 px-2 py-0.5 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
                           {r.kindLabel}
                         </span>
                       ) : null}
@@ -1589,7 +1589,7 @@ export function CommandPalette({ open, onOpenChange, onAskAi }: CommandPalettePr
                 value={buildCommandSearchValue([a.label, ...a.keywords, a.to])}
                 onSelect={() => go(a.to)}
               >
-                <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/35 text-muted-foreground">
+                <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line bg-muted/35 text-muted-foreground">
                   <Icon className="h-4 w-4" />
                 </span>
                 <div className="min-w-0 flex-1">
@@ -1614,7 +1614,7 @@ export function CommandPalette({ open, onOpenChange, onAskAi }: CommandPalettePr
                 value={buildCommandSearchValue([r.label, ...r.keywords, r.to])}
                 onSelect={() => go(r.to)}
               >
-                <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/35 text-muted-foreground">
+                <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line bg-muted/35 text-muted-foreground">
                   <Icon className="h-4 w-4" />
                 </span>
                 <div className="min-w-0 flex-1">

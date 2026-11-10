@@ -270,7 +270,7 @@ export function UserMenu({ mobile = false, onNavigate, compact = false, fxWarnin
             fallback={userData.initials}
             size={36}
             shape="rounded"
-            className="border-border"
+            className="border-line"
             imageClassName="object-cover"
           />
           <div className="min-w-0 flex-1 text-left">
@@ -353,7 +353,7 @@ export function UserMenu({ mobile = false, onNavigate, compact = false, fxWarnin
                 fallback={userData.initials}
                 size={32}
                 shape="rounded"
-                className="border-border"
+                className="border-line"
                 imageClassName="object-cover"
               />
             </Button>
@@ -398,7 +398,7 @@ export function UserMenu({ mobile = false, onNavigate, compact = false, fxWarnin
               fallback={userData.initials}
               size={36}
               shape="rounded"
-              className="border-border"
+              className="border-line"
               imageClassName="object-cover"
             />
 

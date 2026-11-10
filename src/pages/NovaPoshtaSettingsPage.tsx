@@ -47,7 +47,7 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <div className="grid gap-4 border-b border-border/60 p-5 md:grid-cols-[190px_minmax(0,1fr)] md:gap-6">
+    <div className="grid gap-4 border-b border-line-subtle p-5 md:grid-cols-[190px_minmax(0,1fr)] md:gap-6">
       <div>
         <div className="text-sm font-medium text-foreground">{label}</div>
         <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{hint}</p>
@@ -229,7 +229,7 @@ export default function NovaPoshtaSettingsPage() {
     <div className="mx-auto w-full max-w-5xl pb-10">
       <Card className="overflow-visible">
         {/* Шапка аркуша: назва зліва, відповідь на головне питання — справа. */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line-subtle p-5">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-muted">
               <Truck className="h-4.5 w-4.5 text-muted-foreground" />
@@ -504,7 +504,7 @@ export default function NovaPoshtaSettingsPage() {
             </Section>
 
             {/* sticky: на довгій сторінці кнопка не має тікати за нижній край. */}
-            <div className="sticky bottom-0 flex items-center justify-between gap-3 rounded-b-[inherit] border-t border-border/60 bg-card/95 px-5 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/80">
+            <div className="sticky bottom-0 flex items-center justify-between gap-3 rounded-b-[inherit] border-t border-line-subtle bg-card/95 px-5 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/80">
               <span className="text-xs text-muted-foreground">
                 {isDirty ? "Є незбережені зміни" : "Усе збережено"}
               </span>

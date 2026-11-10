@@ -170,7 +170,7 @@ export function ManagerAvatar({ record, size }: { record: DerivedOrderRecord; si
       name={record.managerLabel}
       fallback={initials(record.managerLabel)}
       size={size}
-      className="shrink-0 border-border/60"
+      className="shrink-0 border-line"
       fallbackClassName="text-3xs font-semibold"
     />
   );
@@ -274,7 +274,7 @@ export function OrderListMobileCard({ view, onOpen }: { view: OrderListRowView; 
       type="button"
       onClick={() => onOpen(record)}
       className={cn(
-        "relative flex w-full flex-col gap-2 overflow-hidden rounded-xl border border-border/60 bg-card p-3 text-left",
+        "relative flex w-full flex-col gap-2 overflow-hidden rounded-xl border border-line-strong bg-card p-3 text-left",
         view.mine && "border-primary/40"
       )}
     >
@@ -304,7 +304,7 @@ export function OrderListMobileCard({ view, onOpen }: { view: OrderListRowView; 
         <PaidMiniBar paid={view.paid} />
         <DocMarks docs={view.docs} />
       </div>
-      <div className="flex items-center justify-between gap-2 border-t border-border/40 pt-2">
+      <div className="flex items-center justify-between gap-2 border-t border-line-subtle pt-2">
         <NextStep view={view} />
         <ManagerAvatar record={record} size={20} />
       </div>

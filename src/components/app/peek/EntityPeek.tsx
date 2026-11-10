@@ -96,7 +96,7 @@ export function EntityPeek(props: EntityPeekProps) {
     return (
       <aside aria-label={`Справа: ${props.number}`} className="flex h-full min-h-0 min-w-0 flex-col bg-card">
         <PeekBody {...props} showNav={false} />
-        <footer className="flex shrink-0 flex-wrap items-center gap-3 border-t border-border px-4 py-2 text-2xs text-muted-foreground">
+        <footer className="flex shrink-0 flex-wrap items-center gap-3 border-t border-line-subtle px-4 py-2 text-2xs text-muted-foreground">
           {inline.footer}
         </footer>
       </aside>
@@ -118,7 +118,7 @@ export function EntityPeek(props: EntityPeekProps) {
       >
         <SheetTitle className="sr-only">{props.number}</SheetTitle>
         <PeekBody {...props} />
-        <footer className="flex shrink-0 items-center gap-3 border-t border-border px-4 py-2 text-2xs text-muted-foreground">
+        <footer className="flex shrink-0 items-center gap-3 border-t border-line-subtle px-4 py-2 text-2xs text-muted-foreground">
           {props.footer ?? (
             <>
               <span><Kbd>J</Kbd> <Kbd>K</Kbd> гортати</span>
@@ -134,7 +134,7 @@ export function EntityPeek(props: EntityPeekProps) {
 
 export function Kbd({ children }: { children: ReactNode }) {
   return (
-    <kbd className="inline-flex h-4 min-w-4 items-center justify-center rounded border border-border px-1 font-sans text-3xs text-muted-foreground">
+    <kbd className="inline-flex h-4 min-w-4 items-center justify-center rounded border border-line px-1 font-sans text-3xs text-muted-foreground">
       {children}
     </kbd>
   );
@@ -196,7 +196,7 @@ function PeekBody({
         {properties ? <div className="flex min-w-0 flex-wrap items-center gap-1.5">{properties}</div> : null}
         {actions ? <div className="flex flex-wrap items-center gap-2 pt-1">{actions}</div> : null}
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-border">{children}</div>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-line-subtle">{children}</div>
     </>
   );
 }
@@ -204,7 +204,7 @@ function PeekBody({
 /** Розділ тіла прев'ю: сірий підпис і вміст, розділені лінією від сусідів. */
 export function PeekSection({ title, aside, children }: { title: ReactNode; aside?: ReactNode; children: ReactNode }) {
   return (
-    <section className="space-y-2 border-b border-border px-4 py-3 last:border-b-0">
+    <section className="space-y-2 border-b border-line-subtle px-4 py-3 last:border-b-0">
       <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
         <span>{title}</span>
         {aside ? <span className="ml-auto">{aside}</span> : null}
@@ -260,7 +260,7 @@ function PeekBottomSheet(props: EntityPeekProps) {
         </div>
         <PeekBody {...props} showNav={false} />
         {sheetFooter ? (
-          <footer className="flex shrink-0 items-center gap-2 border-t border-border px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <footer className="flex shrink-0 items-center gap-2 border-t border-line-subtle px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             {sheetFooter}
           </footer>
         ) : null}

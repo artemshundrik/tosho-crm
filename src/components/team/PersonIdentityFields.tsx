@@ -230,7 +230,7 @@ export function PersonIdentityFields({
         світиться під картою перегляду, читається як «тут щось не збережено».
       */}
       {dirty ? (
-        <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
+        <div className="flex flex-wrap items-center gap-2 border-t border-line-subtle pt-3">
           <span className="min-w-0 flex-1 text-2xs text-muted-foreground">
             Зміни побачить уся команда — ім'я стоїть у прорахунках, задачах і сповіщеннях.
           </span>

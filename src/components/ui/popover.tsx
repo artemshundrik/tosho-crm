@@ -56,7 +56,7 @@ const PopoverContent = React.forwardRef<
         if (findScrollableUnderPointer(event, 0)) event.stopPropagation();
       }}
       className={cn(
-        "z-50 w-72 max-h-[var(--radix-popover-content-available-height)] max-w-[var(--radix-popover-content-available-width)] overflow-y-auto overscroll-contain rounded-xl border border-border/50 bg-popover/95 p-4 text-popover-foreground shadow-menu backdrop-blur-xl outline-none",
+        "z-50 w-72 max-h-[var(--radix-popover-content-available-height)] max-w-[var(--radix-popover-content-available-width)] overflow-y-auto overscroll-contain rounded-xl border border-line bg-popover/95 p-4 text-popover-foreground shadow-menu backdrop-blur-xl outline-none",
   // ПАНЕЛЬ РОЗКРИВАЄТЬСЯ З ТОЧКИ ТРИГЕРА (REQ-26).
   //
   // Ключове тут — рядок data-[side=*]:origin-* вище. Він задає точку, ВІД якої

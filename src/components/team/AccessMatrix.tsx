@@ -334,14 +334,14 @@ export function AccessMatrix({
         <table className="w-max min-w-full border-separate border-spacing-0 text-xs">
           <thead>
             <tr>
-              <th className="sticky left-0 top-0 z-30 min-w-[15rem] border-b border-r border-border/60 bg-card px-4 py-2 text-left align-bottom font-semibold">
+              <th className="sticky left-0 top-0 z-30 min-w-[15rem] border-b border-r border-line-subtle bg-card px-4 py-2 text-left align-bottom font-semibold">
                 Модуль
               </th>
               {axis === "roles"
                 ? roleColumns.map((column) => (
                     <th
                       key={column.key}
-                      className="sticky top-0 z-20 min-w-[5.5rem] border-b border-border/60 bg-card px-2 py-2 align-bottom"
+                      className="sticky top-0 z-20 min-w-[5.5rem] border-b border-line-subtle bg-card px-2 py-2 align-bottom"
                     >
                       <div className="flex flex-col items-center gap-0.5">
                         <span className="text-center text-2xs font-semibold leading-tight">{column.label}</span>
@@ -354,7 +354,7 @@ export function AccessMatrix({
                 : people.map((person) => (
                     <th
                       key={person.userId}
-                      className="sticky top-0 z-20 min-w-[3.25rem] border-b border-border/60 bg-card px-1 py-2 align-bottom"
+                      className="sticky top-0 z-20 min-w-[3.25rem] border-b border-line-subtle bg-card px-1 py-2 align-bottom"
                     >
                       <Link
                         to={`/team/${person.userId}`}
@@ -368,7 +368,7 @@ export function AccessMatrix({
                           assetVariant="xs"
                           size={26}
                           shape="circle"
-                          className="border-border bg-muted/50"
+                          className="border-line bg-muted/50"
                           fallbackClassName="text-3xs font-bold"
                         />
                       </Link>
@@ -381,12 +381,12 @@ export function AccessMatrix({
               <Fragment key={group.group}>
                 <tr>
                   <td
-                    className="sticky left-0 z-20 border-b border-r border-border/60 bg-muted px-4 py-1.5 text-3xs font-semibold uppercase tracking-widest text-muted-foreground"
+                    className="sticky left-0 z-20 border-b border-r border-line-subtle bg-muted px-4 py-1.5 text-3xs font-semibold uppercase tracking-widest text-muted-foreground"
                     colSpan={1}
                   >
                     {group.label}
                   </td>
-                  <td className="border-b border-border/60 bg-muted" colSpan={columns} />
+                  <td className="border-b border-line-subtle bg-muted" colSpan={columns} />
                 </tr>
                 {group.modules.map((module) => {
                   const sensitive = SENSITIVE.includes(module.key);
@@ -417,7 +417,7 @@ export function AccessMatrix({
                   ).length;
                   return (
                     <tr key={module.key} className="group">
-                      <td className="sticky left-0 z-20 border-b border-r border-border/60 bg-card px-4 py-1.5 group-hover:bg-muted/60">
+                      <td className="sticky left-0 z-20 border-b border-r border-line-subtle bg-card px-4 py-1.5 group-hover:bg-muted/60">
                         <div className="flex items-center gap-2 whitespace-nowrap">
                           {sensitive ? <ShieldAlert className="h-3.5 w-3.5 text-warning-foreground" /> : null}
                           <span className="font-medium">{module.label}</span>
@@ -446,7 +446,7 @@ export function AccessMatrix({
                             return (
                               <td
                                 key={column.key}
-                                className="border-b border-border/60 px-2 py-1.5 text-center group-hover:bg-muted/60"
+                                className="border-b border-line-subtle px-2 py-1.5 text-center group-hover:bg-muted/60"
                               >
                                 {editable ? (
                                   <HoverTip asChild label={`${title} · клік змінює стартовий набір посади`}>
@@ -481,7 +481,7 @@ export function AccessMatrix({
                             return (
                               <td
                                 key={person.userId}
-                                className="border-b border-border/60 px-1 py-1.5 text-center group-hover:bg-muted/60"
+                                className="border-b border-line-subtle px-1 py-1.5 text-center group-hover:bg-muted/60"
                               >
                                 <Cell
                                   checked={lock.checked}
@@ -515,7 +515,7 @@ export function AccessMatrix({
 
           {pending ? (
             <div className="flex flex-col gap-3 text-sm">
-              <div className="rounded-md border border-border/60 p-3">
+              <div className="rounded-md border border-line p-3">
                 <p className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Зачепить зараз ({pending.follows.length})
                 </p>
@@ -526,7 +526,7 @@ export function AccessMatrix({
                 </p>
               </div>
               {pending.deviating.length ? (
-                <div className="rounded-md border border-border/60 p-3">
+                <div className="rounded-md border border-line p-3">
                   <p className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
                     Не зачепить — інше значення ({pending.deviating.length})
                   </p>

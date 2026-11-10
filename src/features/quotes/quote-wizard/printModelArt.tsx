@@ -116,7 +116,7 @@ export function PrintModelTile({
   return (
     <div
       className={cn(
-        "grid shrink-0 place-items-center overflow-hidden border border-border/60 bg-card text-foreground/70",
+        "grid shrink-0 place-items-center overflow-hidden border border-line bg-card text-foreground/70",
         className
       )}
     >

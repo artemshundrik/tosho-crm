@@ -261,7 +261,7 @@ function ServiceTags({ value, limit, nowrap = false }: { value?: string | null; 
       {shown.map((tag) => (
         <span
           key={tag}
-          className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full border border-border/60 bg-muted/40 px-2 py-0.5 text-2xs font-medium text-foreground"
+          className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full border border-line bg-muted/40 px-2 py-0.5 text-2xs font-medium text-foreground"
         >
           {tag}
         </span>
@@ -297,7 +297,7 @@ function ContactColumn({ row, points }: { row: ContractorRow; points: CustomerDe
         </a>
       ))}
       {firstPoint && PointIcon ? (
-        <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-0.5 text-2xs text-muted-foreground">
+        <span className="inline-flex items-center gap-1 rounded-full border border-line px-2 py-0.5 text-2xs text-muted-foreground">
           <PointIcon className="h-3 w-3 shrink-0" aria-hidden />
           {formatDeliveryPointBadge(firstPoint)}
           {restPoints.length > 0 ? <span className="opacity-70">+{restPoints.length}</span> : null}
@@ -457,7 +457,7 @@ function ContractorDetail({
         ) : null}
       </div>
 
-      <div className="mt-3.5 flex justify-end gap-2 border-t border-border/40 pt-3">
+      <div className="mt-3.5 flex justify-end gap-2 border-t border-line-subtle pt-3">
         <Button variant="ghost" size="sm" className="text-xs" onClick={onEdit}>
           Редагувати
         </Button>
@@ -525,7 +525,7 @@ function ContractorsTable({
         {rows.map((row) => (
           <div
             key={row.id}
-            className="rounded-inner border border-border bg-card p-3.5"
+            className="rounded-inner border border-line bg-card p-3.5"
             onClick={() => onEdit(row)}
           >
             <div className="flex items-start justify-between gap-3">
@@ -1158,7 +1158,7 @@ export default function ContractorsPage() {
             {error ? (
               <div className="p-6 text-sm text-destructive">{error}</div>
             ) : schemaMissing ? (
-              <div className="rounded-inner border border-dashed border-border bg-card/40 p-6 text-sm text-muted-foreground">
+              <div className="rounded-inner border border-dashed border-line bg-card/40 p-6 text-sm text-muted-foreground">
                 Таблиця підрядників ще не створена в Supabase. Потрібно застосувати
                 {" "}
                 <span className="font-medium text-foreground">scripts/contractors-schema.sql</span>
@@ -1168,7 +1168,7 @@ export default function ContractorsPage() {
                 <span className="font-medium text-foreground">scripts/contractors-seed-from-xlsx.sql</span>.
               </div>
             ) : filteredRows.length === 0 ? (
-              <div className="rounded-inner border border-dashed border-border bg-card/40 p-6 text-sm text-muted-foreground">
+              <div className="rounded-inner border border-dashed border-line bg-card/40 p-6 text-sm text-muted-foreground">
                 {rows.length === 0
                   ? "Підрядників ще немає. Додайте першого або залийте seed у Supabase."
                   : "За цими фільтрами нічого не знайдено."}
@@ -1190,7 +1190,7 @@ export default function ContractorsPage() {
             {error ? (
               <div className="p-6 text-sm text-destructive">{error}</div>
             ) : schemaMissing ? (
-              <div className="rounded-inner border border-dashed border-border bg-card/40 p-6 text-sm text-muted-foreground">
+              <div className="rounded-inner border border-dashed border-line bg-card/40 p-6 text-sm text-muted-foreground">
                 Таблиця підрядників ще не створена в Supabase. Потрібно застосувати
                 {" "}
                 <span className="font-medium text-foreground">scripts/contractors-schema.sql</span>
@@ -1200,7 +1200,7 @@ export default function ContractorsPage() {
                 <span className="font-medium text-foreground">scripts/contractors-seed-from-xlsx.sql</span>.
               </div>
             ) : filteredRows.length === 0 ? (
-              <div className="rounded-inner border border-dashed border-border bg-card/40 p-6 text-sm text-muted-foreground">
+              <div className="rounded-inner border border-dashed border-line bg-card/40 p-6 text-sm text-muted-foreground">
                 За цими фільтрами нічого не знайдено.
               </div>
             ) : (
@@ -1414,7 +1414,7 @@ export default function ContractorsPage() {
               <div
                 role="radiogroup"
                 aria-label="Періодичність нагадування"
-                className="flex gap-1 rounded-xl border border-border/50 bg-muted/40 p-1"
+                className="flex gap-1 rounded-xl border border-line bg-muted/40 p-1"
               >
                 {(["none", "weekly", "monthly"] as ContractorReminderRepeat[]).map((option) => {
                   const active = form.reminderRepeat === option;
@@ -1477,7 +1477,7 @@ export default function ContractorsPage() {
 
           </SheetBody>
 
-          <SheetFooter className="border-t border-border/50 bg-background px-6 py-4">
+          <SheetFooter className="border-t border-line-subtle bg-background px-6 py-4">
             <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
               Скасувати
             </Button>

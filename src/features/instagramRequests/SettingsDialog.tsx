@@ -33,7 +33,7 @@ function Pill({ active, onClick, member, children }: { active: boolean; onClick:
       className={cn(
         "inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-md transition-colors",
         member && "pl-1.5",
-        active ? "border-primary/30 bg-primary/8 text-foreground" : "border-border text-muted-foreground hover:bg-muted"
+        active ? "border-primary/30 bg-primary/8 text-foreground" : "border-line-strong text-muted-foreground hover:bg-muted"
       )}
     >
       {member ? (

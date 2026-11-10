@@ -33,7 +33,7 @@ export function MemberSelectItem({ member }: { member: MemberOption }) {
           name={member.label}
           fallback={member.label.slice(0, 1).toUpperCase()}
           size={18}
-          className="border-border/60"
+          className="border-line"
           fallbackClassName="text-3xs font-semibold"
         />
         <span className="truncate">{member.label}</span>
@@ -94,7 +94,7 @@ export function ManualOrderDesignSection({
 }) {
   if (!hasPrint) {
     return (
-      <p className="rounded-lg border border-dashed border-border/60 px-3 py-2.5 text-xs text-muted-foreground">
+      <p className="rounded-lg border border-dashed border-line px-3 py-2.5 text-xs text-muted-foreground">
         У жодного товару немає нанесення: дизайн не потрібен. Додайте нанесення до товару, щоб обрати готовий дизайн або
         створити нову задачу.
       </p>
@@ -180,16 +180,16 @@ export function ManualOrderDesignSection({
           </div>
 
           {product ? (
-            <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/20 p-2">
+            <div className="flex items-center gap-2 rounded-lg border border-line bg-muted/20 p-2">
               {product.imageUrl ? (
                 <img
                   src={product.imageUrl}
                   alt={product.name}
-                  className="h-9 w-9 shrink-0 rounded-md border border-border/60 object-cover"
+                  className="h-9 w-9 shrink-0 rounded-md border border-line object-cover"
                   loading="lazy"
                 />
               ) : (
-                <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-border/60 bg-muted/30 text-muted-foreground">
+                <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-line bg-muted/30 text-muted-foreground">
                   <Package className="h-4 w-4" />
                 </div>
               )}

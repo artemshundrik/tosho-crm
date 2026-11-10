@@ -54,7 +54,7 @@ function SimpleModelGridBase({
         {Array.from({ length: 8 }).map((_, i) => (
           <div
             key={i}
-            className="flex flex-col overflow-hidden rounded-xl border border-border/60 bg-card"
+            className="flex flex-col overflow-hidden rounded-xl border border-line bg-card"
           >
             <Skeleton className="aspect-[4/5] w-full rounded-none" />
             <div className="flex flex-col gap-3 p-4">

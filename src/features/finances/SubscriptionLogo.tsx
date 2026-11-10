@@ -63,7 +63,7 @@ export function SubscriptionLogo({
 
   return (
     <Avatar
-      className={cn("shrink-0 border", src ? "border-border/60 bg-card" : toneClass(categoryName || name), className)}
+      className={cn("shrink-0 border", src ? "border-line bg-card" : toneClass(categoryName || name), className)}
       style={{ width: size, height: size, borderRadius: radius }}
     >
       {src ? (

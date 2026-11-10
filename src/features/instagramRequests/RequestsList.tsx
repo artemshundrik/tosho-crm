@@ -97,7 +97,7 @@ export function RequestsList({ requests, selectedId, userId, isOwnerOrCeo, manag
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {rows.length === 0 ? (
-          <div className="border-t border-border px-4 py-8 text-center text-sm text-muted-foreground">
+          <div className="border-t border-line-subtle px-4 py-8 text-center text-sm text-muted-foreground">
             {tab === "active" ? "Нових заявок немає. Коли хтось напише, ви отримаєте сповіщення." : "Тут поки порожньо."}
           </div>
         ) : (
@@ -110,7 +110,7 @@ export function RequestsList({ requests, selectedId, userId, isOwnerOrCeo, manag
                 to={`${ROUTES.requests}/${request.id}`}
                 aria-current={request.id === selectedId ? "true" : undefined}
                 className={cn(
-                  "flex flex-col gap-1.5 border-t border-border px-4 py-3 text-md hover:bg-muted/50",
+                  "flex flex-col gap-1.5 border-t border-line-subtle px-4 py-3 text-md hover:bg-muted/50",
                   request.id === selectedId && "bg-primary/8 hover:bg-primary/8"
                 )}
               >
@@ -139,7 +139,7 @@ function ManagersPanel({ requests, managers, now }: { requests: RequestRow[]; ma
   if (managers.length === 0) return null;
   const grid = "grid grid-cols-[minmax(0,1fr)_40px_52px_60px] gap-1.5";
   return (
-    <div className="flex flex-col gap-1.5 rounded-xl border border-border p-2.5">
+    <div className="flex flex-col gap-1.5 rounded-xl border border-line p-2.5">
       <div className={cn(grid, "text-2xs text-muted-foreground")}>
         <span>Менеджер</span>
         <span>Нові</span>

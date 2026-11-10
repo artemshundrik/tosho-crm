@@ -72,7 +72,7 @@ export function EntityHeader({
 
 /** Чип властивості: рамка, 28 px, підпис сірим. Клікабельний — `EntityPropButton`. */
 export const ENTITY_PROP =
-  "inline-flex h-7 max-w-full shrink-0 items-center gap-1.5 rounded-md border border-border bg-background px-2 text-xs font-medium text-foreground";
+  "inline-flex h-7 max-w-full shrink-0 items-center gap-1.5 rounded-md border border-line-strong bg-background px-2 text-xs font-medium text-foreground";
 
 const ENTITY_PROP_INTERACTIVE =
   "cursor-pointer transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 disabled:cursor-default disabled:opacity-60 disabled:hover:bg-background";

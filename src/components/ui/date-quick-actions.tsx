@@ -52,7 +52,7 @@ export function DateQuickActions({
             "h-[30px] w-full justify-center rounded-lg border px-1.5 text-xs font-medium",
             action.muted
               ? "border-transparent text-muted-foreground hover:text-foreground"
-              : "border-border/60 hover:border-foreground/30 hover:text-foreground"
+              : "border-line-strong hover:border-foreground/30 hover:text-foreground"
           )}
           onClick={() => void onSelect(action.value)}
         >
@@ -65,6 +65,6 @@ export function DateQuickActions({
   if (flush) return <div className={className}>{grid}</div>;
 
   return (
-    <div className={cn("border-t border-border/60 p-3", className)}>{grid}</div>
+    <div className={cn("border-t border-line-subtle p-3", className)}>{grid}</div>
   );
 }

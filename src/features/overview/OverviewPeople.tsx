@@ -96,8 +96,8 @@ export function OverviewPeople({
   if (!data) return null;
 
   return (
-    <section className="overflow-hidden rounded-xl border border-border/40 bg-card">
-      <div className="flex items-center gap-2 border-b border-border/40 px-3 py-2.5 sm:px-5">
+    <section className="overflow-hidden rounded-xl border border-line bg-card">
+      <div className="flex items-center gap-2 border-b border-line-subtle px-3 py-2.5 sm:px-5">
         <h2 className="min-w-0 flex-1 text-2xs font-semibold uppercase tracking-wider text-foreground">По людях</h2>
         <span className="w-8 text-right text-2xs text-muted-foreground">Горить</span>
         <span className="w-8 text-right text-2xs text-muted-foreground">Сьог.</span>
@@ -109,7 +109,7 @@ export function OverviewPeople({
           <Link
             key={member.userId}
             to={`/my-turn?who=${encodeURIComponent(member.userId)}`}
-            className="flex min-w-0 items-center gap-2.5 border-t border-border/40 px-3 py-2 transition-colors first:border-t-0 hover:bg-muted/40 sm:px-5"
+            className="flex min-w-0 items-center gap-2.5 border-t border-line-subtle px-3 py-2 transition-colors first:border-t-0 hover:bg-muted/40 sm:px-5"
           >
             <AvatarBase
               src={member.avatarDisplayUrl}

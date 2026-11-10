@@ -53,7 +53,7 @@ export function ThreadAttachmentCard({ attachment }: { attachment: ThreadAttachm
       <button
         type="button"
         onClick={() => setPreviewOpen(true)}
-        className="block w-full overflow-hidden rounded-xl border border-border/60 bg-card text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
+        className="block w-full overflow-hidden rounded-xl border border-line-strong bg-card text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
       >
         {url ? (
           <img
@@ -88,7 +88,7 @@ export function ThreadAttachmentCard({ attachment }: { attachment: ThreadAttachm
     <button
       type="button"
       onClick={() => setPreviewOpen(true)}
-      className="flex w-full items-center gap-2.5 rounded-xl border border-border/60 bg-card px-2.5 py-2 text-left transition-colors hover:bg-muted/50"
+      className="flex w-full items-center gap-2.5 rounded-xl border border-line-strong bg-card px-2.5 py-2 text-left transition-colors hover:bg-muted/50"
     >
       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
         {broken ? <ImageOff className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
@@ -149,7 +149,7 @@ function PreviewDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* Перегляд вкладення — закривати кліком повз тут природно, втрачати нічого. */}
       <DialogContent dismissible className="max-h-[92vh] w-fit max-w-[min(96vw,1100px)] gap-0 overflow-hidden p-0">
-        <div className="flex items-center gap-3 border-b border-border/50 px-4 py-3">
+        <div className="flex items-center gap-3 border-b border-line-subtle px-4 py-3">
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
             <FileText className="h-4 w-4" />
           </span>
@@ -161,7 +161,7 @@ function PreviewDialog({
             <a
               href={source}
               download={attachment.fileName}
-              className="ml-auto mr-8 inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-border/60 px-3 text-xs font-medium transition-colors hover:bg-muted/60"
+              className="ml-auto mr-8 inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-line-strong px-3 text-xs font-medium transition-colors hover:bg-muted/60"
             >
               <Download className="h-3.5 w-3.5" />
               Завантажити

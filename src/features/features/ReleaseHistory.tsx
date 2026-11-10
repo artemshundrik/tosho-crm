@@ -108,7 +108,7 @@ function TipView({ tip }: { tip: TipState }) {
         zIndex: 60,
         pointerEvents: "none",
       }}
-      className="w-max max-w-[min(88vw,320px)] rounded-lg border border-border bg-popover px-3 py-2 text-xs leading-snug"
+      className="w-max max-w-[min(88vw,320px)] rounded-lg border border-line bg-popover px-3 py-2 text-xs leading-snug"
     >
       {tip.title ? <div className="mb-1 font-semibold text-foreground">{tip.title}</div> : null}
       <div className="flex flex-col gap-1">
@@ -381,7 +381,7 @@ export function ReleaseHistory() {
       {overlay}
 
       {/* Шапка: KPI з розшифровками на наведення */}
-      <header className="flex flex-wrap items-end gap-x-6 gap-y-2 border-b border-border pb-3.5">
+      <header className="flex flex-wrap items-end gap-x-6 gap-y-2 border-b border-line-subtle pb-3.5">
         <div>
           <h2 className="text-base font-semibold tracking-tight">Релізи</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
@@ -539,7 +539,7 @@ export function ReleaseHistory() {
         )}
 
         <aside className="grid gap-3.5 lg:sticky lg:top-2">
-          <section className="rounded-xl border border-border bg-card p-3.5">
+          <section className="rounded-xl border border-line bg-card p-3.5">
             <h3 className="text-3xs font-bold uppercase tracking-widest text-muted-foreground">
               Коли зазвичай працюєш
             </h3>
@@ -745,7 +745,7 @@ function MonthView({
 
   return (
     <div className="grid grid-cols-1 gap-3">
-      <header className="sticky top-0 z-10 border-b border-border/70 bg-background pb-2.5 pt-1">
+      <header className="sticky top-0 z-10 border-b border-line-subtle bg-background pb-2.5 pt-1">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <h2 className="text-lg font-semibold tracking-tight">{monthTitle(month)}</h2>
           {month === monthKeys.at(-1) ? (
@@ -805,7 +805,7 @@ function MonthView({
               key={k}
               type="button"
               onClick={() => go({ t: "day", k })}
-              className="flex w-full cursor-pointer items-baseline gap-3 rounded-xl border border-border bg-card px-3.5 py-2.5 text-left transition-colors hover:border-muted-foreground"
+              className="flex w-full cursor-pointer items-baseline gap-3 rounded-xl border border-line-strong bg-card px-3.5 py-2.5 text-left transition-colors hover:border-muted-foreground"
             >
               <span className="w-12 shrink-0 text-sm font-semibold">
                 {WD_SHORT[date.getUTCDay()]} {date.getUTCDate()}
@@ -867,7 +867,7 @@ function DayView({
 
   return (
     <div className="grid grid-cols-1 gap-3">
-      <header className="sticky top-0 z-10 border-b border-border/70 bg-background pb-2.5 pt-1">
+      <header className="sticky top-0 z-10 border-b border-line-subtle bg-background pb-2.5 pt-1">
         <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
           <button
             type="button"
@@ -944,7 +944,7 @@ function DayView({
             ([from, to], i) => (
               <span
                 key={i}
-                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-0.5 text-3xs text-muted-foreground"
+                className="inline-flex items-center gap-1.5 rounded-full border border-line bg-card px-2.5 py-0.5 text-3xs text-muted-foreground"
               >
                 <i
                   className={cn(
@@ -1043,7 +1043,7 @@ function NavBtn({ label, onClick, disabled }: { label: string; onClick: () => vo
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="h-6 cursor-pointer rounded-md border border-border bg-card px-2 text-xs leading-none text-muted-foreground transition-colors hover:text-foreground disabled:cursor-default disabled:opacity-35"
+      className="h-6 cursor-pointer rounded-md border border-line-strong bg-card px-2 text-xs leading-none text-muted-foreground transition-colors hover:text-foreground disabled:cursor-default disabled:opacity-35"
     >
       {label}
     </button>
@@ -1059,7 +1059,7 @@ function ThreadCard({ thread }: { thread: Thread }) {
   };
 
   return (
-    <article className="rounded-xl border border-border bg-card px-3.5 py-3 transition-colors hover:border-muted-foreground">
+    <article className="rounded-xl border border-line bg-card px-3.5 py-3 transition-colors hover:border-muted-foreground">
       <div className="flex items-baseline">
         <time className="w-9 shrink-0 text-right text-3xs tabular-nums text-muted-foreground">
           {timeOf(thread.lead.releasedAt)}
@@ -1098,7 +1098,7 @@ function ThreadCard({ thread }: { thread: Thread }) {
       </div>
 
       {thread.rest.length > 0 ? (
-        <ul className="ml-[4rem] mt-2 grid gap-1.5 border-l-2 border-border pl-3">
+        <ul className="ml-[4rem] mt-2 grid gap-1.5 border-l-2 border-line-subtle pl-3">
           {thread.rest.map((change) => (
             <li key={change.sha} className="flex items-baseline gap-2.5 text-xs leading-relaxed text-muted-foreground">
               <time className="shrink-0 text-3xs tabular-nums">{timeOf(change.releasedAt)}</time>
@@ -1198,7 +1198,7 @@ function ScopePanel({
   }, [list]);
 
   return (
-    <section className="rounded-xl border border-border bg-card p-3.5">
+    <section className="rounded-xl border border-line bg-card p-3.5">
       <h3 className="mb-2.5 text-3xs font-bold uppercase tracking-widest text-muted-foreground">
         Куди пішла робота · {monthOf(month)}
       </h3>

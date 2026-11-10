@@ -106,7 +106,7 @@ export function MethodsSection({
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3">
-          <div className="rounded-lg border border-border/50 bg-muted/10 p-3">
+          <div className="rounded-lg border border-line bg-muted/10 p-3">
             <div className="space-y-2">
               <Label className="text-xs font-medium text-muted-foreground">
                 Знайти або додати метод
@@ -117,7 +117,7 @@ export function MethodsSection({
                   value={newMethodName}
                   onChange={(e) => onMethodNameChange(e.target.value)}
                   placeholder="Напр. DTF"
-                  className="border-border/60 pl-9"
+                  className="border-line-strong pl-9"
                 />
               </div>
             </div>
@@ -142,7 +142,7 @@ export function MethodsSection({
                     type="button"
                     disabled={methodSaving}
                     onClick={() => onAddMethod(draftKindId, entry.name, entry.id)}
-                    className="flex w-full items-center justify-between gap-2 rounded-lg border border-border/50 bg-background/60 px-3 py-2 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 disabled:opacity-60"
+                    className="flex w-full items-center justify-between gap-2 rounded-lg border border-line-strong bg-background/60 px-3 py-2 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 disabled:opacity-60"
                   >
                     <span className="min-w-0 truncate text-sm font-medium">{entry.name}</span>
                     <span className="shrink-0 text-xs text-muted-foreground">
@@ -192,7 +192,7 @@ export function MethodsSection({
                       "flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 transition-colors",
                       isSelected
                         ? "border-primary/50 bg-primary/10 text-primary"
-                        : "border-border/50 bg-background/50 text-foreground hover:border-border/80 hover:bg-muted/20",
+                        : "border-line bg-background/50 text-foreground hover:border-line-strong hover:bg-muted/20",
                       exactHere?.id === method.id && !isSelected && "border-primary/40 bg-primary/5"
                     )}
                   >

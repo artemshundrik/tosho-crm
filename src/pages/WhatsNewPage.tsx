@@ -84,7 +84,7 @@ export default function WhatsNewPage() {
               return (
                 <article
                   key={update.id}
-                  className="border-b border-border py-5 last:border-b-0"
+                  className="border-b border-line-subtle py-5 last:border-b-0"
                 >
                   <div className="flex flex-wrap items-center gap-2">
                     {update.importance === "major" ? (
@@ -120,7 +120,7 @@ export default function WhatsNewPage() {
 
         {ready && shown.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-16 text-center">
-            <span className="grid h-10 w-10 place-items-center rounded-xl border border-border bg-muted text-muted-foreground">
+            <span className="grid h-10 w-10 place-items-center rounded-xl border border-line bg-muted text-muted-foreground">
               <SearchX className="h-4 w-4" />
             </span>
             <p className="text-sm font-semibold">Записів ще немає</p>

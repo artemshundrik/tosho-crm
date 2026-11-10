@@ -1144,7 +1144,7 @@ export function ProfilePage() {
     resolvedEmploymentStatus === "active"
       ? "tone-success"
       : resolvedEmploymentStatus === "inactive"
-      ? "border-border bg-muted text-muted-foreground"
+      ? "border-line bg-muted text-muted-foreground"
       : resolvedEmploymentStatus === "rejected"
       ? "tone-danger"
       : "tone-warning";
@@ -1236,7 +1236,7 @@ export function ProfilePage() {
   };
 
   const identityCard = (
-    <div className="rounded-inner border border-border/40 bg-card p-5 md:p-6">
+    <div className="rounded-inner border border-line bg-card p-5 md:p-6">
       <div className="flex flex-col gap-5 md:flex-row md:items-center">
         <div className="relative mx-auto shrink-0 md:mx-0">
           <AvatarBase
@@ -1286,13 +1286,13 @@ export function ProfilePage() {
                   ? "tone-accent"
                   : accessRole === "admin"
                   ? "border-primary/20 bg-primary/10 text-foreground"
-                  : "border-border bg-background/80 text-muted-foreground"
+                  : "border-line bg-background/80 text-muted-foreground"
               )}
             >
               {accessRole === "owner" ? "Super Admin" : accessRole === "admin" ? "Admin" : "Member"}
             </span>
             {jobRole ? (
-              <span className="inline-flex items-center rounded-full border border-border bg-background/80 px-3 py-1 text-xs font-medium text-muted-foreground">
+              <span className="inline-flex items-center rounded-full border border-line bg-background/80 px-3 py-1 text-xs font-medium text-muted-foreground">
                 {jobRole}
               </span>
             ) : null}
@@ -1346,7 +1346,7 @@ export function ProfilePage() {
       </div>
 
       {startDate ? (
-        <div className="mt-6 border-t border-border/40 pt-6">
+        <div className="mt-6 border-t border-line-subtle pt-6">
           <div className="relative mx-1 h-1.5 rounded-full bg-muted/60">
             <div
               className={cn(
@@ -1449,9 +1449,9 @@ export function ProfilePage() {
           {identityCard}
 
           {avatarDraftUrl ? (
-            <div className="rounded-inner border border-border/40 bg-card p-4">
+            <div className="rounded-inner border border-line bg-card p-4">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
-                <div className="relative h-40 w-40 overflow-hidden rounded-full border border-border bg-background">
+                <div className="relative h-40 w-40 overflow-hidden rounded-full border border-line bg-background">
                   <Cropper
                     image={avatarDraftUrl}
                     crop={crop}
@@ -1517,7 +1517,7 @@ export function ProfilePage() {
                       {todayReminders.length === 0 ? (
                         <p className="mt-2 text-xs text-muted-foreground">На сьогодні нагадувань немає.</p>
                       ) : (
-                        <div className="mt-1 divide-y divide-border/30">
+                        <div className="mt-1 divide-y divide-line-subtle">
                           {todayReminders.slice(0, 4).map((reminder) => (
                             <div key={reminder.id} className="flex items-center gap-3 py-2">
                               <span className="w-11 shrink-0 text-xs font-semibold tabular-nums text-muted-foreground">
@@ -1539,9 +1539,9 @@ export function ProfilePage() {
                     </div>
 
                     {myQuotes.length > 0 ? (
-                      <div className="border-t border-border/40 pt-3">
+                      <div className="border-t border-line-subtle pt-3">
                         {todaySection("Мої активні прорахунки", myQuotes.length, "/orders/estimates", "У прорахунки")}
-                        <div className="mt-1 divide-y divide-border/30">
+                        <div className="mt-1 divide-y divide-line-subtle">
                           {myQuotes.slice(0, 3).map((quote) => (
                             <div key={quote.id} className="flex items-center gap-3 py-2">
                               <div className="min-w-0 flex-1">
@@ -1573,9 +1573,9 @@ export function ProfilePage() {
                     ) : null}
 
                     {myDesignTasks.length > 0 ? (
-                      <div className="border-t border-border/40 pt-3">
+                      <div className="border-t border-line-subtle pt-3">
                         {todaySection("Мої дизайн-задачі", myDesignTasks.length, "/design", "У дизайн")}
-                        <div className="mt-1 divide-y divide-border/30">
+                        <div className="mt-1 divide-y divide-line-subtle">
                           {myDesignTasks.slice(0, 3).map((task) => {
                             const deadline = designTaskDeadline(task.metadata);
                             return (
@@ -1642,7 +1642,7 @@ export function ProfilePage() {
                   ) : myAbsences.length === 0 ? (
                     <p className="text-sm text-muted-foreground">Цього року заявок ще не було.</p>
                   ) : (
-                    <div className="divide-y divide-border/30">
+                    <div className="divide-y divide-line-subtle">
                       {myAbsences.slice(0, 3).map((absence) => renderAbsenceRow(absence))}
                     </div>
                   )}
@@ -1668,7 +1668,7 @@ export function ProfilePage() {
               ) : (
                 <>
                   <AbsenceBalanceMeters balance={myBalance} entries={balanceEntries} year={year} />
-                  <p className="mt-3 border-t border-border/40 pt-2.5 text-2xs text-muted-foreground">
+                  <p className="mt-3 border-t border-line-subtle pt-2.5 text-2xs text-muted-foreground">
                     Відпустка міряється календарними днями — вихідні всередині неї квоту списують.
                     Відгул і лікарняний рахуються робочими. Свята не списують нічого.
                   </p>
@@ -1694,14 +1694,14 @@ export function ProfilePage() {
                   <div className="h-10 animate-pulse rounded-lg bg-muted/40" />
                 </div>
               ) : myAbsences.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-border/60 bg-muted/10 p-6 text-center">
+                <div className="rounded-xl border border-dashed border-line bg-muted/10 p-6 text-center">
                   <p className="text-sm font-medium text-foreground">Цього року заявок ще не було</p>
                   <p className="mt-1 text-xs text-muted-foreground">
                     Відпустка, відгул чи лікарняний — кнопка «Подати заявку» вгорі.
                   </p>
                 </div>
               ) : (
-                <div className="divide-y divide-border/30">
+                <div className="divide-y divide-line-subtle">
                   {myAbsences.map((absence) => renderAbsenceRow(absence, { withCancel: true }))}
                 </div>
               )}
@@ -1713,7 +1713,7 @@ export function ProfilePage() {
       {tab === "settings" ? (
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
           <div className="space-y-4">
-            <div className="rounded-inner border border-border/40 bg-card p-5">
+            <div className="rounded-inner border border-line bg-card p-5">
               <div className="mb-5">
                 <div className="text-lg font-semibold text-foreground">Особисті дані</div>
                 <div className="mt-1 text-sm text-muted-foreground">Інформація, яку бачать інші учасники команди.</div>
@@ -1741,7 +1741,7 @@ export function ProfilePage() {
                   <p className="text-xs text-muted-foreground">Змінити email можна лише через звернення до адміністратора.</p>
                 </div>
               </div>
-              <div className="-mx-5 -mb-5 mt-5 flex flex-col gap-3 rounded-b-inner border-t border-border/60 bg-muted/20 px-5 py-3 sm:flex-row sm:items-center">
+              <div className="-mx-5 -mb-5 mt-5 flex flex-col gap-3 rounded-b-inner border-t border-line-subtle bg-muted/20 px-5 py-3 sm:flex-row sm:items-center">
                 <p className="text-xs text-muted-foreground sm:mr-auto">Ці дані бачить уся команда.</p>
                 <Button onClick={updateProfile} disabled={updating} className="sm:min-w-[180px]">
                   {updating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
@@ -1750,7 +1750,7 @@ export function ProfilePage() {
               </div>
             </div>
 
-            <div className="rounded-inner border border-border/40 bg-card p-5">
+            <div className="rounded-inner border border-line bg-card p-5">
               <div className="mb-5">
                 <div className="text-lg font-semibold text-foreground">Безпека</div>
                 <div className="mt-1 text-sm text-muted-foreground">Оновлення пароля та базовий захист акаунту.</div>
@@ -1770,10 +1770,10 @@ export function ProfilePage() {
                 </Button>
               </div>
 
-              <div className="mt-5 border-t border-border/60 pt-5">
-                <div className="flex flex-col gap-3 rounded-lg border border-border/70 bg-background px-4 py-3 md:flex-row md:items-center md:justify-between">
+              <div className="mt-5 border-t border-line-subtle pt-5">
+                <div className="flex flex-col gap-3 rounded-lg border border-line bg-background px-4 py-3 md:flex-row md:items-center md:justify-between">
                   <div className="flex min-w-0 items-start gap-3">
-                    <div className="mt-0.5 rounded-full border border-border bg-muted/30 p-2 text-muted-foreground">
+                    <div className="mt-0.5 rounded-full border border-line bg-muted/30 p-2 text-muted-foreground">
                       <MonitorSmartphone className="h-4 w-4" aria-hidden />
                     </div>
                     <div className="min-w-0">
@@ -1810,7 +1810,7 @@ export function ProfilePage() {
           </div>
 
           <div className="space-y-4">
-            <div className="rounded-inner border border-border/40 bg-card p-5">
+            <div className="rounded-inner border border-line bg-card p-5">
               <div className="mb-5">
                 <div className="text-lg font-semibold text-foreground">Telegram-бот</div>
                 <div className="mt-1 text-sm text-muted-foreground">
@@ -1819,7 +1819,7 @@ export function ProfilePage() {
                   лікарняний або заявка оформляться без відкриття CRM (команда /absence).
                 </div>
               </div>
-              <div className="flex flex-col gap-3 rounded-lg border border-border/70 bg-background px-4 py-3">
+              <div className="flex flex-col gap-3 rounded-lg border border-line bg-background px-4 py-3">
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
@@ -1862,7 +1862,7 @@ export function ProfilePage() {
                   )}
                 </div>
                 {tgChatId == null && tgLinkHint ? (
-                  <div className="flex flex-col gap-2 rounded-lg border border-dashed border-border/70 bg-muted/20 px-3 py-2.5 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
+                  <div className="flex flex-col gap-2 rounded-lg border border-dashed border-line bg-muted/20 px-3 py-2.5 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
                     <span>Натиснув Start у боті?</span>
                     <Button size="sm" type="button" variant="ghost" onClick={handleTelegramRefresh} disabled={tgBusy}>
                       Я підключив — оновити статус
@@ -1872,14 +1872,14 @@ export function ProfilePage() {
               </div>
             </div>
 
-            <div className="rounded-inner border border-border/40 bg-card p-5">
+            <div className="rounded-inner border border-line bg-card p-5">
               <div className="mb-4">
                 <div className="text-lg font-semibold text-foreground">Тихі години</div>
                 <div className="mt-1 text-sm text-muted-foreground">
                   Коли команду не будять сповіщеннями про події.
                 </div>
               </div>
-              <div className="rounded-lg border border-border/70 bg-background px-4 py-3">
+              <div className="rounded-lg border border-line bg-background px-4 py-3">
                 <div className="flex items-center gap-2.5">
                   <Moon className="h-4 w-4 text-primary" aria-hidden />
                   <span className="text-base font-semibold tabular-nums text-foreground">
@@ -1901,7 +1901,7 @@ export function ProfilePage() {
           </div>
 
           <div className="xl:col-span-2">
-            <div className="rounded-inner border border-border/40 bg-card p-5">
+            <div className="rounded-inner border border-line bg-card p-5">
               <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 text-lg font-semibold text-foreground">

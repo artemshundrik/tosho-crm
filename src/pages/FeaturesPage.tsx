@@ -246,7 +246,7 @@ export default function FeaturesPage() {
                      повторював заокруглення ховера й обривався по краях. */
                   <div
                     key={def.key}
-                    className="border-b border-border last:border-b-0"
+                    className="border-b border-line-subtle last:border-b-0"
                   >
                   <button
                     type="button"
@@ -302,7 +302,7 @@ export default function FeaturesPage() {
 
           {shown.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-14 text-center">
-              <span className="grid h-10 w-10 place-items-center rounded-xl border border-border bg-muted text-muted-foreground">
+              <span className="grid h-10 w-10 place-items-center rounded-xl border border-line bg-muted text-muted-foreground">
                 <SearchX className="h-4 w-4" />
               </span>
               <p className="text-sm font-semibold">Нічого не знайшлося</p>

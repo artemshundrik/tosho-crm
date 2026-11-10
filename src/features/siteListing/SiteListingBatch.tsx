@@ -61,7 +61,7 @@ export function SiteListingBatch({
         Зібрати файл ({ready.length})
       </Button>
       {built ? (
-        <div className="space-y-2 rounded-lg border border-border/60 bg-muted/20 p-3 text-xs">
+        <div className="space-y-2 rounded-lg border border-line bg-muted/20 p-3 text-xs">
           <p className="font-medium text-foreground">
             Файл зібрано: моделей {built.models}, рядків {built.rows}. Вони перейшли в «У файлі».
           </p>

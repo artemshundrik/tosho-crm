@@ -66,7 +66,7 @@ export function SupplierProducts({
   const searching = term !== debounced || (products.isFetching && !products.isFetchingNextPage);
 
   return (
-    <div className={cn("rounded-section border border-border/60 bg-card", className)}>
+    <div className={cn("rounded-section border border-line bg-card", className)}>
       <div className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">
           {searching ? (

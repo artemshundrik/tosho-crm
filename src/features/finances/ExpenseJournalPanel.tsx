@@ -222,7 +222,7 @@ function EntryEditor({
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-background p-2">
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-line bg-background p-2">
       {/* Порядок: дата → звідки → сума → коментар. Радіус rounded-md — як у кнопок
           тієї ж висоти (h-8); дефолтний rounded-xl на низькому полі виглядав завеликим. */}
       {hideDate ? null : (
@@ -331,7 +331,7 @@ function JournalEntryRow({
         <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">≈ {formatOrderMoney(uah, "UAH")}</span>
       ) : null}
       {entry.vendor ? (
-        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border/60 px-2 py-0.5 text-2xs text-foreground/80">
+        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-line px-2 py-0.5 text-2xs text-foreground/80">
           <SubscriptionLogo
             logoUrl={resolveSubscriptionLogo({ supplierName: entry.vendor })}
             name={entry.vendor}
@@ -436,7 +436,7 @@ export function ExpenseJournalPanel({
   const groupByDate = !isEvent && dateGroups.some((g) => g.items.length > 1 || g.label);
 
   return (
-    <div className="border-t border-border/60 bg-muted/20 px-3 py-2.5">
+    <div className="border-t border-line-subtle bg-muted/20 px-3 py-2.5">
       <div className="mb-1.5 flex items-center justify-between">
         <span className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
           {isEvent ? "Позиції" : `Журнал · ${monthText}`}
@@ -453,7 +453,7 @@ export function ExpenseJournalPanel({
           // Одна дата = одна подія: заголовок із датою, кількістю позицій і підсумком.
           <div className="space-y-2">
             {dateGroups.map((group) => (
-              <div key={group.key} className="rounded-lg border border-border/50 bg-background/60 p-1.5">
+              <div key={group.key} className="rounded-lg border border-line bg-background/60 p-1.5">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1.5 pb-1">
                   {group.label ? (
                     <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-foreground">

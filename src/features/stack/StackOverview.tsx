@@ -124,7 +124,7 @@ export function StackOverview() {
       )}
 
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_17.5rem]">
-        <div className="overflow-hidden rounded-xl border border-border/40 bg-card">
+        <div className="overflow-hidden rounded-xl border border-line bg-card">
           {mode === "layers"
             ? groupByLayer(items).map((group, index) => (
                 <StackGroup
@@ -468,7 +468,7 @@ function StackGroup({
         aria-expanded={open}
         className={cn(
           "flex w-full cursor-pointer items-center gap-2.5 px-4 pb-2 pt-3.5 text-left transition-colors hover:bg-muted/40 sm:px-5",
-          !first && "border-t border-border/40"
+          !first && "border-t border-line-subtle"
         )}
       >
         <span className={cn("h-2.5 w-2.5 shrink-0 rounded-[3px]", dot)} />
@@ -493,7 +493,7 @@ function StackGroup({
               <button
                 type="button"
                 onClick={() => setExpanded(true)}
-                className="flex w-full cursor-pointer items-center gap-2 border-t border-border/40 px-4 py-2.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/40 sm:px-5"
+                className="flex w-full cursor-pointer items-center gap-2 border-t border-line-subtle px-4 py-2.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/40 sm:px-5"
               >
                 <span className="min-w-0 flex-1 truncate">
                   {fresh
@@ -567,14 +567,14 @@ function StackRow({ item }: { item: StackItem }) {
       : null;
 
   return (
-    <div className="flex items-center gap-3 border-t border-border/40 px-4 py-2.5 sm:px-5">
+    <div className="flex items-center gap-3 border-t border-line-subtle px-4 py-2.5 sm:px-5">
       {/* Лого пакета, якщо його є звідки взяти, інакше монограма. Avatar тут не
           прикраса: він сам перемикається на fallback, коли картинка не
           завантажилась, — тобто відсутній інтернет чи заблокований фавікон
           дають монограму, а не порожню діру. Плитка квадратна зі скругленням,
           як у Витратах: це пакет, а не людина. */}
       <Avatar
-        className={cn("h-8 w-8 rounded-lg border", item.iconUrl ? "border-border/60 bg-card" : "border-transparent")}
+        className={cn("h-8 w-8 rounded-lg border", item.iconUrl ? "border-line bg-card" : "border-transparent")}
       >
         {item.iconUrl ? (
           // object-contain — лого не обрізається; padding, щоб воно не впиралось у краї.
@@ -650,7 +650,7 @@ function StackRow({ item }: { item: StackItem }) {
         target="_blank"
         rel="noreferrer"
         title="Відкрити на npmjs.com"
-        className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-border/60 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+        className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-line-strong text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
       >
         <ExternalLink className="h-3.5 w-3.5" />
       </a>
@@ -713,7 +713,7 @@ function StackRowPopover({ item }: { item: StackItem }) {
           /* Повний перелік: у рядку на нього місця немає — там лише перша
              дірка й «і ще N». Посилання тільки https: адреса приходить від npm
              через базу, і javascript: у href ставати не повинен ні за яких умов. */
-          <ul className="mt-3 grid gap-2 border-t border-border/40 pt-2.5">
+          <ul className="mt-3 grid gap-2 border-t border-line-subtle pt-2.5">
             {item.advisories.map((advisory, index) => (
               <li
                 key={`${advisory.dependency?.name ?? ""}|${advisory.url ?? advisory.title}|${index}`}
@@ -749,7 +749,7 @@ function StackRowPopover({ item }: { item: StackItem }) {
           </ul>
         ) : null}
 
-        <dl className="mt-3 grid gap-1.5 border-t border-border/40 pt-2.5 text-2xs">
+        <dl className="mt-3 grid gap-1.5 border-t border-line-subtle pt-2.5 text-2xs">
           {typeof item.usedIn === "number" ? (
             <div className="flex items-baseline justify-between gap-2">
               <dt className="text-muted-foreground">Використовується</dt>
@@ -786,7 +786,7 @@ function StackRowPopover({ item }: { item: StackItem }) {
         {item.bumpCommit ? (
           /* Тема коміта відповідає на «чому саме тоді» — дата сама по собі не
              пояснює нічого, а тема майже завжди пояснює. */
-          <p className="mt-2 border-t border-border/40 pt-2 text-2xs text-muted-foreground">
+          <p className="mt-2 border-t border-line-subtle pt-2 text-2xs text-muted-foreground">
             <span className="figure">{item.bumpCommit.sha}</span>
             {item.bumpCommit.subject ? ` · ${item.bumpCommit.subject}` : ""}
           </p>
@@ -796,7 +796,7 @@ function StackRowPopover({ item }: { item: StackItem }) {
             «сторінка пакета» і «документація» кажуть, куди саме потрапиш.
             Рядками на всю ширину, а не двома словами в кутку — так вони
             читаються як дії, а не як дрібний підпис. */}
-        <div className="mt-2.5 grid gap-0.5 border-t border-border/40 pt-2">
+        <div className="mt-2.5 grid gap-0.5 border-t border-line-subtle pt-2">
           {item.name !== "node" ? (
             <a
               href={`https://www.npmjs.com/package/${item.name}`}
@@ -904,7 +904,7 @@ function EffortCard({ items }: { items: StackItem[] }) {
           ? "Це єдине, що варте того, щоб кинути справи."
           : "Ламке можна брати тоді, коли є час. Дірок безпеки немає."}
       </p>
-      <div className="mt-2.5 grid gap-1.5 border-t border-border/40 pt-2">
+      <div className="mt-2.5 grid gap-1.5 border-t border-line-subtle pt-2">
         {[
           { key: "security", label: "дірки безпеки", value: counts.security, dot: "bg-destructive" },
           { key: "breaking", label: "ламкі", value: counts.breaking, dot: "bg-warning-solid" },
@@ -1021,7 +1021,7 @@ function GuardsCard() {
           );
         })}
       </div>
-      <p className="mt-2.5 border-t border-border/40 pt-2 text-3xs text-muted-foreground">
+      <p className="mt-2.5 border-t border-line-subtle pt-2 text-3xs text-muted-foreground">
         {testFiles ? `${pluralUk(testFiles, "файл", "файли", "файлів")} тестів · ` : ""}
         {STACK_SNAPSHOT.sourceLines.toLocaleString("uk-UA")} рядків коду · знімок{" "}
         {formatAgoCoarse(STACK_SNAPSHOT.generatedAt) ?? "щойно"}
@@ -1104,7 +1104,7 @@ function AutomationCard({ platform }: { platform: StackPlatform | null }) {
           );
         })}
       </div>
-      <p className="mt-2.5 border-t border-border/40 pt-2 text-3xs text-muted-foreground">
+      <p className="mt-2.5 border-t border-line-subtle pt-2 text-3xs text-muted-foreground">
         Хмарних рутин тут немає навмисно: вони живуть поза репозиторієм, і чесно
         порахувати їх звідси неможливо.
       </p>

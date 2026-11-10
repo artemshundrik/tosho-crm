@@ -110,10 +110,10 @@ export function IntegrationCard({
       // невалідна, а дія в підвалі («Налаштувати ›») веде туди ж, куди й клік
       // по картці, тож окремий елемент керування був би обманом.
       className={cn(
-        "grid w-full gap-3 rounded-section border border-border/60 bg-card p-4 text-left",
+        "grid w-full gap-3 rounded-section border border-line-strong bg-card p-4 text-left",
         CARD_ROWS,
         "transition-[background-color,border-color,box-shadow] duration-base ease-out motion-reduce:transition-none",
-        "hover:border-border hover:bg-muted/30",
+        "hover:border-line-strong hover:bg-muted/30",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
       )}
     >
@@ -146,7 +146,7 @@ export function IntegrationCard({
           INTEGRATION_PLATE_TONE). Лінія на всю ширину картки (-mx-4) йде саме
           ПІД повідомленням: вона відділяє суть картки від службового підвалу,
           а не розриває числа й текст, які читаються разом. */}
-      <div className="-mx-4 border-b border-border/60 px-4 pb-3">
+      <div className="-mx-4 border-b border-line-subtle px-4 pb-3">
         <div className={cn("flex items-start gap-2 rounded-inner border px-2.5 py-2", toneSubtleClass[plateTone])}>
           <StateIcon className={cn("mt-0.5 h-3.5 w-3.5 shrink-0", toneTextClass[plateTone])} aria-hidden="true" />
           <p

@@ -63,8 +63,8 @@ export function CategoryDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md p-0 gap-0 overflow-hidden border border-border/60 bg-card text-foreground top-1/2 translate-y-[-50%]">
-        <div className="px-6 pt-6 pb-4 border-b border-border/40 bg-muted/5">
+      <DialogContent className="sm:max-w-md p-0 gap-0 overflow-hidden border border-line bg-card text-foreground top-1/2 translate-y-[-50%]">
+        <div className="px-6 pt-6 pb-4 border-b border-line-subtle bg-muted/5">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-xl">
               {mode === "type" ? <FolderPlus className="h-5 w-5" /> : <Tag className="h-5 w-5" />}
@@ -149,7 +149,7 @@ export function CategoryDialog({
             />
           </div>
         </div>
-        <div className="px-6 py-4 border-t border-border/40 bg-muted/5">
+        <div className="px-6 py-4 border-t border-line-subtle bg-muted/5">
           <DialogFooter className="gap-3 sm:gap-2">
             {isEditing && onDelete && (
               <Button

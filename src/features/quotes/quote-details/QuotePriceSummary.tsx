@@ -75,7 +75,7 @@ export function QuotePriceSummary({
   // Число й смуга складу ціни рушать від одного прапорця.
   const ready = useFigureReveal();
   return (
-    <section className="shrink-0 overflow-hidden rounded-inner border border-border/40 bg-card">
+    <section className="shrink-0 overflow-hidden rounded-inner border border-line bg-card">
       <div className="p-2.5">
         <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
           <span

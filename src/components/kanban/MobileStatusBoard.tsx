@@ -95,7 +95,7 @@ export function MobileStatusChips({
               "transition-colors duration-base ease-out",
               isActive
                 ? "border-foreground/10 bg-foreground text-background"
-                : "border-border bg-card text-muted-foreground"
+                : "border-line-strong bg-card text-muted-foreground"
             )}
           >
             {Icon ? (
@@ -171,7 +171,7 @@ export function MobileStatusBoard<T>({
         {active && active.items.length > 0 ? (
           active.items.map((item) => <div key={getItemKey(item)}>{renderCard(item)}</div>)
         ) : (
-          <p className="rounded-inner border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+          <p className="rounded-inner border border-dashed border-line px-4 py-8 text-center text-sm text-muted-foreground">
             {emptyLabel}
           </p>
         )}

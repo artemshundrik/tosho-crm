@@ -39,7 +39,7 @@ export function ContactCards(props: {
         ))}
       </datalist>
       {contacts.map((contact, index) => (
-        <div key={index} data-testid="contact-card" className="flex min-w-0 flex-col gap-1.5 rounded-lg border border-border px-3.5 py-3">
+        <div key={index} data-testid="contact-card" className="flex min-w-0 flex-col gap-1.5 rounded-lg border border-line px-3.5 py-3">
           <div className="flex items-center gap-2.5">
             <EntityAvatar name={contact.name || contact.phone || "?"} size={32} />
             <div className="min-w-0 flex-1">
@@ -120,7 +120,7 @@ export function ContactCards(props: {
       <button
         type="button"
         onClick={props.onAdd}
-        className="min-h-[120px] rounded-lg border border-dashed border-border text-sm text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
+        className="min-h-[120px] rounded-lg border border-dashed border-line-strong text-sm text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
       >
         + Додати контакт
       </button>

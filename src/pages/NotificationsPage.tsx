@@ -334,7 +334,7 @@ export default function NotificationsPage() {
           className="md:flex md:h-[var(--inbox-height)] md:overflow-hidden"
           style={{ "--inbox-height": `calc(100dvh - ${frameTop}px)` } as CSSProperties}
         >
-          <div className="min-w-0 md:w-[380px] md:shrink-0 md:overflow-y-auto md:overscroll-contain md:border-r md:border-border">
+          <div className="min-w-0 md:w-[380px] md:shrink-0 md:overflow-y-auto md:overscroll-contain md:border-r md:border-line-subtle">
             {visible.length === 0 ? (
               <div className="flex flex-col items-center gap-2 px-6 py-16 text-center text-sm text-muted-foreground">
                 <Inbox className="size-6" />
@@ -534,7 +534,7 @@ function InboxNotificationDetail({ thread, onOpenFull, missing }: { thread: Inbo
           </div>
         ) : null}
       </div>
-      <ul className="min-h-0 flex-1 divide-y divide-border overflow-y-auto border-t border-border">
+      <ul className="min-h-0 flex-1 divide-y divide-line-subtle overflow-y-auto border-t border-line-subtle">
         {thread.notifications.map((row) => (
           <li key={row.id} className="space-y-0.5 px-4 py-2.5">
             <div className="flex items-baseline gap-2">
@@ -551,7 +551,7 @@ function InboxNotificationDetail({ thread, onOpenFull, missing }: { thread: Inbo
         ))}
       </ul>
       {footer ? (
-        <footer className="flex shrink-0 flex-wrap items-center gap-3 border-t border-border px-4 py-2 text-2xs text-muted-foreground">
+        <footer className="flex shrink-0 flex-wrap items-center gap-3 border-t border-line-subtle px-4 py-2 text-2xs text-muted-foreground">
           {footer}
         </footer>
       ) : null}

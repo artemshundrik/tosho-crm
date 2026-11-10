@@ -150,8 +150,8 @@ export function FinancePayments({ teamId, userId, canSeeSensitive }: FinancePaym
       {loading ? (
         <FinanceSkeleton variant="stats" />
       ) : visiblePayments.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border/60 bg-muted/10 p-8 text-center">
-          <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-background">
+        <div className="rounded-xl border border-dashed border-line bg-muted/10 p-8 text-center">
+          <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-background">
             <Wallet className="h-5 w-5 text-muted-foreground" />
           </div>
           <p className="text-sm text-muted-foreground">Ще немає оплат. Додайте першу.</p>
@@ -164,7 +164,7 @@ export function FinancePayments({ teamId, userId, canSeeSensitive }: FinancePaym
             return (
               <div
                 key={payment.id}
-                className="flex items-start justify-between gap-3 rounded-xl border border-border/40 bg-card px-4 py-3"
+                className="flex items-start justify-between gap-3 rounded-xl border border-line bg-card px-4 py-3"
               >
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">

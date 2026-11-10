@@ -203,7 +203,7 @@ export function KanbanImageZoomPreview({
       onBlur={() => setIsOpen(false)}
       onPointerDown={() => setShouldLoad(true)}
       className={cn(
-        "relative h-14 w-14 shrink-0 overflow-visible rounded-lg border border-border/60 bg-secondary",
+        "relative h-14 w-14 shrink-0 overflow-visible rounded-lg border border-line bg-secondary",
         className
       )}
       tabIndex={0}
@@ -259,7 +259,7 @@ export function KanbanImageZoomPreview({
         ? createPortal(
             <div
               aria-hidden="true"
-              className="pointer-events-none fixed z-preview hidden overflow-hidden rounded-xl border border-border/70 bg-card shadow-elevated-preview opacity-100 scale-100 md:block"
+              className="pointer-events-none fixed z-preview hidden overflow-hidden rounded-xl border border-line bg-card shadow-elevated-preview opacity-100 scale-100 md:block"
               style={{
                 top: `${previewBounds.top}px`,
                 left: `${previewBounds.left}px`,

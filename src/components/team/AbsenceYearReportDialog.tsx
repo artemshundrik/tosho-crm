@@ -221,7 +221,7 @@ export function AbsenceYearReportDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="max-h-[56vh] overflow-auto rounded-inner border border-border/50">
+        <div className="max-h-[56vh] overflow-auto rounded-inner border border-line">
           {/* bare: скрол дає рамка вікна, тож липка шапка рахується від неї (top-0),
               а не від шапки сторінки, як у stickyHeader. */}
           <Table bare className="[&_thead]:sticky [&_thead]:top-0 [&_thead]:z-10 [&_thead]:bg-card">

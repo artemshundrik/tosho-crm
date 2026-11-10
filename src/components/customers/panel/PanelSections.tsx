@@ -70,7 +70,7 @@ export function ContextHintCards(props: {
   return (
     <>
       {grouped ? (
-        <div className="flex items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2 text-sm">
+        <div className="flex items-center gap-2 rounded-lg border border-dashed border-line px-3 py-2 text-sm">
           <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", toneDotClass.warning)} />
           <span className="min-w-0 flex-1">
             {undelivered.length} {pluralWordUk(undelivered.length, "замовлення", "замовлення", "замовлень")} ще не
@@ -102,7 +102,7 @@ export function ContextHintCards(props: {
           );
         }
         return (
-          <div key={key} className="flex items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2 text-sm">
+          <div key={key} className="flex items-center gap-2 rounded-lg border border-dashed border-line px-3 py-2 text-sm">
             <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", toneDotClass.warning)} />
             <span className="flex-1">{text}</span>
             {action}
@@ -257,7 +257,7 @@ export function DealsSection(props: {
             key={`${kind}-${item.id}`}
             type="button"
             onClick={() => (kind === "quote" ? props.onOpenQuote(item.id) : props.onOpenOrder(item.id))}
-            className="-mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-md border-t border-border/60 px-2 py-2 text-left text-sm first-of-type:border-t-0 hover:bg-muted/60"
+            className="-mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-md border-t border-line-subtle px-2 py-2 text-left text-sm first-of-type:border-t-0 hover:bg-muted/60"
           >
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="font-mono text-xs text-muted-foreground">{item.number ?? "—"}</span>
@@ -271,7 +271,7 @@ export function DealsSection(props: {
                 <span
                   className={cn(
                     "rounded-full border px-2 py-px text-2xs font-medium",
-                    kind === "quote" ? quoteStatusClasses[status] : "border-border bg-muted/30 text-muted-foreground",
+                    kind === "quote" ? quoteStatusClasses[status] : "border-line bg-muted/30 text-muted-foreground",
                   )}
                 >
                   {label}

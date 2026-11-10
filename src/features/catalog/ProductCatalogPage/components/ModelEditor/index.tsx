@@ -130,8 +130,8 @@ export function ModelEditor({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!w-[min(1120px,calc(100vw-1.5rem))] !max-w-none !gap-0 !overflow-hidden !p-0 sm:!p-0 max-h-[92vh] border border-border/60 bg-background">
-        <div className="border-b border-border/60 bg-muted/10 px-4 py-3 pr-14">
+      <DialogContent className="!w-[min(1120px,calc(100vw-1.5rem))] !max-w-none !gap-0 !overflow-hidden !p-0 sm:!p-0 max-h-[92vh] border border-line bg-background">
+        <div className="border-b border-line-subtle bg-muted/10 px-4 py-3 pr-14">
           <DialogHeader>
             <DialogTitle className="text-xl font-semibold tracking-normal">
               {editingModelId ? "Редагування товару" : "Новий товар"}
@@ -170,7 +170,7 @@ export function ModelEditor({
             />
 
             <div className="space-y-4">
-              <section className="rounded-xl border border-border/50 bg-card/70 p-4">
+              <section className="rounded-xl border border-line bg-card/70 p-4">
                 <MethodsSection
                   draftKindId={draftKindId}
                   draftKindName={draftKind?.name}
@@ -188,7 +188,7 @@ export function ModelEditor({
                 />
               </section>
 
-              <section className="rounded-xl border border-border/50 bg-card/70 p-4">
+              <section className="rounded-xl border border-line bg-card/70 p-4">
                 <PricingSection
                   draftPriceMode={draftPriceMode}
                   draftFixedPrice={draftFixedPrice}
@@ -204,7 +204,7 @@ export function ModelEditor({
           </div>
         </div>
 
-        <DialogFooter className="shrink-0 border-t border-border/60 bg-background/95 px-4 py-3 sm:justify-between">
+        <DialogFooter className="shrink-0 border-t border-line-subtle bg-background/95 px-4 py-3 sm:justify-between">
           {editingModelId ? (
             <Button
               variant="ghost"
@@ -221,7 +221,7 @@ export function ModelEditor({
             <Button
               variant="outline"
               onClick={() => onOpenChange(false)}
-              className="border-border/60"
+              className="border-line-strong"
             >
               Скасувати
             </Button>

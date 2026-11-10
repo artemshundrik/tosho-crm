@@ -98,7 +98,7 @@ const DialogContent = React.forwardRef<
         // відкрита, центр і стеля рахуються від видимої частини над нею.
         "md:in-data-[keyboard=open]:top-[calc((100dvh-var(--keyboard-inset))/2)]",
         "md:in-data-[keyboard=open]:max-h-[calc(100dvh-var(--keyboard-inset)-1.5rem)]",
-        "rounded-2xl border border-border/40 bg-card shadow-elevated-lg ring-1 ring-black/5 dark:ring-white/5 outline-none",
+        "rounded-2xl border border-line bg-card shadow-elevated-lg ring-1 ring-black/5 dark:ring-white/5 outline-none",
         "flex flex-col gap-2 overflow-hidden p-4 sm:gap-3 sm:p-5",
         // ВІДКРИТТЯ: проявлення + легкий приріст масштабу + підйом на 8px.
         // Разом це читається як «вікно виринає», а не «кадр підмінили». Крива —

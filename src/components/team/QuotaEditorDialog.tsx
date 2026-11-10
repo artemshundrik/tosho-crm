@@ -164,7 +164,7 @@ export function QuotaEditorDialog({
         </DialogHeader>
 
         <div className="max-h-[52vh] overflow-y-auto pr-1">
-          <div className="sticky top-0 z-10 grid grid-cols-[minmax(0,1fr)_64px_64px_64px] items-center gap-2 border-b border-border/50 bg-card px-1 pb-2 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <div className="sticky top-0 z-10 grid grid-cols-[minmax(0,1fr)_64px_64px_64px] items-center gap-2 border-b border-line-subtle bg-card px-1 pb-2 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
             <span>Людина</span>
             <span className="text-center">Відп.</span>
             <span className="text-center">Відгул</span>
@@ -177,7 +177,7 @@ export function QuotaEditorDialog({
               Завантаження…
             </div>
           ) : (
-            <div className="divide-y divide-border/40">
+            <div className="divide-y divide-line-subtle">
               {people.map((person) => {
                 const draft = drafts[person.userId];
                 if (!draft) return null;

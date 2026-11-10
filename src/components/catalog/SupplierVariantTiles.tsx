@@ -96,7 +96,7 @@ export function SupplierVariantTiles({
             event.stopPropagation();
             onPick(variant);
           }}
-          className="flex items-center gap-2 rounded-md border border-border/60 py-1 pl-1 pr-2.5 text-left transition-colors hover:border-foreground hover:bg-muted/60"
+          className="flex items-center gap-2 rounded-md border border-line-strong py-1 pl-1 pr-2.5 text-left transition-colors hover:border-foreground hover:bg-muted/60"
         >
           <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded bg-muted/40">
             <VariantPhoto url={variant.imageUrl} label={variant.label} />
@@ -123,7 +123,7 @@ export function SupplierVariantTiles({
           }}
           // Та сама висота, що в плитки кольору: інакше «ще N» з'їжджає під ряд
           // і стає окремим рядком.
-          className="self-stretch rounded-md border border-dashed border-border px-2.5 text-2xs text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
+          className="self-stretch rounded-md border border-dashed border-line-strong px-2.5 text-2xs text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
         >
           ще {product.variants.length - COLOR_CAP}
         </button>

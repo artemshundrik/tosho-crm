@@ -87,7 +87,7 @@ export function SiteListingQueue({
         Моделі {supplierName}, яких ще немає на avanprint.ua.
       </p>
 
-      <div className="mt-3 rounded-section border border-border/60 bg-card">
+      <div className="mt-3 rounded-section border border-line bg-card">
         <div className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between">
           <SegmentedGroup>
             {SITE_LISTING_TABS.map((item) => (

@@ -58,7 +58,7 @@ export const ContractSectionsEditor = ({ sections, onChange, disabled }: Props) 
   return (
     <div className="space-y-4">
       {sections.map((section, index) => (
-        <Card key={section.id} className="border-border/60 p-4">
+        <Card key={section.id} className="border-line p-4">
           <div className="mb-3 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="rounded-full px-2 py-0 text-3xs">
@@ -105,7 +105,7 @@ export const ContractSectionsEditor = ({ sections, onChange, disabled }: Props) 
         </Card>
       ))}
 
-      <Card className="border-dashed border-border/60 p-4">
+      <Card className="border-dashed border-line p-4">
         <div className="mb-2 text-sm font-semibold text-foreground">Додати власний пункт</div>
         <div className="text-xs text-muted-foreground">
           Існуючі пункти 1–8 видалити не можна — лише редагувати їх зміст. Можна дописати додаткові пункти у кінець.

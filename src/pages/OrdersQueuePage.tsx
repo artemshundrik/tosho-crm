@@ -162,7 +162,7 @@ export default function OrdersQueuePage() {
     <PageCanvas>
       <PageCanvasBody className="space-y-3 py-3 pb-20 md:pb-6">
         {isNarrowViewport ? null : (
-          <div className="flex gap-1 border-b border-border/60 px-5" role="tablist" aria-label="Стан прорахунків">
+          <div className="flex gap-1 border-b border-line-subtle px-5" role="tablist" aria-label="Стан прорахунків">
             {TABS.map((item) => (
               <button
                 key={item.id}
@@ -204,7 +204,7 @@ export default function OrdersQueuePage() {
               const items = summarizeOrderItems(record);
               const action = queueAction(record);
               return (
-                <div key={record.id} className="flex flex-col gap-2 rounded-xl border border-border/60 bg-card p-3">
+                <div key={record.id} className="flex flex-col gap-2 rounded-xl border border-line bg-card p-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="truncate text-sm font-semibold text-foreground">{record.customerName}</div>
@@ -281,7 +281,7 @@ export default function OrdersQueuePage() {
                         name={record.managerLabel}
                         fallback={initials(record.managerLabel)}
                         size={24}
-                        className="shrink-0 border-border/60"
+                        className="shrink-0 border-line"
                         fallbackClassName="text-3xs font-semibold"
                       />
                     </TableCell>
@@ -299,7 +299,7 @@ export default function OrdersQueuePage() {
 
 function QueueEmpty({ tab }: { tab: QueueTab }) {
   return (
-    <div className="rounded-xl border border-dashed border-border/70 p-8 text-center text-sm text-muted-foreground">
+    <div className="rounded-xl border border-dashed border-line p-8 text-center text-sm text-muted-foreground">
       {tab === "ready" ? "Немає прорахунків, з яких можна одразу зробити замовлення." : "Тут порожньо."}
     </div>
   );

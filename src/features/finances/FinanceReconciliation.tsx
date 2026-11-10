@@ -228,18 +228,18 @@ export function FinanceReconciliation({ teamId, userId }: FinanceReconciliationP
           </div>
 
           {operations.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border/60 bg-muted/10 p-6 text-center text-sm text-muted-foreground">
+            <div className="rounded-xl border border-dashed border-line bg-muted/10 p-6 text-center text-sm text-muted-foreground">
               Немає операцій по цьому замовнику.
             </div>
           ) : (
-            <div className="overflow-hidden rounded-xl border border-border/60">
-              <div className="grid grid-cols-4 gap-2 border-b border-border/60 bg-muted/20 px-4 py-2 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <div className="overflow-hidden rounded-xl border border-line">
+              <div className="grid grid-cols-4 gap-2 border-b border-line-subtle bg-muted/20 px-4 py-2 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
                 <span>Дата</span>
                 <span>Документ</span>
                 <span className="text-right">Нараховано</span>
                 <span className="text-right">Оплачено</span>
               </div>
-              <div className="divide-y divide-border/50">
+              <div className="divide-y divide-line-subtle">
                 {operations.map((op, i) => (
                   <div key={i} className="grid grid-cols-4 gap-2 px-4 py-2.5 text-sm">
                     <span className="text-muted-foreground">{fmtDate(op.date)}</span>
@@ -253,8 +253,8 @@ export function FinanceReconciliation({ teamId, userId }: FinanceReconciliationP
           )}
         </>
       ) : (
-        <div className="rounded-xl border border-dashed border-border/60 bg-muted/10 p-8 text-center">
-          <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-background">
+        <div className="rounded-xl border border-dashed border-line bg-muted/10 p-8 text-center">
+          <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-background">
             <ScrollText className="h-5 w-5 text-muted-foreground" />
           </div>
           <p className="text-sm text-muted-foreground">Оберіть замовника, щоб сформувати акт звірки.</p>
@@ -268,7 +268,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "wa
   return (
     <div
       className={
-        "rounded-xl border border-border/40 bg-card p-4" +
+        "rounded-xl border border-line bg-card p-4" +
         (tone === "warning" ? " flag-warning" : tone === "info" ? " flag-info" : "")
       }
     >

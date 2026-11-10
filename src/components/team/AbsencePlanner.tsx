@@ -217,7 +217,7 @@ function AbsencePlannerImpl({
           (правка CEO 2026-08-03). Дублює заливку стовпчика навмисно: колір
           каже «щось особливе», а назву дає лише текст. */}
       {visibleHolidays.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border/40 px-3 py-2">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line-subtle px-3 py-2">
           <span className="flex items-center gap-1.5 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
             <PartyPopper className={cn("h-3.5 w-3.5", toneTextClass.festive)} aria-hidden />
             Свята
@@ -226,7 +226,7 @@ function AbsencePlannerImpl({
             <span key={holiday.dateKey} className="flex items-center gap-1.5 text-2xs">
               <span
                 aria-hidden
-                className={cn("h-3 w-3 shrink-0 rounded-sm border border-border/50", HOLIDAY_COLUMN_CLASS)}
+                className={cn("h-3 w-3 shrink-0 rounded-sm border border-line", HOLIDAY_COLUMN_CLASS)}
               />
               <b className={cn("font-semibold tabular-nums", toneTextClass.festive)}>
                 {dayNumber(holiday.dateKey)}
@@ -240,7 +240,7 @@ function AbsencePlannerImpl({
       <div className="overflow-x-auto">
       <div className="min-w-[760px]">
         {/* Шапка з датами */}
-        <div className="grid border-b border-border/60" style={gridStyle}>
+        <div className="grid border-b border-line-subtle" style={gridStyle}>
           <div />
           {dayMeta.map((day) => (
             <div
@@ -290,10 +290,10 @@ function AbsencePlannerImpl({
           return (
             <div
               key={person.userId}
-              className="relative grid h-[46px] items-center border-b border-border/40 last:border-b-0"
+              className="relative grid h-[46px] items-center border-b border-line-subtle last:border-b-0"
               style={gridStyle}
             >
-              <div className="flex h-full min-w-0 items-center gap-2.5 border-r border-border/60 px-3">
+              <div className="flex h-full min-w-0 items-center gap-2.5 border-r border-line-subtle px-3">
                 <PersonHoverCardMaybe person={person.card ?? null} side="right">
                   <AvatarBase
                     src={person.avatarUrl}

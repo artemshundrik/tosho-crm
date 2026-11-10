@@ -238,7 +238,7 @@ export function PartyCreateDialog(props: {
           ) : null}
 
           {similarShown ? (
-            <div role="status" data-testid="party-similar" className="rounded-lg border border-border/60 p-2">
+            <div role="status" data-testid="party-similar" className="rounded-lg border border-line p-2">
               <p className="px-1.5 pb-1 text-sm font-medium text-foreground">Схожа компанія вже є. Це не вона?</p>
               <CompanyHintList matches={similarShown} />
             </div>

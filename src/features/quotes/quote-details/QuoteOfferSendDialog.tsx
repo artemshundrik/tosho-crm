@@ -87,7 +87,7 @@ export function QuoteOfferSendDialog(props: {
            документ було видно до другої позиції. */
         className="flex h-[min(860px,90vh)] w-[min(1080px,calc(100vw-32px))] max-w-[1080px] flex-col gap-0 overflow-hidden p-0 sm:p-0"
       >
-        <DialogHeader className="shrink-0 border-b border-border/60 px-6 py-5 pr-14">
+        <DialogHeader className="shrink-0 border-b border-line-subtle px-6 py-5 pr-14">
           <DialogTitle>Надіслати пропозицію</DialogTitle>
           <DialogDescription>
             {props.quoteNumber} · {props.customerName}
@@ -95,7 +95,7 @@ export function QuoteOfferSendDialog(props: {
         </DialogHeader>
 
         <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-          <div className="flex min-h-0 flex-1 flex-col gap-3 p-5 md:border-r md:border-border/60">
+          <div className="flex min-h-0 flex-1 flex-col gap-3 p-5 md:border-r md:border-line-subtle">
             {props.building ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -112,7 +112,7 @@ export function QuoteOfferSendDialog(props: {
               /* 794 px — ширина сторінки A4 у документі; масштабуємо її під
                  колонку, щоб прев'ю лишалось тим самим документом, а не його
                  вузькою версією. */
-              <div className="min-h-[320px] flex-1 overflow-hidden rounded-xl border border-border/60 bg-muted/20">
+              <div className="min-h-[320px] flex-1 overflow-hidden rounded-xl border border-line bg-muted/20">
                 <div className="h-full w-full origin-top-left scale-[0.72]" style={{ width: "139%", height: "139%" }}>
                   <iframe
                     title="Прев'ю пропозиції"
@@ -192,7 +192,7 @@ export function QuoteOfferSendDialog(props: {
           </div>
         </div>
 
-        <DialogFooter className="shrink-0 items-center border-t border-border/60 px-5 py-4 sm:justify-between">
+        <DialogFooter className="shrink-0 items-center border-t border-line-subtle px-5 py-4 sm:justify-between">
           <label className="flex cursor-pointer items-center gap-2.5 text-sm">
             <Checkbox
               checked={props.markSent}

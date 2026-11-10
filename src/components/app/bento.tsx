@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils";
  */
 
 /** Канонічна поверхня бенто-картки. Тіні немає навмисно — вона лише у спливному. */
-export const BENTO_CARD = "rounded-xl border border-border/40 bg-card";
+export const BENTO_CARD = "rounded-xl border border-line bg-card";
 
 /** Дрібний капслок над великим числом. */
 export const BENTO_LABEL = "text-2xs font-medium uppercase tracking-wide text-muted-foreground";
@@ -169,7 +169,7 @@ export function HeroShell({
         </div>
         {children}
         {footnote ? (
-          <div className="mt-3.5 flex flex-wrap gap-x-4 gap-y-1 border-t border-border/40 pt-2.5 text-2xs text-muted-foreground">
+          <div className="mt-3.5 flex flex-wrap gap-x-4 gap-y-1 border-t border-line-subtle pt-2.5 text-2xs text-muted-foreground">
             {footnote}
           </div>
         ) : null}

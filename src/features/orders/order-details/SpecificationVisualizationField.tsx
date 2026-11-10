@@ -23,7 +23,7 @@ export function SpecificationVisualizationField({
     <label
       htmlFor="spec-include-visualization"
       className={cn(
-        "flex items-start gap-3 rounded-md border border-border/60 p-3",
+        "flex items-start gap-3 rounded-md border border-line p-3",
         enabled ? "cursor-pointer" : "cursor-not-allowed opacity-70"
       )}
     >

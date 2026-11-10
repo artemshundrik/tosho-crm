@@ -259,7 +259,7 @@ export function OrderPurchaseDialog({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border/60 pt-3">
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line-subtle pt-3">
             {problems.length > 0 ? (
               <span className="min-w-[160px] flex-1 text-xs text-muted-foreground">{problems[0]}</span>
             ) : null}

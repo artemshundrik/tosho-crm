@@ -395,7 +395,7 @@ function StockCardsMobile({ rows, handlers }: { rows: SampleStockItemRow[]; hand
       {rows.map((row) => (
         <div
           key={row.id}
-          className="rounded-inner border border-border bg-card p-4"
+          className="rounded-inner border border-line bg-card p-4"
           onClick={() => handlers.onEdit(row)}
         >
           <div className="flex items-start justify-between gap-3">
@@ -970,7 +970,7 @@ export default function SampleStockPage() {
         {error ? (
           <div className="rounded-inner border border-destructive/20 bg-destructive/5 p-6 text-sm text-destructive">{error}</div>
         ) : schemaMissing ? (
-          <div className="rounded-inner border border-dashed border-border bg-card/40 p-6 text-sm text-muted-foreground">
+          <div className="rounded-inner border border-dashed border-line bg-card/40 p-6 text-sm text-muted-foreground">
             Таблиця складу ще не створена в Supabase. Потрібно застосувати{" "}
             <span className="font-medium text-foreground">scripts/sample-stock-schema.sql</span>, а стартові дані лежать у{" "}
             <span className="font-medium text-foreground">scripts/sample-stock-seed-from-numbers.sql</span>.
@@ -1131,7 +1131,7 @@ export default function SampleStockPage() {
                 />
               </div>
 
-              <label className="flex items-center gap-3 rounded-inner border border-border bg-muted/25 px-3 py-3 text-sm sm:col-span-2">
+              <label className="flex items-center gap-3 rounded-inner border border-line bg-muted/25 px-3 py-3 text-sm sm:col-span-2">
                 <Checkbox
                   checked={form.isArchived}
                   onCheckedChange={(checked) => setForm((current) => ({ ...current, isArchived: checked === true }))}
@@ -1146,7 +1146,7 @@ export default function SampleStockPage() {
             {formError ? <div className="text-sm text-destructive">{formError}</div> : null}
           </SheetBody>
 
-          <SheetFooter className="border-t border-border/50 bg-background px-6 py-4">
+          <SheetFooter className="border-t border-line-subtle bg-background px-6 py-4">
               <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
                 Скасувати
               </Button>
@@ -1179,15 +1179,15 @@ export default function SampleStockPage() {
           <SheetBody className="space-y-5 px-6 py-6">
             {movementTarget ? (
               <div className="grid grid-cols-3 gap-3 text-sm">
-                <div className="rounded-inner border border-border bg-card/70 px-3 py-2">
+                <div className="rounded-inner border border-line bg-card/70 px-3 py-2">
                   <div className="text-xs text-muted-foreground">Залишок</div>
                   <div className="font-semibold tabular-nums">{formatQuantity(getQuantity(movementTarget))}</div>
                 </div>
-                <div className="rounded-inner border border-border bg-card/70 px-3 py-2">
+                <div className="rounded-inner border border-line bg-card/70 px-3 py-2">
                   <div className="text-xs text-muted-foreground">Резерв</div>
                   <div className="font-semibold tabular-nums">{formatQuantity(getReservedQuantity(movementTarget))}</div>
                 </div>
-                <div className="rounded-inner border border-border bg-card/70 px-3 py-2">
+                <div className="rounded-inner border border-line bg-card/70 px-3 py-2">
                   <div className="text-xs text-muted-foreground">Доступно</div>
                   <div className="font-semibold tabular-nums">{formatQuantity(getAvailableQuantity(movementTarget))}</div>
                 </div>
@@ -1234,7 +1234,7 @@ export default function SampleStockPage() {
             {movementError ? <div className="text-sm text-destructive">{movementError}</div> : null}
           </SheetBody>
 
-          <SheetFooter className="border-t border-border/50 bg-background px-6 py-4">
+          <SheetFooter className="border-t border-line-subtle bg-background px-6 py-4">
               <Button variant="outline" onClick={() => setMovementTarget(null)} disabled={movementSaving}>
                 Скасувати
               </Button>

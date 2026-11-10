@@ -468,7 +468,7 @@ export function LeadPanel(props: {
         {state === "ready" && form && readiness && screen === "card" ? (
           <>
             {conversion.pending || converting ? (
-              <section className="flex items-center gap-3 border-b border-border px-5 py-3 text-sm">
+              <section className="flex items-center gap-3 border-b border-line-subtle px-5 py-3 text-sm">
                 <UserCheck className="size-4 shrink-0 text-muted-foreground" />
                 <span className="flex-1">
                   {converting ? `Переводимо ${name} в замовники…` : `${name} стане замовником за кілька секунд`}

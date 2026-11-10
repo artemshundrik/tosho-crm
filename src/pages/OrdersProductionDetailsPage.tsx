@@ -1419,7 +1419,7 @@ export default function OrdersProductionDetailsPage() {
             activeTab === "details" ? "pb-0" : "pb-10"
           )}
         >
-          <div className="sticky top-[var(--page-chrome-offset,var(--app-header-height))] z-30 mb-4 -mx-4 border-b border-border/50 bg-background/95 px-4 backdrop-blur md:-mx-5 md:px-5 lg:-mx-6 lg:px-6 record-split:static record-split:mb-0 record-split:shrink-0 2xl:-mx-8 2xl:px-8">
+          <div className="sticky top-[var(--page-chrome-offset,var(--app-header-height))] z-30 mb-4 -mx-4 border-b border-line-subtle bg-background/95 px-4 backdrop-blur md:-mx-5 md:px-5 lg:-mx-6 lg:px-6 record-split:static record-split:mb-0 record-split:shrink-0 2xl:-mx-8 2xl:px-8">
             <TabBar value={activeTab}>
               {orderTabs.map((tab) => (
                 <TabBarItem
@@ -1525,7 +1525,7 @@ export default function OrdersProductionDetailsPage() {
                 {teamId && userId && record.source === "stored" && (requiresCustomerDocuments || record.contractCreatedAt) ? (
                   <Suspense
                     fallback={
-                      <div className="flex items-center gap-2 rounded-xl border border-border/60 p-5 text-sm text-muted-foreground">
+                      <div className="flex items-center gap-2 rounded-xl border border-line p-5 text-sm text-muted-foreground">
                         <Loader2 className="h-4 w-4 animate-spin" /> Завантаження договорів…
                       </div>
                     }
@@ -1673,11 +1673,11 @@ export default function OrdersProductionDetailsPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <div className="space-y-3 rounded-md border border-border/60 p-3">
+            <div className="space-y-3 rounded-md border border-line p-3">
               <div className="flex items-center justify-between gap-2">
                 <div className="text-sm font-medium">Номер і дата договору</div>
                 {!isCeo ? (
-                  <span className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-3xs font-medium text-muted-foreground">
+                  <span className="rounded-full border border-line bg-muted/30 px-2 py-0.5 text-3xs font-medium text-muted-foreground">
                     Тільки CEO / власник
                   </span>
                 ) : null}
@@ -1724,7 +1724,7 @@ export default function OrdersProductionDetailsPage() {
               </div>
               <label
                 htmlFor="contract-auto-prolongation"
-                className="flex h-full cursor-pointer items-start gap-3 rounded-md border border-border/60 p-3"
+                className="flex h-full cursor-pointer items-start gap-3 rounded-md border border-line p-3"
               >
                 <Checkbox
                   id="contract-auto-prolongation"
@@ -1741,7 +1741,7 @@ export default function OrdersProductionDetailsPage() {
               </label>
             </div>
 
-            <div className="space-y-3 rounded-md border border-border/60 p-3">
+            <div className="space-y-3 rounded-md border border-line p-3">
               <div className="text-sm font-medium">Умови оплати</div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="grid content-start gap-2">
@@ -1917,7 +1917,7 @@ export default function OrdersProductionDetailsPage() {
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="grid items-start gap-4 md:grid-cols-2">
-            <div className="space-y-3 rounded-md border border-border/60 p-3">
+            <div className="space-y-3 rounded-md border border-line p-3">
               <div className="text-sm font-medium">Умови оплати</div>
               <div className="grid gap-2">
                 <Label>Тип оплати</Label>
@@ -1998,7 +1998,7 @@ export default function OrdersProductionDetailsPage() {
               />
               <p className="text-xs text-muted-foreground">Іде в п. 2.2 СП: «до N робочих днів».</p>
             </div>
-            <div className="space-y-3 rounded-md border border-border/60 p-3">
+            <div className="space-y-3 rounded-md border border-line p-3">
               <div className="text-sm font-medium">Умови доставки</div>
               <div className="grid gap-2">
                 <div className="flex h-5 items-center gap-1.5">

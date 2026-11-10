@@ -169,7 +169,7 @@ export function useSegmentedSlider<T extends HTMLElement>(variant: SliderVariant
             // дію або посилання, а активна вкладка — не дія, а місце, де ти
             // зараз стоїш.
             "bottom-0 z-base h-0.5 rounded-full bg-foreground"
-          : "z-0 rounded-md border border-border bg-background",
+          : "z-0 rounded-md border border-line-strong bg-background",
         animated &&
           (underline
             ? "transition-[transform,width] duration-base ease-out motion-reduce:transition-none"

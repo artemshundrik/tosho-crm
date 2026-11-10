@@ -757,7 +757,7 @@ function ThreadCard({
         "group w-full rounded-xl border px-4 py-4 text-left transition-colors",
         active
           ? "border-foreground/20 bg-foreground/5 text-foreground"
-          : "border-border/60 bg-card/60 text-foreground hover:bg-muted/35"
+          : "border-line-strong bg-card/60 text-foreground hover:bg-muted/35"
       )}
     >
       <div className="flex items-start justify-between gap-3">
@@ -837,15 +837,15 @@ function analyticsDetailMatchesBadge(detail: AnalyticsDetail, badgeLabel: string
 function AnalyticsResultTable({ analytics }: { analytics: AnalyticsPayload }) {
   const isQuoteDraft = analytics.variant === "quote_draft";
   return (
-    <div className="mt-4 overflow-hidden rounded-xl border border-border/65 bg-background/55">
-      <div className="flex flex-wrap items-end justify-between gap-2 border-b border-border/55 px-3.5 py-3">
+    <div className="mt-4 overflow-hidden rounded-xl border border-line bg-background/55">
+      <div className="flex flex-wrap items-end justify-between gap-2 border-b border-line-subtle px-3.5 py-3">
         <div className="flex min-w-0 items-center gap-2.5">
           {analytics.kind === "entity" ? (
             <EntityAvatar
               src={analytics.avatarUrl ?? null}
               name={analytics.title}
               size={34}
-              className="ring-1 ring-border/60"
+              className="ring-1 ring-line"
               fallbackClassName="text-2xs font-semibold"
             />
           ) : null}
@@ -860,7 +860,7 @@ function AnalyticsResultTable({ analytics }: { analytics: AnalyticsPayload }) {
       </div>
 
       {analytics.rows.length > 0 ? (
-        <div className="divide-y divide-border/45">
+        <div className="divide-y divide-line-subtle">
           {analytics.rows.map((row) => {
             const displayLabel = analytics.kind === "people" ? formatShortDisplayName(row.label) : row.label;
             const hasDetails = Boolean(row.details?.length);
@@ -880,7 +880,7 @@ function AnalyticsResultTable({ analytics }: { analytics: AnalyticsPayload }) {
                         src={row.avatarUrl ?? null}
                         name={displayLabel}
                         size={38}
-                        className="mt-0.5 shrink-0 ring-1 ring-border/60"
+                        className="mt-0.5 shrink-0 ring-1 ring-line"
                         fallbackClassName="text-2xs font-semibold"
                       />
                     ) : row.avatarUrl ? (
@@ -888,7 +888,7 @@ function AnalyticsResultTable({ analytics }: { analytics: AnalyticsPayload }) {
                         <img
                           src={row.avatarUrl}
                           alt=""
-                          className="mt-0.5 h-16 w-16 shrink-0 rounded-xl border border-border/60 bg-background/80 object-cover sm:h-[72px] sm:w-[72px]"
+                          className="mt-0.5 h-16 w-16 shrink-0 rounded-xl border border-line bg-background/80 object-cover sm:h-[72px] sm:w-[72px]"
                           loading="lazy"
                         />
                       ) : (
@@ -896,14 +896,14 @@ function AnalyticsResultTable({ analytics }: { analytics: AnalyticsPayload }) {
                           src={row.avatarUrl}
                           name={displayLabel}
                           size={38}
-                          className="mt-0.5 ring-1 ring-border/60"
+                          className="mt-0.5 ring-1 ring-line"
                           fallbackClassName="text-2xs font-semibold"
                         />
                       )
                     ) : (
                       <div
                         className={cn(
-                          "mt-0.5 flex shrink-0 items-center justify-center border border-border/70 bg-muted/35 text-muted-foreground",
+                          "mt-0.5 flex shrink-0 items-center justify-center border border-line bg-muted/35 text-muted-foreground",
                           isQuoteDraft ? "h-16 w-16 rounded-xl sm:h-[72px] sm:w-[72px]" : "h-[38px] w-[38px] rounded-full"
                         )}
                       >
@@ -932,7 +932,7 @@ function AnalyticsResultTable({ analytics }: { analytics: AnalyticsPayload }) {
                 </div>
 
                 {row.badges && row.badges.length > 0 ? (
-                  <div className="mt-3 overflow-hidden rounded-xl border border-border/55 bg-background/55">
+                  <div className="mt-3 overflow-hidden rounded-xl border border-line bg-background/55">
                     {row.badges.map((badge, badgeIndex) => {
                       const BadgeIcon = getAnalyticsBadgeIcon(badge.label);
                       const badgeMetrics = buildAnalyticsBadgeSummary(badge.value, analytics.variant);
@@ -943,7 +943,7 @@ function AnalyticsResultTable({ analytics }: { analytics: AnalyticsPayload }) {
                       const timeValue = getAnalyticsMetricValue(badgeMetrics, "Час");
                       const amountValue = getAnalyticsMetricValue(badgeMetrics, amountLabel);
                       const rowClassName = cn(
-                        "min-w-0 border-t border-border/45",
+                        "min-w-0 border-t border-line-subtle",
                         badgeIndex === 0 && "border-t-0"
                       );
                       const summaryClassName =
@@ -987,7 +987,7 @@ function AnalyticsResultTable({ analytics }: { analytics: AnalyticsPayload }) {
                           >
                             {typeSummary}
                           </summary>
-                          <div className="divide-y divide-border/45 border-t border-border/45 bg-muted/10">
+                          <div className="divide-y divide-line-subtle border-t border-line-subtle bg-muted/10">
                             {detailRows.map((detail) => {
                               const detailBadges = detail.badges ?? [];
                               const detailContent = (
@@ -1053,7 +1053,7 @@ function AnalyticsResultTable({ analytics }: { analytics: AnalyticsPayload }) {
       )}
 
       {analytics.note ? (
-        <div className="border-t border-border/45 px-3.5 py-2.5 text-xs leading-5 text-muted-foreground">
+        <div className="border-t border-line-subtle px-3.5 py-2.5 text-xs leading-5 text-muted-foreground">
           {analytics.note}
         </div>
       ) : null}
@@ -1126,7 +1126,7 @@ function EmptyChatSuggestions({
   }
 
   return (
-    <div className="rounded-xl border border-border/60 bg-card/72 p-4">
+    <div className="rounded-xl border border-line bg-card/72 p-4">
       <div className="flex items-start gap-3">
         <div className="flex h-9 w-9 items-center justify-center rounded-full border border-ai-accent/18 bg-ai-accent/10 text-ai-accent">
           <Sparkles className="h-4 w-4" />
@@ -1153,7 +1153,7 @@ function EmptyChatSuggestions({
         </div>
       ) : null}
 
-      <div className="mt-4 flex flex-wrap gap-2 border-t border-border/45 pt-3">
+      <div className="mt-4 flex flex-wrap gap-2 border-t border-line-subtle pt-3">
         {groups.map((group) => {
           const isActive = group.id === activeGroupId;
           const isDefault = !activeGroupId && group.id === groups[0]?.id;
@@ -1166,7 +1166,7 @@ function EmptyChatSuggestions({
                 "inline-flex min-h-8 items-center rounded-full border px-3 py-1.5 text-left text-xs font-semibold transition-colors",
                 isActive || isDefault
                   ? "border-ai-accent/24 bg-ai-accent/10 text-ai-accent"
-                  : "border-border/60 bg-card/60 text-muted-foreground hover:border-ai-accent/20 hover:text-foreground"
+                  : "border-line-strong bg-card/60 text-muted-foreground hover:border-ai-accent/20 hover:text-foreground"
               )}
             >
               {group.label}
@@ -1206,7 +1206,7 @@ function MessageCard({
                 "flex h-8 w-8 items-center justify-center rounded-full border",
                 isAssistant
                   ? "border-ai-accent/18 bg-ai-accent/10 text-ai-accent"
-                  : "border-border/60 bg-background/80 text-foreground"
+                  : "border-line bg-background/80 text-foreground"
               )}
             >
               {isAssistant ? <Bot className="h-4 w-4" /> : <MessageSquare className="h-4 w-4" />}
@@ -1224,7 +1224,7 @@ function MessageCard({
             "rounded-xl border px-3.5 py-3 text-[15px] sm:rounded-xl sm:px-4 sm:py-3.5",
             isUser
               ? "border-ai-accent/18 bg-ai-accent/12"
-              : "border-border/60 bg-card/88"
+              : "border-line bg-card/88"
           )}
         >
           <div className="whitespace-pre-wrap break-words text-[15px] leading-6 text-foreground [overflow-wrap:anywhere]">{displayBody}</div>
@@ -1241,18 +1241,18 @@ function MessageCard({
                     href={attachment.url ?? undefined}
                     target="_blank"
                     rel="noreferrer"
-                    className="rounded-xl border border-border/60 bg-background/70 px-3 py-3 transition-colors hover:bg-muted/25"
+                    className="rounded-xl border border-line-strong bg-background/70 px-3 py-3 transition-colors hover:bg-muted/25"
                   >
                     <div className="flex items-start gap-3">
                       {isPreviewableAttachment(attachment) ? (
                         <img
                           src={attachment.url ?? undefined}
                           alt={attachment.fileName}
-                          className="h-14 w-14 rounded-xl border border-border/50 object-cover"
+                          className="h-14 w-14 rounded-xl border border-line object-cover"
                           loading="lazy"
                         />
                       ) : (
-                        <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-border/50 bg-muted/30 text-muted-foreground">
+                        <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-line bg-muted/30 text-muted-foreground">
                           {attachment.mimeType?.startsWith("image/") ? (
                             <ImageIcon className="h-5 w-5" />
                           ) : (
@@ -1281,7 +1281,7 @@ function MessageCard({
                 {message.sources.map((source) => (
                   <div
                     key={`${message.id}:${source.id}`}
-                    className="rounded-xl border border-border/60 bg-background/70 px-3 py-3"
+                    className="rounded-xl border border-line bg-background/70 px-3 py-3"
                   >
                     <div className="text-sm font-medium text-foreground">{source.title}</div>
                     <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
@@ -1315,7 +1315,7 @@ function MessageCard({
                     event.stopPropagation();
                     onSelectAction(action.text);
                   }}
-                  className="inline-flex min-h-8 items-center rounded-full border border-border/65 bg-background/65 px-3 py-1.5 text-left text-xs font-semibold text-foreground/85 transition-colors hover:bg-muted/45"
+                  className="inline-flex min-h-8 items-center rounded-full border border-line-strong bg-background/65 px-3 py-1.5 text-left text-xs font-semibold text-foreground/85 transition-colors hover:bg-muted/45"
                 >
                   {action.label}
                 </button>
@@ -1324,7 +1324,7 @@ function MessageCard({
           ) : null}
 
           {diagnostics ? (
-            <details className="mt-4 rounded-xl border border-border/60 bg-background/65 px-3 py-2 text-xs text-muted-foreground">
+            <details className="mt-4 rounded-xl border border-line bg-background/65 px-3 py-2 text-xs text-muted-foreground">
               <summary className="cursor-pointer select-none font-semibold text-foreground/75">AI debug</summary>
               <div className="mt-2 grid gap-2">
                 {diagnostics.openAi ? (
@@ -2116,7 +2116,7 @@ export function ToShoAiConsole({
           <div className="flex min-h-full w-full min-w-0 max-w-full flex-col gap-3 px-3 pb-3 pt-2 sm:gap-4 sm:px-4 sm:pb-4 sm:pt-3 md:px-5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               {selectedThread ? (
-                <div className="flex min-w-0 items-center rounded-full border border-border/60 bg-card/55 p-1">
+                <div className="flex min-w-0 items-center rounded-full border border-line bg-card/55 p-1">
                   <Button
                     type="button"
                     variant="ghost"
@@ -2130,7 +2130,7 @@ export function ToShoAiConsole({
                   </Button>
                 </div>
               ) : null}
-              <div className="ml-auto flex min-w-0 items-center rounded-full border border-border/60 bg-card/55 p-1">
+              <div className="ml-auto flex min-w-0 items-center rounded-full border border-line bg-card/55 p-1">
                 <Button
                   type="button"
                   variant={showRequestList ? "secondary" : "ghost"}
@@ -2155,7 +2155,7 @@ export function ToShoAiConsole({
             </div>
 
             {/* Обидві панелі лишаються в дереві, а ховає їх `hidden`: вузол мусить дожити до кінця згасання (REQ-203). */}
-            <div hidden={!showRequestList} className="panel-reveal rounded-xl border border-border/60 bg-card/88 p-4">
+            <div hidden={!showRequestList} className="panel-reveal rounded-xl border border-line bg-card/88 p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <div className="text-sm font-semibold text-foreground">Попередні чати</div>
@@ -2170,7 +2170,7 @@ export function ToShoAiConsole({
                 onChange={(event) => setQueueSearch(event.target.value)}
                 placeholder="Пошук по чатах"
                 disabled={historyPanelLoading && !historyLoaded}
-                className="mt-3 border-border/60"
+                className="mt-3 border-line-strong"
               />
               <div className="mt-3 space-y-3">
                 {historyPanelLoading && !historyLoaded ? (
@@ -2198,7 +2198,7 @@ export function ToShoAiConsole({
               </div>
             </div>
 
-            <div hidden={!knowledgeExpanded} className="panel-reveal rounded-xl border border-border/60 bg-card/88 p-4">
+            <div hidden={!knowledgeExpanded} className="panel-reveal rounded-xl border border-line bg-card/88 p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <div className="text-sm font-semibold text-foreground">База знань</div>
@@ -2215,7 +2215,7 @@ export function ToShoAiConsole({
                   <KnowledgeListSkeleton />
                 ) : (snapshot?.knowledgeItems ?? []).length > 0 ? (
                   (snapshot?.knowledgeItems ?? []).map((item) => (
-                    <div key={item.id} className="rounded-xl border border-border/60 bg-background/65 px-4 py-4">
+                    <div key={item.id} className="rounded-xl border border-line bg-background/65 px-4 py-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 space-y-2">
                           <div className="flex flex-wrap items-center gap-2">
@@ -2261,7 +2261,7 @@ export function ToShoAiConsole({
                         </div>
                       </div>
                       {expandedKnowledgeId === item.id ? (
-                        <div className="mt-4 space-y-3 border-t border-border/50 pt-4">
+                        <div className="mt-4 space-y-3 border-t border-line-subtle pt-4">
                           <div className="whitespace-pre-wrap text-sm leading-6 text-foreground">{item.body}</div>
                           <div className="flex flex-wrap items-center justify-between gap-3">
                             <div className="text-xs text-muted-foreground">
@@ -2299,7 +2299,7 @@ export function ToShoAiConsole({
             </div>
 
             {!snapshot && !loading && loadError ? (
-              <div className="rounded-xl border border-border/60 bg-card/70 p-4">
+              <div className="rounded-xl border border-line bg-card/70 p-4">
                 <EmptyPanel
                   icon={<Bot className="h-5 w-5" />}
                   title="ToSho AI тимчасово недоступний"
@@ -2346,7 +2346,7 @@ export function ToShoAiConsole({
 
         <div
           className={cn(
-            "shrink-0 border-t border-border/60 bg-background/95 px-3 pt-2.5 backdrop-blur sm:px-4 sm:pb-4 sm:pt-3 md:px-5",
+            "shrink-0 border-t border-line-subtle bg-background/95 px-3 pt-2.5 backdrop-blur sm:px-4 sm:pb-4 sm:pt-3 md:px-5",
             isMobileComposer && composerFocused ? "pb-2" : "pb-[calc(max(1.25rem,env(safe-area-inset-bottom))+0.25rem)]"
           )}
         >
@@ -2364,16 +2364,16 @@ export function ToShoAiConsole({
                 {pendingAttachments.map((attachment) => (
                   <div
                     key={attachment.id}
-                    className="flex items-center gap-2 rounded-full border border-border/60 bg-card/75 px-3 py-2"
+                    className="flex items-center gap-2 rounded-full border border-line bg-card/75 px-3 py-2"
                   >
                     {attachment.previewUrl ? (
                       <img
                         src={attachment.previewUrl}
                         alt={attachment.file.name}
-                        className="h-7 w-7 rounded-full border border-border/50 object-cover"
+                        className="h-7 w-7 rounded-full border border-line object-cover"
                       />
                     ) : (
-                      <div className="flex h-7 w-7 items-center justify-center rounded-full border border-border/50 bg-muted/30 text-muted-foreground">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full border border-line bg-muted/30 text-muted-foreground">
                         <FileText className="h-3.5 w-3.5" />
                       </div>
                     )}
@@ -2446,7 +2446,7 @@ export function ToShoAiConsole({
                 enterKeyHint="send"
                 rows={1}
                 placeholder={composerPlaceholder}
-                className="h-11 max-h-[150px] min-h-[44px] w-0 min-w-0 max-w-full flex-[1_1_0%] resize-none overflow-x-hidden overflow-y-auto border-border/60 bg-card/88 px-3.5 py-2.5 text-base leading-6 [overflow-wrap:anywhere] sm:h-12 sm:max-h-[220px] sm:min-h-[48px] sm:rounded-xl sm:px-4 sm:py-3 sm:text-sm sm:leading-5"
+                className="h-11 max-h-[150px] min-h-[44px] w-0 min-w-0 max-w-full flex-[1_1_0%] resize-none overflow-x-hidden overflow-y-auto border-line-strong bg-card/88 px-3.5 py-2.5 text-base leading-6 [overflow-wrap:anywhere] sm:h-12 sm:max-h-[220px] sm:min-h-[48px] sm:rounded-xl sm:px-4 sm:py-3 sm:text-sm sm:leading-5"
               />
               <Button
                 type="button"
@@ -2582,8 +2582,8 @@ function EmptyPanel({
   description: string;
 }) {
   return (
-    <div className="rounded-xl border border-dashed border-border/70 bg-background/45 px-4 py-5 text-center">
-      <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full border border-border/60 bg-background/80 text-muted-foreground">
+    <div className="rounded-xl border border-dashed border-line bg-background/45 px-4 py-5 text-center">
+      <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full border border-line bg-background/80 text-muted-foreground">
         {icon}
       </div>
       <div className="mt-3 text-[15px] font-semibold text-foreground">{title}</div>
@@ -2605,7 +2605,7 @@ function MentionSuggestionPanel({
 }) {
   const title = `Підставити ${getMentionKindLabel(activeMention.kind)}`;
   return (
-    <div className="rounded-xl border border-border/60 bg-card/95 p-2">
+    <div className="rounded-xl border border-line bg-card/95 p-2">
       <div className="px-2 pb-1 text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
         {title}
       </div>
@@ -2635,7 +2635,7 @@ function MentionSuggestionPanel({
                     src={suggestion.avatarUrl}
                     name={suggestion.label}
                     size={32}
-                    className="shrink-0 ring-1 ring-border/60"
+                    className="shrink-0 ring-1 ring-line"
                     fallbackClassName="text-2xs font-semibold"
                   />
                 ) : (
@@ -2643,7 +2643,7 @@ function MentionSuggestionPanel({
                     src={suggestion.avatarUrl}
                     name={suggestion.label}
                     size={32}
-                    className="shrink-0 ring-1 ring-border/60"
+                    className="shrink-0 ring-1 ring-line"
                     fallbackClassName="text-2xs font-semibold"
                   />
                 )}
@@ -2670,7 +2670,7 @@ function HistoryListSkeleton() {
       {Array.from({ length: 3 }).map((_, index) => (
         <div
           key={`history-skeleton:${index}`}
-          className="rounded-xl border border-border/60 bg-background/55 px-4 py-4"
+          className="rounded-xl border border-line bg-background/55 px-4 py-4"
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1 space-y-3">
@@ -2699,7 +2699,7 @@ function KnowledgeListSkeleton() {
       {Array.from({ length: 2 }).map((_, index) => (
         <div
           key={`knowledge-skeleton:${index}`}
-          className="rounded-xl border border-border/60 bg-background/55 px-4 py-4"
+          className="rounded-xl border border-line bg-background/55 px-4 py-4"
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1 space-y-3">

@@ -50,7 +50,7 @@ function renderInAppToastContent({
   onClose?: () => void;
 }) {
   return (
-    <div className="w-[min(420px,calc(100vw-32px))] rounded-xl border border-border bg-card p-4 text-card-foreground ring-1 ring-[hsl(var(--soft-ring))]">
+    <div className="w-[min(420px,calc(100vw-32px))] rounded-xl border border-line bg-card p-4 text-card-foreground ring-1 ring-[hsl(var(--soft-ring))]">
       <div className="flex items-start gap-3">
         <div
           className={cn(
@@ -69,7 +69,7 @@ function renderInAppToastContent({
               <button
                 type="button"
                 onClick={onClose}
-                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border/70 bg-background/80 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line-strong bg-background/80 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 aria-label="Закрити сповіщення"
               >
                 <CloseIcon className="h-4 w-4" />
@@ -79,7 +79,7 @@ function renderInAppToastContent({
           {description ? <div className="text-sm leading-5 text-muted-foreground">{description}</div> : null}
           <div className="flex items-center justify-end gap-3 pt-1">
             {actionLabel ? (
-              <span className="inline-flex h-8 items-center rounded-full border border-border bg-background px-3 text-xs font-semibold text-foreground">
+              <span className="inline-flex h-8 items-center rounded-full border border-line bg-background px-3 text-xs font-semibold text-foreground">
                 {actionLabel}
               </span>
             ) : null}
@@ -231,11 +231,11 @@ export function NotificationSettingsDialog({ open, onOpenChange }: { open: boole
       </DialogHeader>
 
       <div className="space-y-2.5 sm:space-y-3">
-        <section className="rounded-inner border border-border/70 bg-background px-3 py-3 sm:px-4 sm:py-4">
+        <section className="rounded-inner border border-line bg-background px-3 py-3 sm:px-4 sm:py-4">
           <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-start md:justify-between">
             <div className="flex min-w-0 items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border bg-primary/5 text-primary">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-line bg-primary/5 text-primary">
                   <BellRing className="h-4 w-4" />
                 </div>
                 <div className="min-w-0 max-w-2xl">
@@ -249,7 +249,7 @@ export function NotificationSettingsDialog({ open, onOpenChange }: { open: boole
                 "inline-flex shrink-0 rounded-full border px-2.5 py-1 text-2xs font-semibold md:hidden",
                 pushStatusTone === "active" && "border-primary/25 bg-primary/10 text-primary",
                 pushStatusTone === "muted" && "border-warning-soft-border bg-warning-soft text-warning-foreground",
-                pushStatusTone === "inactive" && "border-border bg-muted/60 text-muted-foreground"
+                pushStatusTone === "inactive" && "border-line bg-muted/60 text-muted-foreground"
               )}>
                 {pushStatusLabel}
               </span>
@@ -260,7 +260,7 @@ export function NotificationSettingsDialog({ open, onOpenChange }: { open: boole
                   "inline-flex rounded-full border px-2.5 py-1 text-2xs font-semibold",
                   pushStatusTone === "active" && "border-primary/25 bg-primary/10 text-primary",
                   pushStatusTone === "muted" && "border-warning-soft-border bg-warning-soft text-warning-foreground",
-                  pushStatusTone === "inactive" && "border-border bg-muted/60 text-muted-foreground"
+                  pushStatusTone === "inactive" && "border-line bg-muted/60 text-muted-foreground"
                 )}>
                   {pushStatusLabel}
                 </span>
@@ -298,11 +298,11 @@ export function NotificationSettingsDialog({ open, onOpenChange }: { open: boole
           </div>
         </section>
 
-        <section className="rounded-inner border border-border/70 bg-background px-3 py-3 sm:px-4 sm:py-4">
+        <section className="rounded-inner border border-line bg-background px-3 py-3 sm:px-4 sm:py-4">
           <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-start md:justify-between">
             <div className="flex min-w-0 items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border bg-primary/5 text-primary">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-line bg-primary/5 text-primary">
                   <MonitorSmartphone className="h-4 w-4" />
                 </div>
                 <div className="min-w-0 max-w-2xl">
@@ -342,11 +342,11 @@ export function NotificationSettingsDialog({ open, onOpenChange }: { open: boole
           </div>
         </section>
 
-        <section className="rounded-inner border border-border/70 bg-background px-3 py-3 sm:px-4 sm:py-4">
+        <section className="rounded-inner border border-line bg-background px-3 py-3 sm:px-4 sm:py-4">
           <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-start md:justify-between">
             <div className="flex min-w-0 items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border bg-primary/5 text-primary">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-line bg-primary/5 text-primary">
                   <Volume2 className="h-4 w-4" />
                 </div>
                 <div className="min-w-0 max-w-2xl">
@@ -360,7 +360,7 @@ export function NotificationSettingsDialog({ open, onOpenChange }: { open: boole
                 "inline-flex shrink-0 rounded-full border px-2.5 py-1 text-2xs font-semibold md:hidden",
                 soundStatusTone === "active" && "border-primary/25 bg-primary/10 text-primary",
                 soundStatusTone === "muted" && "border-warning-soft-border bg-warning-soft text-warning-foreground",
-                soundStatusTone === "inactive" && "border-border bg-muted/60 text-muted-foreground"
+                soundStatusTone === "inactive" && "border-line bg-muted/60 text-muted-foreground"
               )}>
                 {soundStatusLabel}
               </span>
@@ -370,7 +370,7 @@ export function NotificationSettingsDialog({ open, onOpenChange }: { open: boole
                 "hidden rounded-full border px-2.5 py-1 text-2xs font-semibold md:inline-flex",
                 soundStatusTone === "active" && "border-primary/25 bg-primary/10 text-primary",
                 soundStatusTone === "muted" && "border-warning-soft-border bg-warning-soft text-warning-foreground",
-                soundStatusTone === "inactive" && "border-border bg-muted/60 text-muted-foreground"
+                soundStatusTone === "inactive" && "border-line bg-muted/60 text-muted-foreground"
               )}>
                 {soundStatusLabel}
               </span>
@@ -421,9 +421,9 @@ export function NotificationSettingsDialog({ open, onOpenChange }: { open: boole
           </div>
         </section>
 
-        <section className="rounded-inner border border-border/70 bg-background px-3 py-3 sm:px-4 sm:py-4">
+        <section className="rounded-inner border border-line bg-background px-3 py-3 sm:px-4 sm:py-4">
           <div className="mb-3 flex items-center gap-3">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border bg-primary/5 text-primary">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-line bg-primary/5 text-primary">
               <Send className="h-4 w-4" />
             </div>
             <div className="min-w-0">
@@ -443,7 +443,7 @@ export function NotificationSettingsDialog({ open, onOpenChange }: { open: boole
         </section>
       </div>
 
-      <div className="rounded-inner border border-border/70 bg-background/68 p-3 sm:p-4">
+      <div className="rounded-inner border border-line bg-background/68 p-3 sm:p-4">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="text-sm font-semibold text-foreground sm:text-base">Тест in-app popup</div>

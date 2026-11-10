@@ -49,7 +49,7 @@ function CardShell({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-border/40 bg-card p-4">
+    <section className="rounded-xl border border-line bg-card p-4">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 className="text-2xs font-bold uppercase tracking-widest text-muted-foreground">{title}</h3>
@@ -80,7 +80,7 @@ function FactsBody({ rows }: { rows: Array<{ key: string; label: string; value: 
       {rows.map((row) => (
         <div
           key={row.key}
-          className="flex items-baseline justify-between gap-3 border-t border-border/40 py-1.5 text-xs first:border-t-0"
+          className="flex items-baseline justify-between gap-3 border-t border-line-subtle py-1.5 text-xs first:border-t-0"
         >
           <span className="min-w-0 truncate text-muted-foreground">{row.label}</span>
           <span className="figure shrink-0 font-medium text-foreground">{row.value}</span>
@@ -100,7 +100,7 @@ function ActivityBody({ rows }: { rows: OverviewActivityRow[] }) {
         <Link
           key={row.id}
           to={row.href}
-          className="-mx-1.5 flex items-start gap-2 rounded-lg border-t border-border/40 px-1.5 py-2 transition-colors first:border-t-0 hover:bg-muted/40"
+          className="-mx-1.5 flex items-start gap-2 rounded-lg border-t border-line-subtle px-1.5 py-2 transition-colors first:border-t-0 hover:bg-muted/40"
         >
           <AvatarBase src={row.avatarUrl} name={row.actorName} fallback={getInitials(row.actorName)} variant="sm" />
           <div className="min-w-0 flex-1">

@@ -39,7 +39,7 @@ export function CloseDialog({
           {CLOSE_REASONS.map((option) => (
             <label
               key={option.key}
-              className={cn("flex cursor-pointer items-start gap-2.5 border-t border-border px-4 py-2.5", reason === option.key && "bg-primary/8")}
+              className={cn("flex cursor-pointer items-start gap-2.5 border-t border-line-subtle px-4 py-2.5", reason === option.key && "bg-primary/8")}
             >
               <input type="radio" name="close-reason" className="mt-[3px]" checked={reason === option.key} onChange={() => setReason(option.key)} />
               <span className="flex flex-col gap-0.5">
@@ -49,7 +49,7 @@ export function CloseDialog({
             </label>
           ))}
         </div>
-        <DialogFooter className="border-t border-border p-3 sm:p-3">
+        <DialogFooter className="border-t border-line-subtle p-3 sm:p-3">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Скасувати
           </Button>
@@ -110,14 +110,14 @@ export function PassDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="max-h-[320px] overflow-y-auto">
-          {options.length === 0 ? <p className="border-t border-border p-4 text-sm text-muted-foreground">Більше немає менеджерів, яким можна передати.</p> : null}
+          {options.length === 0 ? <p className="border-t border-line-subtle p-4 text-sm text-muted-foreground">Більше немає менеджерів, яким можна передати.</p> : null}
           {options.map(({ manager, load }) => (
             <button
               key={manager.userId}
               type="button"
               aria-pressed={target === manager.userId}
               onClick={() => setTarget(manager.userId)}
-              className={cn("flex w-full flex-col gap-1 border-t border-border px-4 py-2.5 text-left hover:bg-muted/50", target === manager.userId && "bg-primary/8")}
+              className={cn("flex w-full flex-col gap-1 border-t border-line-subtle px-4 py-2.5 text-left hover:bg-muted/50", target === manager.userId && "bg-primary/8")}
             >
               <span className="flex items-center gap-1.5 text-xs">
                 <AvatarBase
@@ -137,13 +137,13 @@ export function PassDialog({
             </button>
           ))}
         </div>
-        <div className="flex flex-col gap-1 border-t border-border px-4 py-3">
+        <div className="flex flex-col gap-1 border-t border-line-subtle px-4 py-3">
           <label htmlFor="pass-note" className="text-xs text-muted-foreground">
             Коментар колезі, якщо треба
           </label>
           <Input id="pass-note" value={note} maxLength={500} onChange={(event) => setNote(event.target.value)} />
         </div>
-        <DialogFooter className="border-t border-border p-3 sm:p-3">
+        <DialogFooter className="border-t border-line-subtle p-3 sm:p-3">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Скасувати
           </Button>

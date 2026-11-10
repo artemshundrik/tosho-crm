@@ -103,7 +103,7 @@ export function ThreadFeed({
   if (entries.length === 0) {
     return (
       <div className="flex flex-col items-center gap-1.5 px-5 py-10 text-center">
-        <span className="grid h-9 w-9 place-items-center rounded-xl border border-border/60 bg-muted text-muted-foreground">
+        <span className="grid h-9 w-9 place-items-center rounded-xl border border-line bg-muted text-muted-foreground">
           <MessageSquare className="h-4 w-4" />
         </span>
         <span className="text-sm font-semibold">Тут поки тихо</span>
@@ -127,7 +127,7 @@ export function ThreadFeed({
               type="button"
               onClick={() => toggleDay(block.key)}
               aria-expanded={!collapsed}
-              className="sticky top-1 z-10 mx-auto inline-flex items-center gap-1.5 rounded-full border border-border/40 bg-muted px-2.5 py-0.5 text-2xs font-semibold text-muted-foreground transition-colors hover:bg-muted/70"
+              className="sticky top-1 z-10 mx-auto inline-flex items-center gap-1.5 rounded-full border border-line-strong bg-muted px-2.5 py-0.5 text-2xs font-semibold text-muted-foreground transition-colors hover:bg-muted/70"
             >
               {block.label}
               <span className="font-normal opacity-75">· {block.count}</span>
@@ -145,7 +145,7 @@ export function ThreadFeed({
           return (
             <div
               key={block.entry.id}
-              className="mx-auto flex max-w-[88%] items-center gap-1.5 rounded-full border border-border/40 bg-muted px-2.5 py-0.5 text-2xs text-muted-foreground"
+              className="mx-auto flex max-w-[88%] items-center gap-1.5 rounded-full border border-line bg-muted px-2.5 py-0.5 text-2xs text-muted-foreground"
             >
               <span
                 className={cn(
@@ -225,7 +225,7 @@ export function ThreadFeed({
                     ) : null}
 
                     {entry.deletedAt ? (
-                      <div className="rounded-xl border border-dashed border-border/60 px-2.5 py-1.5 text-xs italic text-muted-foreground">
+                      <div className="rounded-xl border border-dashed border-line px-2.5 py-1.5 text-xs italic text-muted-foreground">
                         Повідомлення видалено
                       </div>
                     ) : entry.body ? (
@@ -381,7 +381,7 @@ export function ThreadSkeleton() {
 export function ThreadNoAccess() {
   return (
     <div className="flex flex-col items-center gap-1.5 px-5 py-10 text-center">
-      <span className="grid h-9 w-9 place-items-center rounded-xl border border-border/60 bg-muted text-muted-foreground">
+      <span className="grid h-9 w-9 place-items-center rounded-xl border border-line bg-muted text-muted-foreground">
         <Send className="h-4 w-4" />
       </span>
       <span className="text-sm font-semibold">Обговорення недоступне</span>

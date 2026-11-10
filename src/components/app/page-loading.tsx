@@ -55,7 +55,7 @@ function Line({ w, h = "h-3.5", dim }: { w: string; h?: string; dim?: boolean })
 /** Блок-секція картки сутності. */
 function SectionBlock({ rows = 3, title = "w-32" }: { rows?: number; title?: string }) {
   return (
-    <div className="space-y-3 rounded-section border border-border/60 bg-card/70 p-5">
+    <div className="space-y-3 rounded-section border border-line bg-card/70 p-5">
       <Line w={title} h="h-4" />
       <div className="space-y-2">
         {Array.from({ length: rows }).map((_, index) => (
@@ -104,7 +104,7 @@ function BoardShape({ board }: ShapeProps) {
 function TableShape() {
   return (
     <div className="w-full">
-      <div className="flex h-11 items-center gap-6 border-b border-border/50 px-6">
+      <div className="flex h-11 items-center gap-6 border-b border-line-subtle px-6">
         {["w-20", "w-24", "w-16", "w-14", "w-10"].map((width, index) => (
           <div
             key={index}
@@ -118,7 +118,7 @@ function TableShape() {
         ))}
       </div>
       {Array.from({ length: 9 }).map((_, index) => (
-        <div key={index} className="flex min-h-[74px] items-center gap-6 border-b border-border/30 px-6 py-3.5">
+        <div key={index} className="flex min-h-[74px] items-center gap-6 border-b border-line-subtle px-6 py-3.5">
           <div className="flex-[1.3] space-y-2">
             <Line w={index % 3 === 0 ? "w-[62%]" : "w-[48%]"} />
             <Line w={index % 2 === 0 ? "w-[40%]" : "w-[54%]"} h="h-3" dim />
@@ -153,7 +153,7 @@ function RecordShape({ grid, topBar }: { grid: string; topBar: boolean }) {
   return (
     <div className="w-full">
       {topBar ? (
-        <div className="border-b border-border/70">
+        <div className="border-b border-line-subtle">
           <div className="flex items-center justify-between gap-3 px-4 py-2 md:px-5 lg:px-6">
             <div className="flex min-w-0 items-center gap-3">
               <Skeleton className="h-(--control-h) w-(--control-h) shrink-0 rounded-lg" />
@@ -169,7 +169,7 @@ function RecordShape({ grid, topBar }: { grid: string; topBar: boolean }) {
 
       <div className={cn("grid grid-cols-1 xl:items-start", grid)}>
         <div className="min-w-0 px-4 pb-10 md:px-5 lg:px-6 2xl:px-8">
-          <div className="-mx-4 mb-4 border-b border-border/50 px-4 py-2 md:-mx-5 md:px-5 lg:-mx-6 lg:px-6 2xl:-mx-8 2xl:px-8">
+          <div className="-mx-4 mb-4 border-b border-line-subtle px-4 py-2 md:-mx-5 md:px-5 lg:-mx-6 lg:px-6 2xl:-mx-8 2xl:px-8">
             <div className="flex items-center justify-between gap-3">
               <Line w="w-56" h="h-4" />
               <div className="flex gap-2">
@@ -188,7 +188,7 @@ function RecordShape({ grid, topBar }: { grid: string; topBar: boolean }) {
 
         <div className="px-4 pb-10 pt-2 md:px-5 lg:px-6 xl:border-l xl:border-[hsl(var(--app-structure-divider))] xl:px-6 xl:pt-6">
           <div className="space-y-6">
-            <div className="space-y-3 rounded-section border border-border/60 bg-card/70 p-4">
+            <div className="space-y-3 rounded-section border border-line bg-card/70 p-4">
               <Line w="w-24" h="h-4" />
               {Array.from({ length: 4 }).map((_, index) => (
                 <div key={index} className="flex items-center justify-between gap-3">
@@ -197,7 +197,7 @@ function RecordShape({ grid, topBar }: { grid: string; topBar: boolean }) {
                 </div>
               ))}
             </div>
-            <div className="space-y-3 rounded-section border border-border/60 bg-card/70 p-4">
+            <div className="space-y-3 rounded-section border border-line bg-card/70 p-4">
               <Line w="w-28" h="h-4" />
               {Array.from({ length: 3 }).map((_, index) => (
                 <div key={index} className="flex items-center gap-3">
@@ -229,7 +229,7 @@ function QuoteRecordShape() {
     <div className="grid grid-cols-1 xl:h-[calc(100dvh-57px)] xl:grid-cols-[minmax(0,1fr)_380px] xl:overflow-hidden">
       <div className="flex min-w-0 flex-col">
         {/* Шапка: назад · номер · тип · статус-контрол · ⋮ */}
-        <div className="border-b border-border/70 px-4 py-2 md:px-5 lg:px-6">
+        <div className="border-b border-line-subtle px-4 py-2 md:px-5 lg:px-6">
           <div className="flex min-h-10 items-center gap-2">
             <Skeleton className="h-8 w-8 shrink-0 rounded-md" />
             <Line w="w-32" h="h-4" />
@@ -242,7 +242,7 @@ function QuoteRecordShape() {
         </div>
 
         {/* Вкладки — підкресленням, тому лише рядок написів */}
-        <div className="border-b border-border/50 px-3 md:px-4">
+        <div className="border-b border-line-subtle px-3 md:px-4">
           <div className="flex h-11 items-center gap-5">
             {["w-16", "w-14", "w-20", "w-24", "w-20"].map((w, index) => (
               <Line key={index} w={w} h="h-3" dim={index > 0} />
@@ -258,7 +258,7 @@ function QuoteRecordShape() {
 
       {/* Права колонка: ідентичність → підсумок → розмова */}
       <div className="flex flex-col gap-2 px-4 pb-10 pt-2 md:px-5 lg:px-6 xl:border-l xl:border-[hsl(var(--app-structure-divider))] xl:px-3 xl:pb-3 xl:pt-3">
-        <div className="shrink-0 rounded-inner border border-border/40 bg-card/70 p-2.5">
+        <div className="shrink-0 rounded-inner border border-line bg-card/70 p-2.5">
           <div className="flex items-center gap-2">
             <Skeleton className="h-7 w-7 shrink-0 rounded-full" />
             <div className="min-w-0 flex-1 space-y-1.5">
@@ -276,7 +276,7 @@ function QuoteRecordShape() {
           </div>
         </div>
 
-        <div className="shrink-0 space-y-2.5 rounded-inner border border-border/40 bg-card/70 p-2.5">
+        <div className="shrink-0 space-y-2.5 rounded-inner border border-line bg-card/70 p-2.5">
           <Skeleton className="h-6 w-40 rounded-lg" />
           <Skeleton className="h-2.5 w-full rounded-full opacity-80" />
           <div className="space-y-1.5">
@@ -290,7 +290,7 @@ function QuoteRecordShape() {
           </div>
         </div>
 
-        <div className="flex min-h-[220px] flex-1 flex-col rounded-inner border border-border/40 bg-card/70 p-2.5">
+        <div className="flex min-h-[220px] flex-1 flex-col rounded-inner border border-line bg-card/70 p-2.5">
           <Line w="w-28" h="h-3" dim />
           <div className="mt-auto space-y-2">
             <Skeleton className="h-8 w-[70%] rounded-xl opacity-70" />
@@ -316,7 +316,7 @@ function DesignRecordShape() {
 function DetailShape({ canvas }: ShapeProps) {
   return (
     <div className={cn("space-y-5", canvas && "px-4 py-4 pb-20 sm:px-6 lg:px-8 2xl:px-10")}>
-      <div className="flex flex-wrap items-start justify-between gap-4 rounded-section border border-border/60 bg-card/70 p-5">
+      <div className="flex flex-wrap items-start justify-between gap-4 rounded-section border border-line bg-card/70 p-5">
         <div className="min-w-0 flex-1 space-y-2.5">
           <Skeleton className="h-6 w-[38%] rounded-full" />
           <Line w="w-[54%]" dim />
@@ -340,7 +340,7 @@ function DetailShape({ canvas }: ShapeProps) {
         </div>
         <div className="space-y-4">
           {Array.from({ length: 2 }).map((_, index) => (
-            <div key={index} className="space-y-3 rounded-section border border-border/60 bg-card/70 p-5">
+            <div key={index} className="space-y-3 rounded-section border border-line bg-card/70 p-5">
               <Line w="w-24" h="h-4" />
               {Array.from({ length: 3 }).map((_, rowIndex) => (
                 <div key={rowIndex} className="flex items-center justify-between gap-3">
@@ -361,7 +361,7 @@ function DashboardShape({ canvas }: ShapeProps) {
     <div className={cn("space-y-5", canvas && "px-4 py-4 md:px-5 lg:px-6")}>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }).map((_, index) => (
-          <div key={index} className="space-y-3 rounded-section border border-border/60 bg-card/70 p-4">
+          <div key={index} className="space-y-3 rounded-section border border-line bg-card/70 p-4">
             <Line w="w-24" h="h-3" dim />
             <Skeleton className="h-7 w-20 rounded-lg" />
             <Line w="w-[58%]" h="h-3" dim />
@@ -370,11 +370,11 @@ function DashboardShape({ canvas }: ShapeProps) {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-        <div className="space-y-4 rounded-section border border-border/60 bg-card/70 p-5">
+        <div className="space-y-4 rounded-section border border-line bg-card/70 p-5">
           <Line w="w-40" h="h-4" />
           <Skeleton className="h-[200px] w-full rounded-xl opacity-70" />
         </div>
-        <div className="space-y-3 rounded-section border border-border/60 bg-card/70 p-5">
+        <div className="space-y-3 rounded-section border border-line bg-card/70 p-5">
           <Line w="w-28" h="h-4" />
           {Array.from({ length: 5 }).map((_, index) => (
             <div key={index} className="flex items-center gap-3">
@@ -396,7 +396,7 @@ function GridShape() {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
       {Array.from({ length: 10 }).map((_, index) => (
-        <div key={index} className="overflow-hidden rounded-xl border border-border/60 bg-card">
+        <div key={index} className="overflow-hidden rounded-xl border border-line bg-card">
           <Skeleton className="aspect-[4/3] w-full rounded-none opacity-80" />
           <div className="space-y-2 p-3">
             <Line w={index % 2 === 0 ? "w-[64%]" : "w-[48%]"} />
@@ -423,7 +423,7 @@ function CardsShape({ cards }: ShapeProps) {
   return (
     <div className="pb-10">
       {cards?.search ? (
-        <div className="rounded-section border border-border/60 bg-card/70 p-3">
+        <div className="rounded-section border border-line bg-card/70 p-3">
           <Skeleton className="h-(--control-h) w-full rounded-lg opacity-80" />
         </div>
       ) : null}
@@ -446,7 +446,7 @@ function ListShape({ canvas }: ShapeProps) {
         {Array.from({ length: 7 }).map((_, index) => (
           <div
             key={index}
-            className="flex items-center gap-3 rounded-xl border border-border/50 bg-card/70 px-4 py-3.5"
+            className="flex items-center gap-3 rounded-xl border border-line bg-card/70 px-4 py-3.5"
           >
             <Skeleton className="h-11 w-11 shrink-0 rounded-xl" />
             <div className="min-w-0 flex-1 space-y-2">
@@ -468,11 +468,11 @@ function SplitShape({ canvas }: ShapeProps) {
       className={cn(
         "flex overflow-hidden",
         canvas
-          ? "h-[calc(100dvh-125px)] min-h-[420px] border-t border-border/50"
-          : "mx-auto h-[calc(100dvh-7rem)] min-h-[420px] w-full max-w-[1400px] rounded-section border border-border bg-card/60"
+          ? "h-[calc(100dvh-125px)] min-h-[420px] border-t border-line-subtle"
+          : "mx-auto h-[calc(100dvh-7rem)] min-h-[420px] w-full max-w-[1400px] rounded-section border border-line bg-card/60"
       )}
     >
-      <div className="hidden w-[300px] shrink-0 flex-col gap-2 border-r border-border/50 p-3 md:flex">
+      <div className="hidden w-[300px] shrink-0 flex-col gap-2 border-r border-line-subtle p-3 md:flex">
         <Skeleton className="h-(--control-h) w-full rounded-lg opacity-80" />
         {Array.from({ length: 9 }).map((_, index) => (
           <div key={index} className="flex items-center gap-2.5 rounded-xl px-2 py-2">
@@ -482,13 +482,13 @@ function SplitShape({ canvas }: ShapeProps) {
         ))}
       </div>
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center gap-3 border-b border-border/50 px-4 py-3">
+        <div className="flex items-center gap-3 border-b border-line-subtle px-4 py-3">
           <Skeleton className="h-(--control-h) w-full max-w-[360px] rounded-lg" />
           <Skeleton className="ml-auto h-(--control-h) w-28 shrink-0 rounded-lg opacity-80" />
         </div>
         <div className="grid min-h-0 flex-1 gap-3 overflow-hidden p-4 sm:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 6 }).map((_, index) => (
-            <div key={index} className="space-y-3 rounded-xl border border-border/50 bg-background/50 p-3">
+            <div key={index} className="space-y-3 rounded-xl border border-line bg-background/50 p-3">
               <Skeleton className="h-24 w-full rounded-xl opacity-75" />
               <Line w={index % 2 === 0 ? "w-[58%]" : "w-[44%]"} />
               <Line w="w-[34%]" h="h-3" dim />

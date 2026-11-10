@@ -25,7 +25,7 @@ export function OrderDeliveryCard({
   const recipient = details ? [details.contactName, details.contactPhone].filter(Boolean).join(" · ") : "";
 
   return (
-    <section className="rounded-xl border border-border/60 bg-card p-4" aria-label="Доставка">
+    <section className="rounded-xl border border-line bg-card p-4" aria-label="Доставка">
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <Truck className="h-4 w-4 text-muted-foreground" />
@@ -43,19 +43,19 @@ export function OrderDeliveryCard({
       {details?.payer ? (
         <div className="mt-1 text-xs text-muted-foreground">Платить: {details.payer === "company" ? "ми" : "замовник"}</div>
       ) : null}
-      <div className="mt-3 border-t border-border/50 pt-3 text-sm">
+      <div className="mt-3 border-t border-line-subtle pt-3 text-sm">
         <span className="text-muted-foreground">Умови поставки: </span>
         <span className="font-medium text-foreground">{record.incotermsCode || "FCA"}</span>
         {record.incotermsPlace ? <span className="text-muted-foreground">, {record.incotermsPlace}</span> : null}
       </div>
       {record.packaging ? (
-        <div className="mt-3 border-t border-border/50 pt-3">
+        <div className="mt-3 border-t border-line-subtle pt-3">
           <div className="text-2xs uppercase tracking-caps-tight text-muted-foreground">Пакування</div>
           <div className="mt-1 text-sm text-foreground">{record.packaging}</div>
         </div>
       ) : null}
       {record.source === "stored" ? (
-        <div className="mt-3 border-t border-border/50 pt-3">
+        <div className="mt-3 border-t border-line-subtle pt-3">
           {record.npTtnNumber ? (
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">

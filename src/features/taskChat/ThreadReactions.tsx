@@ -54,7 +54,7 @@ export function ThreadReactions({ reactions, userId, memberName, onToggle, align
                     "inline-flex h-[22px] items-center gap-1 rounded-full border px-1.5 text-2xs tabular-nums transition-colors",
                     mine
                       ? "border-foreground/30 bg-foreground/10 font-semibold text-foreground"
-                      : "border-border/60 bg-card text-foreground/80 hover:bg-muted/60"
+                      : "border-line-strong bg-card text-foreground/80 hover:bg-muted/60"
                   )}
                 >
                   <span className="text-md leading-none">{emoji}</span>
@@ -71,7 +71,7 @@ export function ThreadReactions({ reactions, userId, memberName, onToggle, align
             <button
               type="button"
               aria-label="Додати реакцію"
-              className="grid h-[22px] w-[22px] place-items-center rounded-full border border-border/60 bg-card text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+              className="grid h-[22px] w-[22px] place-items-center rounded-full border border-line-strong bg-card text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
             >
               <SmilePlus className="h-3 w-3" />
             </button>
@@ -117,7 +117,7 @@ export function ThreadReactionBar({
         align === "end" ? "right-0" : "left-0"
       )}
     >
-      <div className="flex items-center gap-0.5 rounded-full border border-border/60 bg-card p-0.5">
+      <div className="flex items-center gap-0.5 rounded-full border border-line bg-card p-0.5">
       {QUICK_REACTIONS.map((emoji) => (
         <button
           key={emoji}

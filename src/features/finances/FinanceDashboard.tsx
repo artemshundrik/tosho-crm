@@ -248,7 +248,7 @@ function StatCard({
   return (
     <div
       className={cn(
-        "rounded-xl border border-border/40 bg-card p-4",
+        "rounded-xl border border-line bg-card p-4",
         tone === "warning" && "flag-warning"
       )}
     >
@@ -283,7 +283,7 @@ function Row({
   return (
     <div
       className={cn(
-        "flex items-center justify-between gap-3 rounded-xl border border-border/40 bg-card px-4 py-2.5",
+        "flex items-center justify-between gap-3 rounded-xl border border-line bg-card px-4 py-2.5",
         muted && "flag-warning"
       )}
     >
@@ -298,7 +298,7 @@ function Row({
 
 function EmptyHint({ text }: { text: string }) {
   return (
-    <div className="rounded-xl border border-dashed border-border/60 bg-muted/10 px-4 py-5 text-center text-sm text-muted-foreground">
+    <div className="rounded-xl border border-dashed border-line bg-muted/10 px-4 py-5 text-center text-sm text-muted-foreground">
       {text}
     </div>
   );

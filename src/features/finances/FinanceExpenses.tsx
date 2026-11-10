@@ -846,7 +846,7 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
     return (
       <div
         key={expense.id}
-        className="flex items-start justify-between gap-3 rounded-xl border border-border/40 bg-card px-4 py-3"
+        className="flex items-start justify-between gap-3 rounded-xl border border-line bg-card px-4 py-3"
       >
         <div className="flex min-w-0 gap-3">
           <SubscriptionLogo
@@ -925,7 +925,7 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
       <div
         key={expense.id}
         className={cn(
-          "overflow-hidden rounded-xl border border-border/40 bg-card",
+          "overflow-hidden rounded-xl border border-line bg-card",
           // Порожній місяць — приглушено, але клікабельно: журнал відкривається,
           // і запис додається просто звідси.
           dormant && "border-dashed bg-muted/20",
@@ -1086,8 +1086,8 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
       {loading ? (
         <FinanceSkeleton variant="stats" />
       ) : visibleExpenses.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border/60 bg-muted/10 p-8 text-center">
-          <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-background">
+        <div className="rounded-xl border border-dashed border-line bg-muted/10 p-8 text-center">
+          <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-background">
             <PiggyBank className="h-5 w-5 text-muted-foreground" />
           </div>
           <p className="text-sm text-muted-foreground">
@@ -1163,7 +1163,7 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
                   s.items.length > 0 ? (
                     <div className="grid gap-2">{s.items.map(renderRow)}</div>
                   ) : (
-                    <div className="rounded-xl border border-dashed border-border/60 bg-muted/10 p-6 text-center text-sm text-muted-foreground">
+                    <div className="rounded-xl border border-dashed border-line bg-muted/10 p-6 text-center text-sm text-muted-foreground">
                       Немає змінних витрат за {monthLabel(selectedMonth)}.
                     </div>
                   )
@@ -1707,7 +1707,7 @@ function ExpenseDialog({
           типів — перемикання Разова/Сервіс/Регулярний не смикає вікно. Довший вміст
           (сервіс, багато платежів) скролить усередині тіла. */}
       <DialogContent className="h-[640px] max-h-[calc(100dvh-2rem)] gap-0 p-0 sm:max-w-[720px] sm:gap-0 sm:p-0">
-        <DialogHeader className="shrink-0 border-b border-border/60 px-6 pb-4 pt-5">
+        <DialogHeader className="shrink-0 border-b border-line-subtle px-6 pb-4 pt-5">
           <DialogTitle>{editing ? "Редагувати витрату" : "Нова витрата"}</DialogTitle>
           <DialogDescription className="min-h-[20px]">
             {batchMode
@@ -1752,7 +1752,7 @@ function ExpenseDialog({
                     "flex cursor-pointer items-start gap-2.5 rounded-xl border p-3 text-left transition-colors disabled:pointer-events-none disabled:opacity-60",
                     active
                       ? "border-primary/50 bg-primary/5 ring-1 ring-primary/30"
-                      : "border-border/60 hover:border-border hover:bg-muted/40"
+                      : "border-line hover:border-line-strong hover:bg-muted/40"
                   )}
                 >
                   <div
@@ -1760,7 +1760,7 @@ function ExpenseDialog({
                       "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border",
                       active
                         ? "border-primary/40 bg-primary/10 text-primary"
-                        : "border-border/60 bg-muted/30 text-muted-foreground"
+                        : "border-line bg-muted/30 text-muted-foreground"
                     )}
                   >
                     <Icon className="h-4 w-4" />
@@ -1793,7 +1793,7 @@ function ExpenseDialog({
                     Сума | Періодичність знизу. Колонки вирівняні, нічого не тісниться. */}
                 <div className="space-y-2.5">
                   {recurRows.map((row) => (
-                    <div key={row.id} className="space-y-2.5 rounded-xl border border-border/60 bg-muted/10 p-3">
+                    <div key={row.id} className="space-y-2.5 rounded-xl border border-line bg-muted/10 p-3">
                       <div className="grid gap-2.5 sm:grid-cols-2">
                         <div className="grid gap-1.5">
                           <Label className="text-2xs font-normal uppercase tracking-wide text-muted-foreground">
@@ -1897,7 +1897,7 @@ function ExpenseDialog({
               </div>
 
               {/* Спільні поля — застосуються до всіх платежів у списку */}
-              <div className="rounded-xl border border-border/60 bg-muted/10 p-3">
+              <div className="rounded-xl border border-line bg-muted/10 p-3">
                 <div className="mb-2 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Спільне для всіх
                 </div>
@@ -2092,7 +2092,7 @@ function ExpenseDialog({
                   {/* Нагадування про платіж — має сенс лише коли є конкретна дата списання. */}
                   {varyingRecurring ? null : (
                     <div className="grid gap-2 sm:col-span-2">
-                      <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-border/60 bg-muted/10 p-3">
+                      <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-line bg-muted/10 p-3">
                         <Checkbox
                           checked={reminderEnabled}
                           onCheckedChange={(v) => setReminderEnabled(v === true)}
@@ -2258,7 +2258,7 @@ function ExpenseDialog({
               </div>
 
               {isRecurring ? (
-                <div className="rounded-xl border border-border/60 bg-muted/10 px-3 py-2.5 text-xs sm:col-span-2">
+                <div className="rounded-xl border border-line bg-muted/10 px-3 py-2.5 text-xs sm:col-span-2">
                   {varyingRecurring ? (
                     <span className="text-muted-foreground">
                       Сума змінна — кожну оплату з датою й коментарем додаси в журналі (у списку витрат).
@@ -2284,7 +2284,7 @@ function ExpenseDialog({
 
               {/* Розподіл на замовлення — тільки разова: підписка не належить замовленню. */}
               {expenseKind === "one_off" && !purchaseLocked ? (
-                <div className="rounded-xl border border-border/60 bg-muted/10 p-3 sm:col-span-2">
+                <div className="rounded-xl border border-line bg-muted/10 p-3 sm:col-span-2">
                   <div className="mb-2 flex items-center justify-between">
                     <Label className="text-xs uppercase tracking-wide text-muted-foreground">
                       Розподіл на замовлення
@@ -2356,7 +2356,7 @@ function ExpenseDialog({
           )}
         </div>
 
-        <DialogFooter className="shrink-0 flex-col items-stretch gap-3 border-t border-border/60 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <DialogFooter className="shrink-0 flex-col items-stretch gap-3 border-t border-line-subtle px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
           {/* Живий підсумок — завжди в одному місці, читається без пошуку по формі. */}
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
             {batchMode ? (

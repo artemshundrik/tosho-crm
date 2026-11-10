@@ -64,7 +64,7 @@ const Table = React.forwardRef<
   const variantClasses = {
     list: [
       headClasses,
-      "[&_tbody_tr]:border-border/50 [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-muted/30",
+      "[&_tbody_tr]:border-line-subtle [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-muted/30",
     ].join(" "),
     analytics: [
       headClasses,
@@ -72,7 +72,7 @@ const Table = React.forwardRef<
     ].join(" "),
     compact: [
       headClasses,
-      "[&_tbody_tr]:border-border/50 [&_tbody_tr:hover]:bg-muted/30",
+      "[&_tbody_tr]:border-line-subtle [&_tbody_tr:hover]:bg-muted/30",
     ].join(" "),
   };
 
@@ -127,7 +127,7 @@ const TableHeader = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
 >(({ className, ...props }, ref) => (
-  <thead ref={ref} className={cn("[&_tr]:border-b [&_tr]:border-border", className)} {...props} />
+  <thead ref={ref} className={cn("[&_tr]:border-b [&_tr]:border-line-subtle", className)} {...props} />
 ))
 TableHeader.displayName = "TableHeader"
 
@@ -165,7 +165,7 @@ const TableRow = React.forwardRef<
   <tr
     ref={ref}
     className={cn(
-      "border-b border-border/30 transition-colors hover:bg-muted/20 data-[state=selected]:bg-muted/60",
+      "border-b border-line-subtle transition-colors hover:bg-muted/20 data-[state=selected]:bg-muted/60",
       className
     )}
     {...props}

@@ -394,7 +394,7 @@ function FilterChip({
           ? "border-primary bg-primary/10 text-primary"
           : tone === "warning"
             ? "tone-warning-subtle tone-text-warning border-transparent hover:brightness-[0.97]"
-            : "border-border/70 bg-muted/[0.04] text-muted-foreground hover:bg-muted/[0.08] hover:text-foreground",
+            : "border-line-strong bg-muted/[0.04] text-muted-foreground hover:bg-muted/[0.08] hover:text-foreground",
       )}
     >
       {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
@@ -1722,9 +1722,9 @@ export function TeamMembersPage() {
           <>
           <div className="space-y-3 px-4 lg:hidden">
             {membersError ? (
-              <Card className="border-border/60 p-4 text-sm text-destructive">Помилка завантаження: {membersError}</Card>
+              <Card className="border-line p-4 text-sm text-destructive">Помилка завантаження: {membersError}</Card>
             ) : filteredMembers.length === 0 ? (
-              <Card className="border-border/60 p-4 text-sm text-muted-foreground">Нема учасників.</Card>
+              <Card className="border-line p-4 text-sm text-muted-foreground">Нема учасників.</Card>
             ) : (
               filteredMembers.map((m) => {
                 const profile = memberProfilesByUserId[m.user_id];
@@ -1745,7 +1745,7 @@ export function TeamMembersPage() {
                 return (
                   <Card
                     key={m.user_id}
-                    className={cn("border-border/60 p-4", canOpenProfileCard && "cursor-pointer")}
+                    className={cn("border-line p-4", canOpenProfileCard && "cursor-pointer")}
                     onClick={() => navigate(`/team/${m.user_id}`)}
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -1758,7 +1758,7 @@ export function TeamMembersPage() {
                             assetVariant="md"
                             size={44}
                             shape="circle"
-                            className="border-border bg-muted/50"
+                            className="border-line bg-muted/50"
                             fallbackClassName="text-xs font-bold"
                             availability={availability}
                             presence={presence?.online ? "online" : "offline"}
@@ -1894,7 +1894,7 @@ export function TeamMembersPage() {
                       {employmentSummary.secondary ? <div>Стаж: {employmentSummary.secondary}</div> : null}
                       {employmentDays !== null && employmentDays >= 0 ? <div>У компанії: {employmentDays} днів</div> : null}
                       {probation ? (
-                        <div className="rounded-lg border border-border/70 bg-muted/30 px-2.5 py-2 text-foreground">
+                        <div className="rounded-lg border border-line bg-muted/30 px-2.5 py-2 text-foreground">
                           <div className="flex items-center justify-between gap-2">
                             <span
                               className={cn(
@@ -1935,7 +1935,7 @@ export function TeamMembersPage() {
           {/* Порівняльна таблиця — десктопний вигляд вкладки «Люди».
               Клік по рядку веде в картку людини (/team/:userId), а не
               розкриває панель поруч: картка тепер одна на застосунок. */}
-            <div className="hidden border-t border-border/60 pb-8 lg:block">
+            <div className="hidden border-t border-line-subtle pb-8 lg:block">
               <div ref={membersTableRef}>
               <Table variant="list" size="md" className="table-fixed">
                 <TableHeader>
@@ -1979,7 +1979,7 @@ export function TeamMembersPage() {
                                 assetVariant="xs"
                                 size={34}
                                 shape="circle"
-                                className="border-border bg-muted/50"
+                                className="border-line bg-muted/50"
                                 fallbackClassName="text-3xs font-bold"
                                 availability={rowAvailability}
                                 presence={rowPresence?.online ? "online" : "offline"}
@@ -2065,17 +2065,17 @@ export function TeamMembersPage() {
           <>
           <div className="space-y-3 px-4 md:hidden">
             {invitesError ? (
-              <Card className="border-border/60 p-4 text-sm text-destructive">Помилка завантаження: {invitesError}</Card>
+              <Card className="border-line p-4 text-sm text-destructive">Помилка завантаження: {invitesError}</Card>
             ) : invites.length === 0 ? (
-              <Card className="border-border/60 p-4 text-sm text-muted-foreground">Немає активних запрошень.</Card>
+              <Card className="border-line p-4 text-sm text-muted-foreground">Немає активних запрошень.</Card>
             ) : (
               invites.map((inv) => {
                 const expired = isExpired(inv.expires_at);
                 const used = !!inv.accepted_at;
                 return (
-                  <Card key={inv.id} className="border-border/60 p-4">
+                  <Card key={inv.id} className="border-line p-4">
                     <div className="flex items-start gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border bg-muted">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-line bg-muted">
                         <LinkIcon className="h-4 w-4 text-muted-foreground" />
                       </div>
                       <div className="min-w-0 flex-1">
@@ -2175,7 +2175,7 @@ export function TeamMembersPage() {
                       <TableRow key={inv.id} className="hover:bg-muted/40 transition-colors">
                         <TableCell className="pl-6">
                           <div className="flex items-center gap-3">
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted border border-border">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted border border-line">
                               <LinkIcon className="w-4 h-4 text-muted-foreground" />
                             </div>
                             <div className="flex flex-col max-w-[240px]">
@@ -2319,7 +2319,7 @@ export function TeamMembersPage() {
       <Sheet open={!!pulsePeekUserId} onOpenChange={(open) => { if (!open) setPulsePeekUserId(null); }}>
         <SheetContent
           side="right"
-          className="flex h-full w-full flex-col gap-0 overflow-hidden border-l border-border bg-card p-0 text-foreground sm:max-w-[640px]"
+          className="flex h-full w-full flex-col gap-0 overflow-hidden border-l border-line-subtle bg-card p-0 text-foreground sm:max-w-[640px]"
           dismissible={true}
         >
           {pulsePeekUserId ? (() => {
@@ -2327,7 +2327,7 @@ export function TeamMembersPage() {
             const peekMember = members.find((m) => m.user_id === pulsePeekUserId) ?? null;
             return (
               <>
-                <div className="shrink-0 border-b border-border bg-muted/10 px-6 py-5">
+                <div className="shrink-0 border-b border-line-subtle bg-muted/10 px-6 py-5">
                   <SheetHeader>
                     <SheetTitle className="flex items-center gap-3 text-left">
                       <AvatarBase
@@ -2337,7 +2337,7 @@ export function TeamMembersPage() {
                         assetVariant="xs"
                         size={40}
                         shape="circle"
-                        className="border-border bg-muted/50"
+                        className="border-line bg-muted/50"
                         fallbackClassName="text-2xs font-bold"
                         presence={peekPerson.online ? "online" : "offline"}
                       />
@@ -2359,7 +2359,7 @@ export function TeamMembersPage() {
                     <PersonActivitySection userId={pulsePeekUserId} />
                   </div>
                 </div>
-                <div className="shrink-0 border-t border-border bg-card px-6 py-4">
+                <div className="shrink-0 border-t border-line-subtle bg-card px-6 py-4">
                   <Button
                     variant="outline"
                     className="w-full"
@@ -2381,8 +2381,8 @@ export function TeamMembersPage() {
           if (!open) setInviteResult(null);
         }}
       >
-        <DialogContent className="sm:max-w-[520px] p-0 gap-0 overflow-hidden border border-border bg-card text-foreground">
-          <div className="p-6 border-b border-border bg-muted/10">
+        <DialogContent className="sm:max-w-[520px] p-0 gap-0 overflow-hidden border border-line bg-card text-foreground">
+          <div className="p-6 border-b border-line-subtle bg-muted/10">
             <DialogHeader>
               <DialogTitle className="text-xl font-semibold text-foreground">Запросити в workspace</DialogTitle>
               <DialogDescription className="mt-1.5 text-muted-foreground">
@@ -2550,7 +2550,7 @@ export function TeamMembersPage() {
 
       <Dialog open={!!revokeId} onOpenChange={(open) => !open && setRevokeId(null)}>
         {/* Підтвердження, а не форма: тут нема введеного, яке можна втратити. */}
-        <DialogContent dismissible className="sm:max-w-[420px] p-0 gap-0 border border-border bg-card text-foreground overflow-hidden">
+        <DialogContent dismissible className="sm:max-w-[420px] p-0 gap-0 border border-line bg-card text-foreground overflow-hidden">
           <div className="p-6 flex flex-col items-center text-center">
             <div className="w-14 h-14 bg-danger-soft rounded-full flex items-center justify-center mb-4 text-destructive border border-danger-soft-border">
               <AlertTriangle className="w-7 h-7" />
@@ -2582,7 +2582,7 @@ export function TeamMembersPage() {
 
       <Dialog open={!!memberToDelete} onOpenChange={(open) => !open && !memberDeleteBusy && setMemberToDelete(null)}>
         {/* Підтвердження, а не форма: тут нема введеного, яке можна втратити. */}
-        <DialogContent dismissible className="sm:max-w-[420px] p-0 gap-0 border border-border bg-card text-foreground overflow-hidden">
+        <DialogContent dismissible className="sm:max-w-[420px] p-0 gap-0 border border-line bg-card text-foreground overflow-hidden">
           <div className="p-6 flex flex-col items-center text-center">
             <div className="w-14 h-14 bg-danger-soft rounded-full flex items-center justify-center mb-4 text-destructive border border-danger-soft-border">
               <AlertTriangle className="w-7 h-7" />

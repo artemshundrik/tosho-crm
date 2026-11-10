@@ -207,7 +207,7 @@ export function QuoteDeliveryFields({
   return (
     <div className={stacked ? "grid grid-cols-1 gap-3 [&>*]:col-span-1!" : "grid gap-3 md:grid-cols-2"}>
       {isNovaPoshta && npPoints.length === 0 && canSaveToCard ? (
-        <div className="md:col-span-2 rounded-lg border border-dashed border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+        <div className="md:col-span-2 rounded-lg border border-dashed border-line bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
           У клієнта ще немає збережених адрес доставки. Заповніть нову нижче — вона додасться в картку клієнта
           (Логістика) і наступного разу підтягнеться сюди автоматично.
         </div>

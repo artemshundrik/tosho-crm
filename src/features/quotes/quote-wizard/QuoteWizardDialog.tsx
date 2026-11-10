@@ -723,7 +723,7 @@ export function QuoteWizardDialog({
       >
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto md:flex-row md:overflow-hidden">
           {appendTo ? null : (
-          <aside className="flex shrink-0 flex-col gap-4 border-b border-border/60 bg-muted/30 px-5 pb-5 pt-5 md:w-[272px] md:border-b-0 md:border-r md:pr-4">
+          <aside className="flex shrink-0 flex-col gap-4 border-b border-line-subtle bg-muted/30 px-5 pb-5 pt-5 md:w-[272px] md:border-b-0 md:border-r md:pr-4">
             <DialogHeader className="text-left">
               <DialogTitle>Новий прорахунок</DialogTitle>
               <DialogDescription>Для кого й що рахуємо.</DialogDescription>
@@ -767,7 +767,7 @@ export function QuoteWizardDialog({
                         "disabled:pointer-events-none disabled:opacity-50",
                         active
                           ? "border-foreground/35 bg-card text-foreground"
-                          : "border-border/60 bg-card/40 text-muted-foreground hover:border-border hover:text-foreground"
+                          : "border-line bg-card/40 text-muted-foreground hover:border-line-strong hover:text-foreground"
                       )}
                     >
                       <Icon className="h-6 w-6" strokeWidth={1.5} />
@@ -878,8 +878,8 @@ export function QuoteWizardDialog({
                     і дія при самому файлі.
                   */}
                   {fileName && fileDrafts.length > 0 ? (
-                    <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/25 p-3">
-                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-background text-muted-foreground ring-1 ring-border/60">
+                    <div className="flex items-center gap-3 rounded-xl border border-line bg-muted/25 p-3">
+                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-background text-muted-foreground ring-1 ring-line">
                         {isWordImportFile(fileName) ? (
                           <FileText className="h-4 w-4" />
                         ) : (
@@ -920,8 +920,8 @@ export function QuoteWizardDialog({
                     поза позиціями (skippedFileRows), а НЕ кількість зауваг.
                   */}
                   {warnings.length > 0 ? (
-                    <div className="overflow-hidden rounded-xl border border-border/60">
-                      <div className="flex items-center gap-2.5 border-b border-border/60 bg-muted/25 px-3 py-2">
+                    <div className="overflow-hidden rounded-xl border border-line">
+                      <div className="flex items-center gap-2.5 border-b border-line-subtle bg-muted/25 px-3 py-2">
                         <Info className="h-4 w-4 shrink-0 text-muted-foreground" />
                         <span className="text-sm font-medium">
                           {skippedFileRows > 0
@@ -931,7 +931,7 @@ export function QuoteWizardDialog({
                             : "Зауваги до розбору"}
                         </span>
                       </div>
-                      <ul className="divide-y divide-border/60">
+                      <ul className="divide-y divide-line-subtle">
                         {warnings.map((warning) => (
                           <li key={warning} className="px-3 py-2 text-xs leading-relaxed text-muted-foreground">
                             {warning}
@@ -1044,7 +1044,7 @@ export function QuoteWizardDialog({
               )}
             </div>
 
-            <DialogFooter className="shrink-0 gap-2 border-t border-border/60 px-5 py-3 sm:justify-between">
+            <DialogFooter className="shrink-0 gap-2 border-t border-line-subtle px-5 py-3 sm:justify-between">
               {/*
                 Причина — звичайним приглушеним кольором. Спершу тут стояв
                 `text-warning-copy`: він заведений для тексту ПОВЕРХ бурштинової
@@ -1111,7 +1111,7 @@ function ExcelPanel({
     const current = order.indexOf(parseStep);
     return (
       <div className="space-y-3">
-        <div className="flex items-center gap-3 rounded-xl border border-border/60 px-3 py-2.5">
+        <div className="flex items-center gap-3 rounded-xl border border-line px-3 py-2.5">
           {/*
             Жива ілюстрація замість статичної піктограми (REQ-253). Розбір
             моделлю триває до пів хвилини, і весь цей час панель не мала
@@ -1127,7 +1127,7 @@ function ExcelPanel({
             <div className="text-2xs text-muted-foreground">розбираю моделлю</div>
           </div>
         </div>
-        <ol className="divide-y divide-border/60 rounded-xl border border-border/60">
+        <ol className="divide-y divide-line-subtle rounded-xl border border-line">
           {steps.map((step, index) => {
             const done = index < current;
             const running = index === current;
@@ -1144,7 +1144,7 @@ function ExcelPanel({
                     "grid h-5 w-5 shrink-0 place-items-center rounded-full border",
                     done && "border-foreground bg-foreground text-background",
                     running && "border-foreground border-t-transparent animate-spin",
-                    !done && !running && "border-border"
+                    !done && !running && "border-line"
                   )}
                 >
                   {done ? <Check className="h-3 w-3" strokeWidth={3} /> : null}

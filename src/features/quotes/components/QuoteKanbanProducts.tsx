@@ -119,7 +119,7 @@ export function QuoteKanbanProducts({ preview, isLoading, imageLoadStrategy }: Q
                   loadStrategy={imageLoadStrategy}
                 />
               ) : (
-                <div className="h-9 w-9 shrink-0 overflow-hidden rounded-md border border-border/60 bg-secondary">
+                <div className="h-9 w-9 shrink-0 overflow-hidden rounded-md border border-line bg-secondary">
                   {isLoading ? (
                     <Skeleton className="h-full w-full rounded-md" />
                   ) : (
@@ -134,7 +134,7 @@ export function QuoteKanbanProducts({ preview, isLoading, imageLoadStrategy }: Q
         })}
         {overflowProducts.length ? (
           <span
-            className="inline-flex h-9 min-w-9 shrink-0 items-center justify-center rounded-md border border-dashed border-border/60 px-1.5 text-xs font-semibold tabular-nums text-muted-foreground"
+            className="inline-flex h-9 min-w-9 shrink-0 items-center justify-center rounded-md border border-dashed border-line px-1.5 text-xs font-semibold tabular-nums text-muted-foreground"
             title={overflowProducts.map((product) => productDisplayName(product)).join(", ")}
           >
             +{overflowProducts.length}

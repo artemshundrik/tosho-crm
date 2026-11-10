@@ -533,7 +533,7 @@ class AppRuntimeBoundary extends React.Component<AppBoundaryProps, AppBoundarySt
   render() {
     if (!this.state.hasError) return this.props.children;
     const card = (
-      <div className="w-full max-w-lg rounded-inner border border-border bg-card p-5">
+      <div className="w-full max-w-lg rounded-inner border border-line bg-card p-5">
         <div className="text-base font-semibold">Сталася помилка інтерфейсу</div>
         <div className="mt-2 text-sm text-muted-foreground">{this.state.message}</div>
         <div className="mt-4 flex gap-2">
@@ -776,7 +776,7 @@ function LoginPage() {
 
   return (
     <div className="min-h-[100dvh] w-full flex items-center justify-center bg-background p-6">
-      <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 text-card-foreground">
+      <div className="w-full max-w-md rounded-xl border border-line bg-card p-6 text-card-foreground">
         <div className="mb-5">
           <div className="text-xl font-extrabold text-foreground">
             {isInviteFlow ? "Вхід за інвайтом" : "Вхід у ToSho CRM"}

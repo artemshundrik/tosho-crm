@@ -302,7 +302,7 @@ export const ContractRevisionsPanel = ({
     const busy = busyId === revision.id;
 
     return (
-      <Card key={revision.id} className="border-border/60 p-4">
+      <Card key={revision.id} className="border-line p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -382,7 +382,7 @@ export const ContractRevisionsPanel = ({
         </div>
 
         {canCeoDecide ? (
-          <div className="mt-4 rounded-lg border border-border/60 bg-muted/[0.04] p-3">
+          <div className="mt-4 rounded-lg border border-line bg-muted/[0.04] p-3">
             <div className="text-sm font-semibold text-foreground">Рішення CEO</div>
             <Textarea
               value={ceoCommentDraft[revision.id] ?? ""}
@@ -428,7 +428,7 @@ export const ContractRevisionsPanel = ({
                     </div>
                   ) : null}
                 </div>
-                <div className="space-y-3 rounded-lg border border-border/60 bg-muted/[0.04] p-3">
+                <div className="space-y-3 rounded-lg border border-line bg-muted/[0.04] p-3">
                   {revision.sections.map((section, index) => {
                     const previousBody = previousMap?.get(section.id);
                     const changed = previousMap !== null && previousBody !== section.bodyHtml;
@@ -469,7 +469,7 @@ export const ContractRevisionsPanel = ({
 
   if (loading) {
     return (
-      <Card className="border-border/60 p-6">
+      <Card className="border-line p-6">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
           Завантажуємо ревізії договору...
@@ -481,7 +481,7 @@ export const ContractRevisionsPanel = ({
   const editorOpen = action !== null;
 
   return (
-    <Card className="border-border/60 p-4">
+    <Card className="border-line p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
         <div>
           <div className="text-base font-semibold text-foreground">Версії договору</div>
@@ -517,7 +517,7 @@ export const ContractRevisionsPanel = ({
 
       {editorOpen ? (
         <div className="space-y-4">
-          <div className="rounded-lg border border-border/60 bg-muted/[0.04] p-3 text-sm">
+          <div className="rounded-lg border border-line bg-muted/[0.04] p-3 text-sm">
             <div className="font-semibold text-foreground">
               {action?.kind === "edit"
                 ? `Редагування v${action.revision.revisionNumber}`
@@ -575,7 +575,7 @@ export const ContractRevisionsPanel = ({
       ) : (
         <div className="space-y-3">
           {revisions.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border/60 bg-muted/10 p-6 text-center text-sm text-muted-foreground">
+            <div className="rounded-lg border border-dashed border-line bg-muted/10 p-6 text-center text-sm text-muted-foreground">
               Договір ще не створено. Натисніть «Створити Договір (v1)», щоб згенерувати першу версію зі стандартного шаблону.
             </div>
           ) : (

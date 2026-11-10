@@ -38,7 +38,7 @@ function QueueRow({ item }: { item: OverviewQueueItem }) {
   return (
     <Link
       to={item.to}
-      className="group flex min-w-0 items-start gap-2.5 border-t border-border/40 px-3 py-2.5 transition-colors first:border-t-0 hover:bg-muted/40 sm:gap-3 sm:px-5"
+      className="group flex min-w-0 items-start gap-2.5 border-t border-line-subtle px-3 py-2.5 transition-colors first:border-t-0 hover:bg-muted/40 sm:gap-3 sm:px-5"
     >
       {/* Кант терміновості — та сама мова, що в рядках канбану й нагадувань. */}
       <span
@@ -84,7 +84,7 @@ function QueueRow({ item }: { item: OverviewQueueItem }) {
 
 function LaneHeader({ lane, count }: { lane: (typeof OVERVIEW_LANES)[number]; count: number }) {
   return (
-    <div className="flex items-center gap-2 border-t border-border/40 bg-muted/40 px-3 py-2 first:border-t-0 sm:px-5">
+    <div className="flex items-center gap-2 border-t border-line-subtle bg-muted/40 px-3 py-2 first:border-t-0 sm:px-5">
       <span className={cn("h-2 w-2 shrink-0 rounded-[3px]", toneDotClass[OVERVIEW_LANE_TONE[lane]])} aria-hidden="true" />
       <span className="text-2xs font-semibold uppercase tracking-wider text-foreground">
         {OVERVIEW_LANE_LABEL[lane]}
@@ -106,7 +106,7 @@ export function OverviewQueue({
 }) {
   if (items.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-border/50 bg-card px-5 py-10 text-center">
+      <div className="rounded-xl border border-dashed border-line bg-card px-5 py-10 text-center">
         <div className="text-sm font-medium text-foreground">Порожньо — і це добра новина</div>
         <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">{emptyText}</p>
       </div>
@@ -114,7 +114,7 @@ export function OverviewQueue({
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border/40 bg-card">
+    <div className="overflow-hidden rounded-xl border border-line bg-card">
       {OVERVIEW_LANES.map((lane) => {
         const laneItems = items.filter((item) => item.lane === lane);
         if (laneItems.length === 0) return null;
@@ -130,7 +130,7 @@ export function OverviewQueue({
       {total > items.length ? (
         // Не «і ще щось»: скільки саме лишилось за кадром, видно числом. Інакше
         // велике число в героєві виглядало б як помилка поруч із коротким списком.
-        <div className="border-t border-border/40 px-3 py-2.5 text-2xs text-muted-foreground sm:px-5">
+        <div className="border-t border-line-subtle px-3 py-2.5 text-2xs text-muted-foreground sm:px-5">
           Показано {items.length} з <span className="figure font-medium text-foreground">{total}</span> — решта в
           розділах
         </div>

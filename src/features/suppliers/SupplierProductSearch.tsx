@@ -80,7 +80,7 @@ export function SupplierProductSearch({
 
   return (
     <section
-      className={cn("rounded-section border border-border/60 bg-card", className)}
+      className={cn("rounded-section border border-line bg-card", className)}
       aria-label="Пошук у товарах постачальників"
     >
       <div className="relative p-3">

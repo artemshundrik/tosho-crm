@@ -143,7 +143,7 @@ export default function InstagramRequestsPage() {
             now={now}
             hours={hours}
             className={cn(
-              "w-full border-border md:w-[340px] md:shrink-0 md:border-r",
+              "w-full border-line-subtle md:w-[340px] md:shrink-0 md:border-r",
               selectedId && "hidden md:flex",
               showTable && "md:hidden"
             )}
@@ -173,7 +173,7 @@ export default function InstagramRequestsPage() {
                   onShowDetails={() => setDetailsOpen(true)}
                   className="flex-1"
                 />
-                <div className="hidden w-[300px] shrink-0 border-l border-border xl:block">{side}</div>
+                <div className="hidden w-[300px] shrink-0 border-l border-line-subtle xl:block">{side}</div>
                 <Sheet open={detailsOpen} onOpenChange={setDetailsOpen}>
                   <SheetContent side="right" className="w-[320px] p-0">
                     <SheetTitle className="sr-only">Дані заявки</SheetTitle>

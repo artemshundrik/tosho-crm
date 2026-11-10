@@ -267,7 +267,7 @@ export const ORDER_STATUS_SECTIONS = [
 ] as const;
 
 export const ORDER_TONE_CLASSES = {
-  neutral: "border-border bg-muted/30 text-muted-foreground",
+  neutral: "border-line bg-muted/30 text-muted-foreground",
   info: "tone-info",
   success: "tone-success",
   warning: "tone-warning",

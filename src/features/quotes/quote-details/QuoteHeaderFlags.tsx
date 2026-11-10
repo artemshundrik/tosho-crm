@@ -27,9 +27,9 @@ export type QuoteMarkupGateRun = {
 };
 
 const CHIP_CLASS =
-  "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-border/60 bg-muted px-2.5 text-2xs font-medium text-foreground transition-colors hover:border-border hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20";
+  "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-line bg-muted px-2.5 text-2xs font-medium text-foreground transition-colors hover:border-line-strong hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20";
 
-const LIST_CLASS = "mt-2 flex flex-col gap-1 border-t border-border/40 pt-2";
+const LIST_CLASS = "mt-2 flex flex-col gap-1 border-t border-line-subtle pt-2";
 
 /** Тиражі нижче дна без чинного погодження: КП клієнту й «Затверджено» замкнені. */
 export function QuoteMarkupGateChip({

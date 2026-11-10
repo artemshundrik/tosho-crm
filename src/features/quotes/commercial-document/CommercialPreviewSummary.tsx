@@ -30,7 +30,7 @@ export function CommercialPreviewSummary({ doc }: { doc: CommercialDocument }) {
   );
 
   return (
-    <div className="space-y-1 border-t border-border/60 pt-3">
+    <div className="space-y-1 border-t border-line-subtle pt-3">
       {hasRunChoice ? (
         <p className="pb-2 text-2xs text-muted-foreground">{RUN_CHOICE_NOTE}</p>
       ) : null}

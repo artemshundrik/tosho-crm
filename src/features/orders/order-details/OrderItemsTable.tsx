@@ -48,7 +48,7 @@ export function OrderItemsTable({
 }) {
   return (
     <div className="space-y-4">
-    <div className="overflow-hidden rounded-xl border border-border/60 bg-card">
+    <div className="overflow-hidden rounded-xl border border-line bg-card">
       <Table variant="list" size="md">
         <TableHeader>
           <TableRow>
@@ -71,7 +71,7 @@ export function OrderItemsTable({
                     <img
                       src={item.thumbUrl || item.imageUrl || ""}
                       alt={item.name}
-                      className="h-12 w-12 shrink-0 rounded-lg border border-border/60 bg-muted/20 object-cover"
+                      className="h-12 w-12 shrink-0 rounded-lg border border-line bg-muted/20 object-cover"
                       loading="lazy"
                     />
                   ) : null}
@@ -110,7 +110,7 @@ export function OrderItemsTable({
         ) : null}
       </Table>
     </div>
-    <div className="rounded-xl border border-border/60 bg-card p-4">
+    <div className="rounded-xl border border-line bg-card p-4">
       <OrderItemDocumentNamesField record={record} teamId={teamId} onSaved={onDocumentNamesSaved} />
     </div>
     </div>

@@ -450,7 +450,7 @@ function ImprintChip({
                   setOpen(false);
                   onRemove();
                 }}
-                className="mt-1 flex w-full items-center rounded-md border-t border-border/60 px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted/60"
+                className="mt-1 flex w-full items-center rounded-md border-t border-line-subtle px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted/60"
               >
                 Прибрати нанесення
               </button>

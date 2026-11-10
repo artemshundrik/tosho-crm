@@ -48,7 +48,7 @@ export function QuoteOfferSendButton(props: {
     <div
       className={cn(
         "flex h-8 items-stretch overflow-hidden rounded-lg border focus-within:ring-2 focus-within:ring-foreground/20 focus-within:ring-offset-1 focus-within:ring-offset-background",
-        props.primary ? "border-foreground bg-foreground" : "border-border bg-background"
+        props.primary ? "border-foreground bg-foreground" : "border-line bg-background"
       )}
     >
       <Button

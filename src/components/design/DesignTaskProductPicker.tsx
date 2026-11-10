@@ -260,7 +260,7 @@ export function DesignTaskProductPicker({ teamId, value, onChange }: DesignTaskP
   ];
 
   return (
-    <div className="rounded-xl border border-border/60 bg-muted/20 p-3 space-y-3">
+    <div className="rounded-xl border border-line bg-muted/20 p-3 space-y-3">
       <div className="flex items-center justify-between">
         <Label className="text-sm font-medium">Товар</Label>
         {value?.catalogTypeId ? (
@@ -278,7 +278,7 @@ export function DesignTaskProductPicker({ teamId, value, onChange }: DesignTaskP
       </div>
 
       {/* Product kind — apparel/merch cascade vs simplified поліграфія */}
-      <div className="inline-flex rounded-lg border border-border/60 bg-background p-0.5">
+      <div className="inline-flex rounded-lg border border-line bg-background p-0.5">
         {PRODUCT_KIND_TABS.map((tab) => (
           <button
             key={tab.value}
@@ -363,7 +363,7 @@ export function DesignTaskProductPicker({ teamId, value, onChange }: DesignTaskP
                 href={link.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-md border border-border/60 px-2.5 py-1 text-xs text-foreground hover:bg-muted/40"
+                className="inline-flex items-center gap-1.5 rounded-md border border-line-strong px-2.5 py-1 text-xs text-foreground hover:bg-muted/40"
               >
                 <ExternalLink className="h-3.5 w-3.5" />
                 {link.label}
@@ -371,7 +371,7 @@ export function DesignTaskProductPicker({ teamId, value, onChange }: DesignTaskP
             ) : (
               <span
                 key={link.label}
-                className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border/50 px-2.5 py-1 text-xs text-muted-foreground/60"
+                className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-line px-2.5 py-1 text-xs text-muted-foreground/60"
                 title="Немає посилання в каталозі"
               >
                 <ExternalLink className="h-3.5 w-3.5" />
@@ -491,7 +491,7 @@ export function DesignTaskProductPicker({ teamId, value, onChange }: DesignTaskP
         {/* Кількість сторін друку — спрощено */}
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">Друк</Label>
-          <div className="inline-flex rounded-lg border border-border/60 bg-background p-0.5">
+          <div className="inline-flex rounded-lg border border-line bg-background p-0.5">
             {PRINT_SIDE_TABS.map(([side, label]) => (
               <button
                 key={side}

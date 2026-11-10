@@ -14,16 +14,16 @@ export function getJobRoleLabel(role: string | null) {
 export function getAccessBadgeClass(role: string | null) {
   if (role === "owner") return "tone-accent";
   if (role === "admin") return "bg-info-soft text-info-foreground border-info-soft-border";
-  return "bg-muted/50 border-border text-muted-foreground";
+  return "bg-muted/50 border-line text-muted-foreground";
 }
 
 export function getJobBadgeClass(role: string | null) {
-  if (!role) return "bg-muted/50 border-border text-muted-foreground";
-  return "bg-muted/30 border-border text-muted-foreground";
+  if (!role) return "bg-muted/50 border-line text-muted-foreground";
+  return "bg-muted/30 border-line text-muted-foreground";
 }
 
 export function getProbationBadgeClass(status: "upcoming" | "active" | "completed") {
   if (status === "completed") return "bg-success-soft text-success-foreground border-success-soft-border";
   if (status === "active") return "bg-warning-soft text-warning-foreground border-warning-soft-border";
-  return "bg-muted text-muted-foreground border-border";
+  return "bg-muted text-muted-foreground border-line";
 }

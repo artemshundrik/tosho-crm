@@ -80,11 +80,11 @@ function BalanceBreakdown({
       </div>
 
       {entries.length === 0 ? (
-        <div className="mt-2 border-t border-border/40 pt-2 text-2xs text-muted-foreground">
+        <div className="mt-2 border-t border-line-subtle pt-2 text-2xs text-muted-foreground">
           Цього року ще не було.
         </div>
       ) : (
-        <div className="mt-2 space-y-1 border-t border-border/40 pt-2">
+        <div className="mt-2 space-y-1 border-t border-line-subtle pt-2">
           {visible.map((entry) => (
             <div
               key={entry.id}
@@ -110,7 +110,7 @@ function BalanceBreakdown({
       )}
 
       {bucket.pending > 0 ? (
-        <div className="mt-2 border-t border-border/40 pt-1.5 text-3xs text-muted-foreground">
+        <div className="mt-2 border-t border-line-subtle pt-1.5 text-3xs text-muted-foreground">
           Після погодження лишиться{" "}
           <b className="font-semibold text-foreground">{Math.max(0, bucket.remaining - bucket.pending)}</b>{" "}
           із {bucket.quota}

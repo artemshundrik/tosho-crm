@@ -99,7 +99,7 @@ export function SupplierDocumentsCard({
   const groups = groupBySupplier(data.pending, now);
 
   return (
-    <section className={cn("rounded-xl border border-border/40 bg-card p-4", className)}>
+    <section className={cn("rounded-xl border border-line bg-card p-4", className)}>
       <h3 className="text-2xs font-bold uppercase tracking-widest text-muted-foreground">Документи постачальників</h3>
       <p className="mt-0.5 text-2xs leading-snug text-muted-foreground/80">
         Що ще не прийшло від постачальників по відкритих замовленнях.

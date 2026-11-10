@@ -535,14 +535,14 @@ export function TeamPulsePanel({
       {loading && rows.length === 0 ? (
         // Каркас рядків замість підпису «Завантаження активності…»: далі тут
         // буде саме список людей із метриками (REQ-19).
-        <Card className="overflow-hidden border-border/60 p-0" role="status" aria-busy="true">
-          <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
+        <Card className="overflow-hidden border-line p-0" role="status" aria-busy="true">
+          <div className="flex items-center gap-2 border-b border-line-subtle px-4 py-3">
             <Skeleton className="h-3.5 w-3.5 rounded" />
             <Skeleton className="h-3 w-16 rounded-full opacity-70" />
           </div>
           <div className="flex flex-col">
             {Array.from({ length: 5 }).map((_, index) => (
-              <div key={index} className="flex items-center gap-3 border-b border-border/40 px-4 py-3 last:border-b-0">
+              <div key={index} className="flex items-center gap-3 border-b border-line-subtle px-4 py-3 last:border-b-0">
                 <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
                 <div className="min-w-0 flex-1 space-y-2">
                   <Skeleton className={cn("h-3.5 rounded-full", index % 2 === 0 ? "w-32" : "w-24")} />
@@ -555,14 +555,14 @@ export function TeamPulsePanel({
           </div>
         </Card>
       ) : rankedPeople.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-2 rounded-inner border border-dashed border-border/70 py-12 text-center">
+        <div className="flex flex-col items-center justify-center gap-2 rounded-inner border border-dashed border-line py-12 text-center">
           <Activity className="h-6 w-6 text-muted-foreground/60" />
           <div className="text-sm font-medium text-foreground">Немає активності за цей період</div>
           <div className="text-xs text-muted-foreground">Оберіть ширший діапазон — дії зʼявляються тут одразу, а хвилини накопичуються поки люди працюють у CRM.</div>
         </div>
       ) : (
-        <Card className="overflow-hidden border-border/60 p-0">
-          <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <Card className="overflow-hidden border-line p-0">
+          <div className="flex items-center gap-2 border-b border-line-subtle px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             <Users className="h-3.5 w-3.5" />
             Люди
             <span className="ml-auto normal-case tabular-nums">{rankedPeople.length}</span>
@@ -576,7 +576,7 @@ export function TeamPulsePanel({
                 type="button"
                 onClick={() => onSelectPerson(entry.userId)}
                 title={`Відкрити картку: ${person.displayName}`}
-                className="flex w-full cursor-pointer items-center gap-3 border-b border-border/60 px-4 py-3 text-left transition-colors last:border-0 hover:bg-muted/40"
+                className="flex w-full cursor-pointer items-center gap-3 border-b border-line-strong px-4 py-3 text-left transition-colors last:border-0 hover:bg-muted/40"
               >
                 <div className="relative shrink-0">
                   <AvatarBase
@@ -586,7 +586,7 @@ export function TeamPulsePanel({
                     assetVariant="xs"
                     size={30}
                     shape="circle"
-                    className="border-border bg-muted/50"
+                    className="border-line bg-muted/50"
                     fallbackClassName="text-2xs font-bold"
                     presence={person.online ? "online" : "offline"}
                   />
@@ -653,7 +653,7 @@ export function TeamPulsePanel({
       </div>
 
       <aside className="flex flex-col gap-3">
-        <section className="rounded-section border border-border/60 bg-card p-4">
+        <section className="rounded-section border border-line bg-card p-4">
           <div className="text-3xs font-semibold uppercase tracking-widest text-muted-foreground">Зараз онлайн</div>
           {onlinePeople.length === 0 ? (
             <p className="mt-2 text-2xs text-muted-foreground">Нікого — усі вийшли.</p>
@@ -670,7 +670,7 @@ export function TeamPulsePanel({
                       assetVariant="xs"
                       size={26}
                       shape="circle"
-                      className="-ml-1.5 border-border bg-muted/50 ring-2 ring-card first:ml-0"
+                      className="-ml-1.5 border-line bg-muted/50 ring-2 ring-card first:ml-0"
                       fallbackClassName="text-3xs font-bold"
                     />
                   ))}
@@ -689,7 +689,7 @@ export function TeamPulsePanel({
           )}
         </section>
 
-        <section className="rounded-section border border-border/60 bg-card p-4">
+        <section className="rounded-section border border-line bg-card p-4">
           <div className="text-3xs font-semibold uppercase tracking-widest text-muted-foreground">
             {periodLabel}
           </div>
@@ -710,7 +710,7 @@ export function TeamPulsePanel({
 /** Рядок рейки: підпис дрібний приглушений, значення напівжирним. */
 function PulseFact({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-baseline gap-3 border-t border-border/40 py-1.5 first:border-t-0">
+    <div className="flex items-baseline gap-3 border-t border-line-subtle py-1.5 first:border-t-0">
       <dt className="w-[6.5rem] shrink-0 text-2xs text-muted-foreground">{label}</dt>
       <dd className="min-w-0 flex-1 text-md font-semibold tabular-nums text-foreground">{value}</dd>
     </div>

@@ -222,7 +222,7 @@ export function ViewAsDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                       fallback={member.initials}
                       size={32}
                       loading="eager"
-                      className="shrink-0 border-border/70"
+                      className="shrink-0 border-line"
                       inactive={member.inactive}
                     />
                     <span className="min-w-0 flex-1">
@@ -252,7 +252,7 @@ export function ViewAsDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                     viewAs?.kind === "role" && viewAs.jobRole === role.key && "bg-primary/5 ring-1 ring-primary/25"
                   )}
                 >
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border/70 bg-muted/40">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line bg-muted/40">
                     <Briefcase className="h-3.5 w-3.5 text-muted-foreground" />
                   </span>
                   {/* Без підпису під назвою: він однаковий у всіх рядках, тож
@@ -272,7 +272,7 @@ export function ViewAsDialog({ open, onOpenChange }: { open: boolean; onOpenChan
 
 function EmptyRow({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-section border border-dashed border-border/60 px-4 py-8 text-center text-sm text-muted-foreground">
+    <div className="rounded-section border border-dashed border-line px-4 py-8 text-center text-sm text-muted-foreground">
       {children}
     </div>
   );

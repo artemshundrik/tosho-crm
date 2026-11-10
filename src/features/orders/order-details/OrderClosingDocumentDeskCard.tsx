@@ -86,7 +86,7 @@ export function OrderClosingDocumentDeskCard({
 
   const fieldId = `${doc.kind}-number`;
   return (
-    <section className="rounded-xl border border-border/60 bg-card p-4" aria-label={`Номер: ${doc.label}`}>
+    <section className="rounded-xl border border-line bg-card p-4" aria-label={`Номер: ${doc.label}`}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex min-w-0 items-start gap-2.5">
           <Receipt className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />

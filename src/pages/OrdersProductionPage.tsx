@@ -330,7 +330,7 @@ export default function OrdersProductionPage() {
                         name={label}
                         fallback={label.slice(0, 1)}
                         size={18}
-                        className="shrink-0 border-border/60"
+                        className="shrink-0 border-line"
                         fallbackClassName="text-3xs font-semibold"
                       />
                       <span className="truncate">{label}</span>
@@ -440,7 +440,7 @@ export default function OrdersProductionPage() {
           </div>
         ) : filteredViews.length === 0 ? (
           <div className="px-5 max-md:px-4">
-            <div className="rounded-xl border border-dashed border-border/70 p-8 text-center text-sm text-muted-foreground">
+            <div className="rounded-xl border border-dashed border-line p-8 text-center text-sm text-muted-foreground">
               {myTurnOnly ? "Зараз хід не за тобою." : "Немає замовлень за цими фільтрами."}
             </div>
           </div>
@@ -512,7 +512,7 @@ export default function OrdersProductionPage() {
 
       {firstSelected ? (
         <div className="fixed inset-x-0 bottom-4 z-30 flex justify-center px-4 max-md:bottom-20">
-          <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-popover px-4 py-2.5 shadow-lg">
+          <div className="flex items-center gap-3 rounded-xl border border-line bg-popover px-4 py-2.5 shadow-lg">
             <span className="text-sm text-foreground">
               {selectedRecords.length} обрано · {firstSelected.customerName}
             </span>

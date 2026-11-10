@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 
 /** Класи для `Input`/`DigitsInput`/`PrefixField`, щоб поле стало «на місці». */
 export const INLINE_CONTROL = cn(
-  "border-border bg-card hover:border-foreground/30",
+  "border-line-strong bg-card hover:border-foreground/30",
   "focus-visible:border-foreground/50 focus-within:border-foreground/50",
 );
 /** Бракує для рахунку: лише обводка, без жовтого фону — бейдж «для рахунку» поруч і так каже. */
@@ -81,7 +81,7 @@ export function PartySection(props: {
       data-testid={props["data-testid"]}
       className={cn(
         "flex min-w-0 flex-col gap-2.5",
-        layout === "card" ? "rounded-xl border border-border bg-card px-5 py-4" : "border-t border-border px-5 py-4 first:border-t-0",
+        layout === "card" ? "rounded-xl border border-line bg-card px-5 py-4" : "border-t border-line-subtle px-5 py-4 first:border-t-0",
         props.className,
       )}
     >

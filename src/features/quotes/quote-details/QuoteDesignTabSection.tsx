@@ -223,15 +223,15 @@ export function QuoteDesignTabSection({
           <div className="text-xs font-semibold uppercase tracking-caps text-muted-foreground">
             Без задачі · {untaskedVisible.length}
           </div>
-          <div className="overflow-hidden rounded-xl border border-border/50 bg-card">
+          <div className="overflow-hidden rounded-xl border border-line bg-card">
             {untaskedVisible.map((item) => {
               const open = item.id === composerItemId;
               const imprint = imprintOf(item.id);
               const image = imageByItemId.get(item.id);
               return (
-                <div key={item.id} className={cn("border-b border-border/40 last:border-b-0", open && "bg-muted/[0.03]")}>
+                <div key={item.id} className={cn("border-b border-line-subtle last:border-b-0", open && "bg-muted/[0.03]")}>
                   <div className="flex items-center gap-3 px-3 py-2.5 sm:px-4">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border/50 bg-muted/20">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-muted/20">
                       {image ? (
                         <img src={image} alt="" className="h-full w-full object-cover" loading="lazy" />
                       ) : (

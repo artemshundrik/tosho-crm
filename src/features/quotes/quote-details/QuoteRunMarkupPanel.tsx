@@ -145,7 +145,7 @@ const formatDateTime = (value?: string | null) => {
 type BadgeTone = "mute" | "ok" | "info" | "warn" | "bad";
 
 const BADGE_CLASS: Record<BadgeTone, string> = {
-  mute: "bg-muted text-muted-foreground border-border",
+  mute: "bg-muted text-muted-foreground border-line",
   ok: "bg-success-soft text-success-foreground border-success-soft-border",
   info: "bg-info-soft text-info-foreground border-info-soft-border",
   warn: "bg-warning-soft text-warning-foreground border-warning-soft-border",
@@ -775,7 +775,7 @@ export function QuoteRunMarkupPanel({
     <div className="mt-4 space-y-4">
       {/* ЯРУС ПЕРШИЙ — накрутка. Шкала між дном і орієнтиром відповідає на
           «чому саме стільки», і з неї починається розмова про ціну. */}
-      <div className="border-t border-border/40 pt-4">
+      <div className="border-t border-line-subtle pt-4">
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1.5">
           <span className="text-sm font-semibold text-foreground">
             Накрутка на собівартість{" "}
@@ -813,7 +813,7 @@ export function QuoteRunMarkupPanel({
       </div>
 
       {/* ЯРУС ДРУГИЙ — ціна. Скільки вийшло і, кому належить бачити, з чого. */}
-      <div className="border-t border-border/40 pt-4">
+      <div className="border-t border-line-subtle pt-4">
         <span className="text-sm font-semibold text-foreground">
           {off ? "Ціна" : `Ціна з накруткою ${formatRate(markupRate)}`}
         </span>
@@ -849,7 +849,7 @@ export function QuoteRunMarkupPanel({
           як випадкові. Стан належить ярусу ціни, а не окремій секції — його
           відділяє проміжок.
         */
-        <div className="mt-1 rounded-lg border border-border/60 bg-muted/60 px-3 py-2.5">
+        <div className="mt-1 rounded-lg border border-line bg-muted/60 px-3 py-2.5">
           {/* items-center: контроли на 28 px і рядок тексту на 17 вирівнюються
               по середині, а не по верхньому краю — саме тому кнопки й напис
               стояли сходинкою. */}
@@ -873,7 +873,7 @@ export function QuoteRunMarkupPanel({
                 type="button"
                 onClick={() => setDetailsOpen((open) => !open)}
                 aria-expanded={detailsOpen}
-                className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-border/60 px-2.5 text-2xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-line-strong px-2.5 text-2xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 Що це означає
                 <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", detailsOpen && "rotate-180")} />
@@ -905,7 +905,7 @@ export function QuoteRunMarkupPanel({
           </div>
 
           {note && detailsOpen && note.details.length > 0 ? (
-            <div className="mt-3 grid gap-x-8 gap-y-1.5 border-t border-border/40 pt-3 sm:grid-cols-2">
+            <div className="mt-3 grid gap-x-8 gap-y-1.5 border-t border-line-subtle pt-3 sm:grid-cols-2">
               {note.details.map((row) => (
                 <div key={row.label} className="flex items-baseline justify-between gap-4 text-2xs">
                   <span className="min-w-0 text-muted-foreground">{row.label}</span>
@@ -924,7 +924,7 @@ export function QuoteRunMarkupPanel({
           поріг погодження, а не заборона зберігати. У стовпчику разом із ПДВ
           і постійними заробіток читався як ще одна складова ціни, а дно —
           як межа, за яку не пускають. */}
-      <div className="flex flex-wrap gap-x-5 gap-y-1 border-t border-border/40 pt-3 text-2xs text-muted-foreground">
+      <div className="flex flex-wrap gap-x-5 gap-y-1 border-t border-line-subtle pt-3 text-2xs text-muted-foreground">
         {view.income ? (
           <span>
             {view.income === "own"

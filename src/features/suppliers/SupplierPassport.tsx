@@ -39,7 +39,7 @@ import {
 
 function Block({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="rounded-section border border-border/60 bg-card p-4">
+    <section className="rounded-section border border-line bg-card p-4">
       <h2 className="text-3xs font-semibold uppercase tracking-caps-tight text-muted-foreground">
         {title}
       </h2>
@@ -85,7 +85,7 @@ export function SupplierPassport({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-end justify-between gap-4 rounded-section border border-border/60 bg-card px-4 py-3">
+      <div className="flex flex-wrap items-end justify-between gap-4 rounded-section border border-line bg-card px-4 py-3">
         <div className="grid flex-1 grid-cols-3 gap-4 sm:max-w-md">
           {status.metrics.map((metric) => (
             <SupplierMetric key={metric.label} metric={metric} />
@@ -95,7 +95,7 @@ export function SupplierPassport({
           type="button"
           onClick={() => setOpen((value) => !value)}
           aria-expanded={open}
-          className="flex items-center gap-1 rounded-full border border-border/60 px-2.5 py-1 text-2xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className="flex items-center gap-1 rounded-full border border-line-strong px-2.5 py-1 text-2xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           Паспорт кабінету
           <ChevronDown
@@ -207,7 +207,7 @@ export function SupplierPassport({
                 {definition.gives.map((item) => (
                   <span
                     key={item}
-                    className="rounded-full border border-border/60 px-2.5 py-1 text-2xs"
+                    className="rounded-full border border-line px-2.5 py-1 text-2xs"
                   >
                     {item}
                   </span>

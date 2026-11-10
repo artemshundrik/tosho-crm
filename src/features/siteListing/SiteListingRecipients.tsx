@@ -121,7 +121,7 @@ export function SiteListingRecipients({ teamId }: { teamId: string | null }) {
                     fallback={member.initials}
                     size={24}
                     loading="eager"
-                    className="shrink-0 border-border/70"
+                    className="shrink-0 border-line"
                   />
                   <span className="min-w-0 flex-1 truncate text-xs text-foreground">{member.label}</span>
                 </label>

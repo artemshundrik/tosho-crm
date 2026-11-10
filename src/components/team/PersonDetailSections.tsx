@@ -172,7 +172,7 @@ export function PersonActivitySection({ userId }: { userId: string }) {
     });
 
   return (
-    <section className="rounded-lg border border-border bg-muted/20 p-4">
+    <section className="rounded-lg border border-line bg-muted/20 p-4">
       <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
         <Activity className="h-4 w-4 text-muted-foreground" />
         Активність
@@ -207,7 +207,7 @@ export function PersonActivitySection({ userId }: { userId: string }) {
             ))}
           </div>
 
-          <div className="overflow-hidden rounded-lg border border-border/60 bg-background/40">
+          <div className="overflow-hidden rounded-lg border border-line bg-background/40">
             {groups.map((group) => {
               const isOpen = expanded.has(group.key);
               const heading = formatGroupHeading(group);
@@ -218,7 +218,7 @@ export function PersonActivitySection({ userId }: { userId: string }) {
               // itself must carry the name — for hover and for screen readers.
               const kindLabel = typeLabel ?? group.entityTypeLabel ?? "Дія в CRM";
               return (
-                <div key={group.key} className="border-b border-border/50 last:border-0">
+                <div key={group.key} className="border-b border-line last:border-0">
                   <HoverTip asChild label={heading}>
                     <button
                       type="button"
@@ -242,7 +242,7 @@ export function PersonActivitySection({ userId }: { userId: string }) {
                       </span>
                       <span className="flex min-w-0 flex-1 items-center gap-2">
                         {group.number ? (
-                          <span className="shrink-0 rounded border border-border/70 bg-muted/60 px-1.5 py-0.5 font-mono text-2xs tabular-nums text-muted-foreground">
+                          <span className="shrink-0 rounded border border-line bg-muted/60 px-1.5 py-0.5 font-mono text-2xs tabular-nums text-muted-foreground">
                             {group.number}
                           </span>
                         ) : null}
@@ -265,7 +265,7 @@ export function PersonActivitySection({ userId }: { userId: string }) {
                   </HoverTip>
 
                   {isOpen ? (
-                    <div className="border-t border-border/40 bg-muted/[0.04] px-3 py-1.5">
+                    <div className="border-t border-line-subtle bg-muted/[0.04] px-3 py-1.5">
                       {group.href && group.key !== UNGROUPED_KEY ? (
                         <Link
                           to={group.href}
@@ -278,7 +278,7 @@ export function PersonActivitySection({ userId }: { userId: string }) {
                         {group.events.map((event, index) => (
                           <li
                             key={`${group.key}-${event.created_at}-${index}`}
-                            className="flex items-center gap-2.5 border-b border-border/30 py-1.5 last:border-0"
+                            className="flex items-center gap-2.5 border-b border-line py-1.5 last:border-0"
                           >
                             <span className="min-w-0 flex-1 truncate text-sm text-foreground">
                               {event.title?.trim() || event.action?.trim() || "Дія в CRM"}
@@ -431,7 +431,7 @@ export function PersonAccessHistorySection({
   }, [workspaceId, userId]);
 
   return (
-    <section className="rounded-lg border border-border bg-muted/20 p-4">
+    <section className="rounded-lg border border-line bg-muted/20 p-4">
       <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
         <History className="h-4 w-4 text-muted-foreground" />
         Історія доступів
@@ -450,7 +450,7 @@ export function PersonAccessHistorySection({
           {entries.map((entry) => {
             const fields = Object.keys(entry.changed ?? {}).filter((field) => !NOISE_FIELDS.has(field));
             return (
-              <li key={entry.id} className="border-b border-border/40 pb-3 last:border-0 last:pb-0">
+              <li key={entry.id} className="border-b border-line pb-3 last:border-0 last:pb-0">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-medium text-foreground">
                     {resolveActorName(entry.actorUserId, entry.actorName)}
@@ -577,7 +577,7 @@ export function PersonTimeInCrm({ userId }: { userId: string }) {
   const month = sumMinutes(rows, dayOffset(30));
 
   return (
-    <div className="rounded-lg border border-border bg-muted/20 p-4">
+    <div className="rounded-lg border border-line bg-muted/20 p-4">
       <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         <Clock className="h-3.5 w-3.5" />
         Час у CRM

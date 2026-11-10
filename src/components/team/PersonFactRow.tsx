@@ -29,7 +29,7 @@ export function Row({
   meta?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-baseline gap-x-4 gap-y-0.5 border-t border-border/40 py-2 first:border-t-0">
+    <div className="flex flex-wrap items-baseline gap-x-4 gap-y-0.5 border-t border-line-subtle py-2 first:border-t-0">
       <span className="w-[8.5rem] shrink-0 text-2xs leading-5 text-muted-foreground">{label}</span>
       <span className="min-w-0 flex-1 text-[15px] font-semibold leading-snug tracking-[-0.01em] text-foreground">
         {value}
@@ -46,7 +46,7 @@ export function Row({
  */
 export function RailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex items-baseline gap-3 border-b border-border/40 py-1.5 last:border-b-0">
+    <div className="flex items-baseline gap-3 border-b border-line-subtle py-1.5 last:border-b-0">
       <span className="w-[5.5rem] shrink-0 text-2xs text-muted-foreground">{label}</span>
       <span className="min-w-0 flex-1 text-md font-medium text-foreground">{value}</span>
     </div>

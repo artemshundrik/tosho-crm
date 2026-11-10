@@ -174,7 +174,7 @@ export function ContentHeader({
   return (
     <>
       {/* Lean header: breadcrumb + view settings */}
-      <div className="border-b border-border/40 p-4">
+      <div className="border-b border-line-subtle p-4">
         <div className="flex items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-2 text-sm">
             <span className="inline-flex shrink-0 items-center gap-1.5 text-muted-foreground">
@@ -229,8 +229,8 @@ export function ContentHeader({
                     type="button"
                     onClick={() => openEditPositionModal(pos.id, pos.label)}
                     className={cn(
-                      "inline-flex items-center gap-2 rounded-full border border-border/60 bg-muted/40 px-3 py-1 text-xs font-medium text-foreground transition",
-                      "hover:border-border hover:bg-muted/60",
+                      "inline-flex items-center gap-2 rounded-full border border-line-strong bg-muted/40 px-3 py-1 text-xs font-medium text-foreground transition",
+                      "hover:border-line-strong hover:bg-muted/60",
                       positionModalId === pos.id && positionModalOpen && "ring-1 ring-primary/30"
                     )}
                   >
@@ -240,7 +240,7 @@ export function ContentHeader({
                 <button
                   type="button"
                   onClick={openAddPositionModal}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border/70 bg-muted/20 px-3 py-1 text-xs font-medium text-muted-foreground transition hover:bg-muted/40"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-line-strong bg-muted/20 px-3 py-1 text-xs font-medium text-muted-foreground transition hover:bg-muted/40"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   Додати місце
@@ -410,7 +410,7 @@ export function ContentHeader({
                       setMethodModalOpen(false);
                       setMethodModalValue("");
                     }}
-                    className="flex w-full items-center justify-between gap-2 rounded-lg border border-border/50 bg-background/60 px-3 py-2 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 disabled:opacity-60"
+                    className="flex w-full items-center justify-between gap-2 rounded-lg border border-line-strong bg-background/60 px-3 py-2 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 disabled:opacity-60"
                   >
                     <span className="min-w-0 truncate text-sm font-medium">{entry.name}</span>
                     <span className="shrink-0 text-xs text-muted-foreground">

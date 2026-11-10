@@ -48,7 +48,7 @@ const DropdownMenuSubContent = React.forwardRef<
     <DropdownMenuPrimitive.SubContent
       ref={ref}
       className={cn(
-        "z-50 min-w-[8rem] overflow-hidden rounded-xl border border-border/50 bg-popover/95 p-1 text-popover-foreground shadow-menu backdrop-blur-xl",
+        "z-50 min-w-[8rem] overflow-hidden rounded-xl border border-line bg-popover/95 p-1 text-popover-foreground shadow-menu backdrop-blur-xl",
         // Підменю грає за тим самим правилом, що й головне (див. нижче):
         // росте з точки прив'язки, зсувів не має.
         "data-[side=bottom]:origin-top data-[side=top]:origin-bottom data-[side=left]:origin-right data-[side=right]:origin-left data-[side=bottom]:data-[align=start]:origin-top-left data-[side=bottom]:data-[align=end]:origin-top-right data-[side=top]:data-[align=start]:origin-bottom-left data-[side=top]:data-[align=end]:origin-bottom-right",
@@ -71,7 +71,7 @@ const DropdownMenuContent = React.forwardRef<
       ref={ref}
       sideOffset={sideOffset}
       className={cn(
-        "z-50 max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-xl border border-border/50 bg-popover/95 p-1 text-popover-foreground shadow-menu backdrop-blur-xl",
+        "z-50 max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-xl border border-line bg-popover/95 p-1 text-popover-foreground shadow-menu backdrop-blur-xl",
         "origin-[var(--radix-dropdown-menu-content-transform-origin)]",
   // ПАНЕЛЬ РОЗКРИВАЄТЬСЯ З ТОЧКИ ТРИГЕРА (REQ-26).
   //

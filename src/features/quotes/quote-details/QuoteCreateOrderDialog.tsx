@@ -99,7 +99,7 @@ export function QuoteCreateOrderDialog({
           <div className="py-6 text-sm text-muted-foreground">Готуємо дані для замовлення...</div>
         ) : draft ? (
           <div className="space-y-4">
-            <div className="rounded-lg border border-border/60 bg-muted/20 p-4">
+            <div className="rounded-lg border border-line bg-muted/20 p-4">
               <div className="text-sm font-semibold text-foreground">{draft.quoteNumber}</div>
               <div className="mt-1 text-sm text-muted-foreground">{draft.readiness.customerName}</div>
             </div>
@@ -108,7 +108,7 @@ export function QuoteCreateOrderDialog({
               <div className="text-sm font-semibold text-foreground">Що має бути готово</div>
               <div className="space-y-2">
                 {draft.readiness.readinessSteps.map((step) => (
-                  <div key={step.label} className="flex items-start gap-3 rounded-lg border border-border/50 px-3 py-2">
+                  <div key={step.label} className="flex items-start gap-3 rounded-lg border border-line px-3 py-2">
                     <Checkbox checked={step.done} disabled />
                     <div className="text-sm text-foreground">
                       {step.label}
@@ -143,7 +143,7 @@ export function QuoteCreateOrderDialog({
                         onClick={() => setTarget(option.id)}
                         className={cn(
                           "flex w-full items-start gap-3 rounded-lg border px-3 py-2 text-left transition-colors",
-                          active ? "border-primary bg-primary/5" : "border-border/50 hover:bg-muted/40"
+                          active ? "border-primary bg-primary/5" : "border-line-strong hover:bg-muted/40"
                         )}
                       >
                         <span
@@ -176,7 +176,7 @@ export function QuoteCreateOrderDialog({
                     <label
                       key={itemId}
                       className={cn(
-                        "flex items-start gap-3 rounded-lg border border-border/50 px-3 py-2",
+                        "flex items-start gap-3 rounded-lg border border-line px-3 py-2",
                         orderedIn ? "opacity-60" : "cursor-pointer"
                       )}
                     >

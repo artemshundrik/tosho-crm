@@ -25,7 +25,7 @@ export const CONTROL_BASE = cx(
   "h-(--control-h) rounded-lg bg-transparent",
   // Рамка ПОВНА, а не /50: у темній темі напівпрозора рамка на картці зливалась
   // із нею, і поле без краю читалось як дірка.
-  "border border-border",
+  "border border-line-strong",
   "text-foreground placeholder:text-muted-foreground",
   // Перелік властивостей ПОІМЕННО, а не `transition-all`. Слово `all` означає
   // буквально все, зокрема ВІДСТУПИ — і саме через це модалки помітно
@@ -166,11 +166,11 @@ export const SEARCH_INPUT = cx(TOOLBAR_CONTROL, "pl-9 pr-9");
 export const SEARCH_CLEAR_BTN_POS = cx("absolute right-2 top-1/2 -translate-y-1/2");
 
 export const SEGMENTED_GROUP = cx(
-  "inline-flex p-0.5 h-(--control-h) items-center rounded-lg border border-border/50 bg-muted/40"
+  "inline-flex p-0.5 h-(--control-h) items-center rounded-lg border border-line bg-muted/40"
 );
 
 export const SEGMENTED_GROUP_SM = cx(
-  "inline-flex p-0.5 h-(--control-h-sm) items-center rounded-lg border border-border/50 bg-muted/40"
+  "inline-flex p-0.5 h-(--control-h-sm) items-center rounded-lg border border-line bg-muted/40"
 );
 
 /**

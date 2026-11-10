@@ -44,7 +44,7 @@ const CommandDialog = ({ children, ...props }: CommandDialogProps) => {
         // би смужка на три рядки. Поле лишається ВНИЗУ (flex-col-reverse) — під
         // великим пальцем, як просили склад із логістикою.
         overlayClassName="max-sm:backdrop-blur-md max-sm:bg-background/60"
-        className="!top-4 !translate-y-0 sm:!top-8 w-[calc(100vw-2rem)] max-w-[980px] max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-4rem)] overflow-hidden border border-border/60 bg-card !gap-0 !p-0 sm:!gap-0 sm:!p-0 text-foreground max-sm:!left-0 max-sm:!top-auto max-sm:!bottom-0 max-sm:!translate-x-0 max-sm:!h-[92dvh] max-sm:!max-h-[92dvh] max-sm:!w-screen max-sm:!max-w-none max-sm:!rounded-b-none max-sm:!rounded-t-[28px] max-sm:!border-x-0 max-sm:!border-b-0"
+        className="!top-4 !translate-y-0 sm:!top-8 w-[calc(100vw-2rem)] max-w-[980px] max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-4rem)] overflow-hidden border border-line-strong bg-card !gap-0 !p-0 sm:!gap-0 sm:!p-0 text-foreground max-sm:!left-0 max-sm:!top-auto max-sm:!bottom-0 max-sm:!translate-x-0 max-sm:!h-[92dvh] max-sm:!max-h-[92dvh] max-sm:!w-screen max-sm:!max-w-none max-sm:!rounded-b-none max-sm:!rounded-t-[28px] max-sm:!border-x-0 max-sm:!border-b-0"
       >
         <DialogTitle className="sr-only">Глобальний пошук</DialogTitle>
 
@@ -101,14 +101,14 @@ const CommandInput = React.forwardRef<
      екрані вигляд той самий, що був. */
   <div
     className={cn(
-      "relative flex items-center gap-2 border-b border-border px-3",
+      "relative flex items-center gap-2 border-b border-line-subtle px-3",
       // На телефоні поле — та сама капсула, що в обговоренні справи:
       // тонка рамка, тло картки, підсвітка рамки на фокусі, круглі кнопки
       // всередині. Капсула кругла повністю (rounded-full), а не 20px.
       // Різниця лише в наповненні: там скріпка й «надіслати», тут лупа й
       // мікрофон. Стоїть воно внизу аркуша, тож зайву межу знизу прибираємо.
       "max-sm:m-2 max-sm:mb-[calc(env(safe-area-inset-bottom,0px)+0.5rem)] max-sm:rounded-full",
-      "max-sm:border max-sm:border-border/60 max-sm:bg-card max-sm:px-1.5 max-sm:py-1",
+      "max-sm:border max-sm:border-line-strong max-sm:bg-card max-sm:px-1.5 max-sm:py-1",
       "max-sm:focus-within:border-primary/50"
     )}
     cmdk-input-wrapper=""

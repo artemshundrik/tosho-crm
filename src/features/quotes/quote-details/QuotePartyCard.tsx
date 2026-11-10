@@ -61,7 +61,7 @@ export function QuotePartyCard({
   onOpenDeadlines,
 }: QuotePartyCardProps) {
   return (
-    <section className="shrink-0 overflow-hidden rounded-inner border border-border/40 bg-card">
+    <section className="shrink-0 overflow-hidden rounded-inner border border-line bg-card">
       <button
         type="button"
         onClick={onOpenParty}
@@ -90,7 +90,7 @@ export function QuotePartyCard({
                   name={managerName}
                   fallback={managerInitials ?? ""}
                   size={14}
-                  className="shrink-0 border-border/60"
+                  className="shrink-0 border-line"
                   showStatusIndicator={false}
                 />
                 <span className="truncate">{managerName}</span>
@@ -142,7 +142,7 @@ export function QuotePartyCard({
       </div>
 
       {extras.length > 0 ? (
-        <div className="flex flex-wrap gap-x-3 gap-y-0.5 border-t border-border/40 px-2.5 py-1.5 text-2xs text-muted-foreground">
+        <div className="flex flex-wrap gap-x-3 gap-y-0.5 border-t border-line-subtle px-2.5 py-1.5 text-2xs text-muted-foreground">
           {extras.map((extra) => (
             <span key={extra.label} className="inline-flex items-center gap-1.5">
               {extra.label}

@@ -148,7 +148,7 @@ export function IntegrationSheet({
             (-mx-6 гасить p-6 контейнера), а падінг повертаємо вже секціям.
             Тоді лінія йде через усю шторку, а текст лишається в полях —
             інакше межа виглядає обрізаним огризком посеред панелі. */}
-        <SheetBody className="-mx-6 divide-y divide-border/60 [&>section:first-child]:pt-0 [&>section]:px-6 [&>section]:py-5">
+        <SheetBody className="-mx-6 divide-y divide-line-subtle [&>section:first-child]:pt-0 [&>section]:px-6 [&>section]:py-5">
           {/* Стан — повним текстом, без обрізання: тут місця вистачає. */}
           <section className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
@@ -219,7 +219,7 @@ export function IntegrationSheet({
               <h3 className="text-3xs font-semibold uppercase tracking-caps-tight text-muted-foreground">
                 Налаштування
               </h3>
-              <dl className="divide-y divide-border/60 rounded-inner border border-border/60">
+              <dl className="divide-y divide-line-subtle rounded-inner border border-line">
                 {status.details.map((row) => (
                   <div key={row.label} className="flex items-start justify-between gap-4 px-3 py-2">
                     <dt className="shrink-0 text-xs text-muted-foreground">{row.label}</dt>
@@ -240,7 +240,7 @@ export function IntegrationSheet({
                 </h3>
                 {section.hint ? <p className="mt-1 text-2xs text-muted-foreground">{section.hint}</p> : null}
               </div>
-              <dl className="divide-y divide-border/60 rounded-inner border border-border/60">
+              <dl className="divide-y divide-line-subtle rounded-inner border border-line">
                 {section.rows.map((row) => (
                   <div key={row.label} className="flex items-start justify-between gap-4 px-3 py-2">
                     <dt className="min-w-0 text-xs font-medium text-foreground">{row.label}</dt>

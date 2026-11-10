@@ -212,7 +212,7 @@ export function OtherMethodsPanel({
       </div>
 
       {/* Свідомо без поля «додати свій»: дублі назв уже двічі чистили руками. */}
-      <p className="mt-1 border-t border-border/60 px-2 pb-0.5 pt-1.5 text-2xs leading-snug text-muted-foreground">
+      <p className="mt-1 border-t border-line-subtle px-2 pb-0.5 pt-1.5 text-2xs leading-snug text-muted-foreground">
         Немає в списку? Нову назву додають у Каталозі.
       </p>
     </div>

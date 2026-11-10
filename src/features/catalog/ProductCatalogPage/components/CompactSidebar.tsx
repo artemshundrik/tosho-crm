@@ -114,9 +114,9 @@ export function CompactSidebar({
   };
 
   return (
-    <div className="w-full md:w-[280px] flex flex-col bg-background border-r border-border/40">
+    <div className="w-full md:w-[280px] flex flex-col bg-background border-r border-line-subtle">
       {/* Header */}
-      <div className="p-4 border-b border-border/40 flex items-center justify-between shrink-0">
+      <div className="p-4 border-b border-line-subtle flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
           <div className="h-2 w-2 rounded-full bg-primary" />
           <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
@@ -149,8 +149,8 @@ export function CompactSidebar({
             const GroupIcon = group.icon;
 
             return (
-              <div key={group.key} className="rounded-lg border border-border/50 bg-background/70">
-                <div className="flex items-center gap-2 px-2 py-1.5 border-b border-border/40">
+              <div key={group.key} className="rounded-lg border border-line bg-background/70">
+                <div className="flex items-center gap-2 px-2 py-1.5 border-b border-line-subtle">
                   <HoverTip asChild label={isGroupExpanded ? "Згорнути групу" : "Розгорнути групу"}>
                     <button
                       type="button"
@@ -360,7 +360,7 @@ export function CompactSidebar({
       </div>
 
       {/* Footer Stats */}
-      <div className="p-4 border-t border-border/40 space-y-2 shrink-0">
+      <div className="p-4 border-t border-line-subtle space-y-2 shrink-0">
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted-foreground">Всього моделей:</span>
           <span className="font-semibold tabular-nums">{totalModels}</span>

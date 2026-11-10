@@ -182,15 +182,15 @@ export function OrderInvoiceDeskCard({
       </div>
 
       {record.items.length > 0 ? (
-        <div className="mt-3 overflow-hidden rounded-lg border border-border/60 bg-background">
-          <div className={cn(ROW_GRID, "hidden border-b border-border/60 px-3 py-2 text-xs text-muted-foreground sm:grid")}>
+        <div className="mt-3 overflow-hidden rounded-lg border border-line bg-background">
+          <div className={cn(ROW_GRID, "hidden border-b border-line-subtle px-3 py-2 text-xs text-muted-foreground sm:grid")}>
             <span>№</span>
             <span>Назва в документах — як у BAS</span>
             <span>К-сть</span>
             <span>{vatLabel}</span>
             <span className="text-right">Сума</span>
           </div>
-          <div className="border-b border-border/60 px-3 py-2 text-xs text-muted-foreground sm:hidden">
+          <div className="border-b border-line-subtle px-3 py-2 text-xs text-muted-foreground sm:hidden">
             Назва в документах — як у BAS · к-сть · {vatLabel.toLowerCase()}
           </div>
           {lines.map((line, index) => {
@@ -201,7 +201,7 @@ export function OrderInvoiceDeskCard({
               line.priceChanged ? `ціна ${price(line.item.unitPrice, record.currency)}` : null,
             ].filter(Boolean);
             return (
-              <div key={line.item.id} className={cn(ROW_GRID, "items-center border-b border-border/60 px-3 py-2.5")}>
+              <div key={line.item.id} className={cn(ROW_GRID, "items-center border-b border-line-subtle px-3 py-2.5")}>
                 <span className="text-xs tabular-nums text-muted-foreground">{index + 1}</span>
                 <Input
                   aria-label={`Назва в документах: ${line.item.name}`}

@@ -90,7 +90,7 @@ function CardBody({
       ) : null}
 
       {target.managerLabel ? (
-        <div className="mt-2.5 flex items-center gap-2 rounded-lg border border-border/50 bg-muted/30 px-2.5 py-1.5">
+        <div className="mt-2.5 flex items-center gap-2 rounded-lg border border-line bg-muted/30 px-2.5 py-1.5">
           <AvatarBase
             src={target.managerAvatarUrl ?? null}
             name={target.managerLabel}
@@ -112,7 +112,7 @@ function CardBody({
           Завантажуємо контакти…
         </div>
       ) : contacts.length > 0 || info?.contactName ? (
-        <div className="mt-2.5 space-y-1 border-t border-border/40 pt-2">
+        <div className="mt-2.5 space-y-1 border-t border-line-subtle pt-2">
           {info?.contactName ? <Line icon={User}>{info.contactName}</Line> : null}
           {contacts.map((contact) => (
             <Line key={contact.value} icon={contact.icon}>
@@ -121,7 +121,7 @@ function CardBody({
           ))}
         </div>
       ) : (
-        <div className="mt-2.5 border-t border-border/40 pt-2 text-2xs text-muted-foreground">
+        <div className="mt-2.5 border-t border-line-subtle pt-2 text-2xs text-muted-foreground">
           Контактів не вказано
         </div>
       )}

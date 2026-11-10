@@ -21,6 +21,16 @@ export default {
         },
         colors: {
           border: "hsl(var(--border))",
+          // Три лінії за РОЛЛЮ, а не за числом (картка 271, пункт 10). Рамку
+          // пишемо лише ними: border-line-subtle — роздільник усередині
+          // поверхні, border-line — обводка картки чи панелі,
+          // border-line-strong — кнопка, поле, чип. Сила кожної — одна змінна
+          // в src/index.css; border-border/NN більше не пишемо (check:line-tokens).
+          line: {
+            subtle: "hsl(var(--border) / var(--line-subtle-alpha))",
+            DEFAULT: "hsl(var(--border) / var(--line-alpha))",
+            strong: "hsl(var(--border) / var(--line-strong-alpha))",
+          },
           input: "hsl(var(--input))",
           ring: "hsl(var(--ring))",
           background: "hsl(var(--background))",

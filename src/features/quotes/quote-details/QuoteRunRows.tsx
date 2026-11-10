@@ -201,7 +201,7 @@ export function QuoteRunRows({
                 </span>
               }
             >
-              <span className="inline-flex h-6 cursor-default items-center gap-1.5 rounded-md border border-border/60 bg-muted px-2 text-2xs text-muted-foreground">
+              <span className="inline-flex h-6 cursor-default items-center gap-1.5 rounded-md border border-line bg-muted px-2 text-2xs text-muted-foreground">
                 <AlertTriangle className="h-3 w-3 shrink-0 text-warning-solid" />
                 позначте погоджений клієнтом
               </span>
@@ -243,7 +243,7 @@ export function QuoteRunRows({
           <button
             type="button"
             onClick={onAddRun}
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border/70 px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-border hover:bg-muted hover:text-foreground"
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-line-strong hover:bg-muted hover:text-foreground"
           >
             <Plus className="h-3.5 w-3.5" />
             Тираж
@@ -254,7 +254,7 @@ export function QuoteRunRows({
       {anyPriced ? (
         <div
           className={cn(
-            "-mx-3 hidden gap-x-2.5 border-b border-border/40 px-3 pb-1.5 text-2xs text-muted-foreground sm:-mx-4 sm:px-4 @min-[746px]:grid",
+            "-mx-3 hidden gap-x-2.5 border-b border-line-subtle px-3 pb-1.5 text-2xs text-muted-foreground sm:-mx-4 sm:px-4 @min-[746px]:grid",
             GRID_COLS
           )}
           aria-hidden
@@ -339,7 +339,7 @@ export function QuoteRunRows({
               className={cn(
                 // Смужка стоїть на ВСІХ рядках, просто прозора: інакше вибір
                 // зсував би вміст рядка на 3 px убік.
-                "grid cursor-pointer items-center gap-x-4 gap-y-1.5 @min-[746px]:gap-x-2.5 border-b border-l-[3px] border-border/40 border-l-transparent py-2.5 pl-[9px] pr-3 transition-colors last:border-b-0 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foreground/20 sm:pl-[13px] sm:pr-4",
+                "grid cursor-pointer items-center gap-x-4 gap-y-1.5 @min-[746px]:gap-x-2.5 border-b border-l-[3px] border-line-subtle border-l-transparent py-2.5 pl-[9px] pr-3 transition-colors last:border-b-0 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foreground/20 sm:pl-[13px] sm:pr-4",
                 "grid-cols-[minmax(0,1fr)_auto]",
                 GRID_COLS,
                 isSelected && "border-l-foreground bg-muted"
@@ -431,7 +431,7 @@ export function QuoteRunRows({
                       "inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 text-2xs font-semibold transition-colors",
                       isApproved
                         ? "border-success-soft-border bg-success-soft text-success-foreground hover:bg-success-soft/70"
-                        : "border-dashed border-border text-muted-foreground hover:border-success-soft-border hover:bg-success-soft/40 hover:text-success-foreground"
+                        : "border-dashed border-line-strong text-muted-foreground hover:border-success-soft-border hover:bg-success-soft/40 hover:text-success-foreground"
                     )}
                   >
                     <Check className="h-3.5 w-3.5 shrink-0" />

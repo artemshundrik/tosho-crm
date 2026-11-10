@@ -53,7 +53,7 @@ export function OrderStageStrip({
 
   return (
     <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_260px]">
-      <section className="rounded-xl border border-border/60 bg-card p-4" aria-label="Етапи замовлень">
+      <section className="rounded-xl border border-line bg-card p-4" aria-label="Етапи замовлень">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">У роботі</div>
@@ -110,7 +110,7 @@ export function OrderStageStrip({
                 onClick={() => onStageChange(active ? null : item.id)}
                 className={cn(
                   "flex min-w-0 flex-col gap-0.5 rounded-lg border px-2.5 py-1.5 text-left transition-colors",
-                  active ? "border-border bg-muted/50" : "border-transparent hover:bg-muted/40"
+                  active ? "border-line-strong bg-muted/50" : "border-transparent hover:bg-muted/40"
                 )}
               >
                 <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
@@ -129,7 +129,7 @@ export function OrderStageStrip({
 
       <Link
         to={ROUTES.ordersQueue}
-        className="group flex flex-col justify-between gap-3 rounded-xl border border-border/60 bg-card p-4 transition-colors hover:bg-muted/30 max-md:gap-1.5 max-md:p-3"
+        className="group flex flex-col justify-between gap-3 rounded-xl border border-line-strong bg-card p-4 transition-colors hover:bg-muted/30 max-md:gap-1.5 max-md:p-3"
       >
         <div>
           <div className="text-sm font-semibold text-foreground">Черга з прорахунків</div>

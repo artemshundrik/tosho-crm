@@ -405,7 +405,7 @@ export default function DocumentsPage() {
                           name={person.label}
                           fallback={person.label.slice(0, 1)}
                           size={18}
-                          className="shrink-0 border-border/60"
+                          className="shrink-0 border-line"
                           fallbackClassName="text-3xs font-semibold"
                         />
                         <span className="truncate">{person.label}</span>
@@ -474,7 +474,7 @@ export default function DocumentsPage() {
             onClick={() => setFlag(active ? null : tile.flag)}
             className={cn(
               "flex min-w-0 flex-col gap-2 rounded-xl border bg-card p-3 text-left transition-colors md:p-4",
-              active ? "border-primary ring-2 ring-primary/20" : "border-border/60 hover:bg-muted/30"
+              active ? "border-primary ring-2 ring-primary/20" : "border-line-strong hover:bg-muted/30"
             )}
           >
             <span className="truncate text-xs font-medium text-muted-foreground">
@@ -503,7 +503,7 @@ export default function DocumentsPage() {
   );
 
   const empty = (
-    <div className="rounded-xl border border-dashed border-border/70 p-8 text-center text-sm text-muted-foreground">
+    <div className="rounded-xl border border-dashed border-line p-8 text-center text-sm text-muted-foreground">
       {flag ? "Тут порожньо — увага нічому не потрібна." : "Немає документів за цими фільтрами."}
     </div>
   );
@@ -544,7 +544,7 @@ export default function DocumentsPage() {
         ) : visible.length === 0 ? (
           <div className="px-5">{empty}</div>
         ) : (
-          <div className="flex min-w-0 items-start border-t border-border/60">
+          <div className="flex min-w-0 items-start border-t border-line-subtle">
             {/* overflow-x-auto не ставимо: він гасить липку шапку таблиці. */}
             <div ref={tableRef} className="@container min-w-0 flex-1">
               <Table variant="list" size="sm" stickyHeader className="table-fixed">
@@ -579,7 +579,7 @@ export default function DocumentsPage() {
             {inlinePreview && selected ? (
               <aside
                 aria-label="Перегляд документа"
-                className="sticky top-0 w-[400px] shrink-0 self-start border-l border-border/60 px-5 py-4"
+                className="sticky top-0 w-[400px] shrink-0 self-start border-l border-line-subtle px-5 py-4"
               >
                 <DocumentPreview
                   key={selected.id}

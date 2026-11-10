@@ -91,7 +91,7 @@ export function QuoteViewsBar({
   };
 
   return (
-    <div className="flex items-center gap-1 border-b border-border/60 px-2">
+    <div className="flex items-center gap-1 border-b border-line-subtle px-2">
       <TabBar value={activeId} wrapperClassName="min-w-0 overflow-x-auto">
         {views.map((view) => (
           <TabBarItem

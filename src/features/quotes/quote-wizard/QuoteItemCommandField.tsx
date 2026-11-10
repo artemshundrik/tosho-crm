@@ -577,7 +577,7 @@ export function QuoteItemCommandField({
                 type="button"
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => changeFilter(POOL_FILTER_ALL)}
-                className="mt-1.5 rounded-md border border-border/60 px-2.5 py-1 text-2xs text-muted-foreground transition-colors hover:text-foreground"
+                className="mt-1.5 rounded-md border border-line-strong px-2.5 py-1 text-2xs text-muted-foreground transition-colors hover:text-foreground"
               >
                 Показати всі джерела
               </button>
@@ -713,7 +713,7 @@ export function QuoteItemCommandField({
                         event.stopPropagation();
                         setExpandedPoolKey(expanded ? null : product.key);
                       }}
-                      className="flex shrink-0 items-center gap-1 rounded-full border border-border/60 px-2 py-0.5 text-2xs text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+                      className="flex shrink-0 items-center gap-1 rounded-full border border-line-strong px-2 py-0.5 text-2xs text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
                     >
                       {product.variantCount} {unit}
                       {/* «Обрати» — не окраса. Клік по такому рядку не додає
@@ -769,7 +769,7 @@ export function QuoteItemCommandField({
           {ranked.length > 0 ? (
             <li
               role="presentation"
-              className={cn("pt-1", pool.length > 0 && "mt-1 border-t border-border/60")}
+              className={cn("pt-1", pool.length > 0 && "mt-1 border-t border-line-subtle")}
             >
               <button
                 type="button"
@@ -839,7 +839,7 @@ export function QuoteItemCommandField({
               onAddService
                 ? "-mx-1.5 flex cursor-pointer items-center gap-3 bg-popover px-3.5 py-2 text-sm"
                 : "sticky -bottom-1.5 z-10 -mx-1.5 -mb-1.5 flex cursor-pointer items-center gap-3 bg-popover px-3.5 py-2 text-sm",
-              addRowIndex > 0 && "mt-1 border-t border-border/60 pt-2",
+              addRowIndex > 0 && "mt-1 border-t border-line-subtle pt-2",
               active === addRowIndex ? "bg-muted" : "hover:bg-muted/50"
             )}
             onMouseEnter={() => setActive(addRowIndex)}
@@ -847,7 +847,7 @@ export function QuoteItemCommandField({
             onClick={() => commitRow(addRowIndex)}
             style={{ boxShadow: "0 -8px 12px -8px hsl(var(--foreground) / 0.10)" }}
           >
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-dashed border-border text-muted-foreground">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-dashed border-line text-muted-foreground">
               <Plus className="h-4 w-4" />
             </span>
             <span className="min-w-0 flex-1">
@@ -913,7 +913,7 @@ function useDebouncedValue(value: string, delay: number) {
  * малює зламану картинку, і виглядає це як поломка CRM, а не як дірка у фіді.
  */
 function SuggestionPhoto({ url, name }: { url: string | null; name: string }) {
-  const base = "h-9 w-9 shrink-0 overflow-hidden rounded-md border border-border/60 bg-background";
+  const base = "h-9 w-9 shrink-0 overflow-hidden rounded-md border border-line bg-background";
   // Ловимо саме АДРЕСУ, а не прапорець: рядок списку React переживає зміну
   // товару, і голий `failed` лишився б піднятим для наступного, живого фото.
   const [failedUrl, setFailedUrl] = React.useState<string | null>(null);

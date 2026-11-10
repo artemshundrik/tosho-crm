@@ -116,7 +116,7 @@ const SelectContent = React.forwardRef<
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
-        "relative z-50 min-w-[8rem] overflow-hidden rounded-xl border border-border/50 bg-popover/95 backdrop-blur-xl text-popover-foreground shadow-menu",
+        "relative z-50 min-w-[8rem] overflow-hidden rounded-xl border border-line-strong bg-popover/95 backdrop-blur-xl text-popover-foreground shadow-menu",
   // ПАНЕЛЬ РОЗКРИВАЄТЬСЯ З ТОЧКИ ТРИГЕРА (REQ-26).
   //
   // Ключове тут — рядок data-[side=*]:origin-* вище. Він задає точку, ВІД якої

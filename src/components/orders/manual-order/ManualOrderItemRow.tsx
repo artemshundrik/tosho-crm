@@ -122,7 +122,7 @@ export function ManualOrderItemRow({
   return (
     <article
       data-issue={`pending:${draft.key}`}
-      className={cn("rounded-xl border border-border/60 bg-card", issue(`pending:${draft.key}`))}
+      className={cn("rounded-xl border border-line bg-card", issue(`pending:${draft.key}`))}
     >
       <div className="flex flex-wrap items-start gap-3 px-3 pt-3">
         <ImportItemPhoto preview={preview} name={draft.name} specPreset={draft.catalog?.specPreset} />
@@ -261,7 +261,7 @@ export function ManualOrderItemRow({
       {pending ? (
         <div className="h-3" />
       ) : (
-        <div className="mt-2 space-y-2 border-t border-border/60 bg-muted/20 px-3 py-2">
+        <div className="mt-2 space-y-2 border-t border-line-subtle bg-muted/20 px-3 py-2">
           <div className="flex flex-wrap items-center gap-1.5">
             {draft.catalog?.modelId ? (
               <CatalogPlaceChip label={catalogPlace(draft.catalog.kindName, draft.catalog.typeName)} />
@@ -382,7 +382,7 @@ export function ManualOrderServiceRow({
 }) {
   const issue = (id: string) => issueRing(issueId === id);
   return (
-    <div className="flex flex-wrap items-start gap-2 rounded-xl border border-border/60 bg-card p-3">
+    <div className="flex flex-wrap items-start gap-2 rounded-xl border border-line bg-card p-3">
       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md border tone-icon-box-info" title="Послуга">
         <Briefcase className="h-4 w-4" aria-hidden />
       </span>

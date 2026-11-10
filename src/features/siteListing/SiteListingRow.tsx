@@ -82,11 +82,11 @@ export function SiteListingRow({
           <KanbanImageZoomPreview
             imageUrl={candidate.image_url}
             alt={candidate.model_name}
-            className="h-10 w-10 rounded-md border-border/50 bg-muted/50"
+            className="h-10 w-10 rounded-md border-line bg-muted/50"
             imageClassName="object-cover"
           />
         ) : (
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/50 bg-muted/50">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-line bg-muted/50">
             <PoolPhoto url={null} className="h-4 w-4" />
           </span>
         )}
@@ -251,18 +251,18 @@ function DraftVariantTile({ title, variant }: { title: string; variant: DraftVar
   const photo = variant.images[0] ?? null;
   return (
     <div
-      className="flex w-48 items-center gap-2 rounded-md border border-border/50 bg-background/60 p-1.5"
+      className="flex w-48 items-center gap-2 rounded-md border border-line bg-background/60 p-1.5"
       title={`${variant.color} · ${variant.article}`}
     >
       {photo ? (
         <KanbanImageZoomPreview
           imageUrl={photo}
           alt={`${title}, ${variant.color}`}
-          className="h-10 w-10 rounded-md border-border/50 bg-muted/30"
+          className="h-10 w-10 rounded-md border-line bg-muted/30"
           imageClassName="object-cover"
         />
       ) : (
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border/50 bg-muted/30">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-line bg-muted/30">
           <Package className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
         </span>
       )}
@@ -280,7 +280,7 @@ function DraftVariantTile({ title, variant }: { title: string; variant: DraftVar
 /** Чернетка тими самими блоками, що й опис на сайті, але розміткою CRM. */
 function DraftView({ draft, category }: { draft: SiteListingDraft; category: string | null }) {
   return (
-    <div className="mx-2 mb-2 ml-15 space-y-2 rounded-lg border border-border/60 bg-muted/20 p-3 text-xs">
+    <div className="mx-2 mb-2 ml-15 space-y-2 rounded-lg border border-line bg-muted/20 p-3 text-xs">
       <div>
         <p className="text-sm font-semibold text-foreground">{draft.title}</p>
         <p className="text-muted-foreground">{category ?? "Розділ не визначено"}</p>

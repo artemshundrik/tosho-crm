@@ -254,7 +254,7 @@ export function PersonHoverCard({
       ) : null}
 
       {contacts ? (
-        <div className="mt-2.5 truncate border-t border-border/40 pt-2 text-2xs text-muted-foreground">{contacts}</div>
+        <div className="mt-2.5 truncate border-t border-line-subtle pt-2 text-2xs text-muted-foreground">{contacts}</div>
       ) : null}
     </div>
   );

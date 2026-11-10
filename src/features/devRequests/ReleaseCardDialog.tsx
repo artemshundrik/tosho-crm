@@ -227,7 +227,7 @@ export function ReleaseCardDialog({
             <RowFitHint row="howToCheck" text={howToCheck} />
           </div>
 
-          <div className="rounded-xl border border-border/60 bg-muted/20 p-3">
+          <div className="rounded-xl border border-line bg-muted/20 p-3">
             {preview ? (
               <img src={preview} alt="Прев'ю картки" className="w-full rounded-lg" />
             ) : (

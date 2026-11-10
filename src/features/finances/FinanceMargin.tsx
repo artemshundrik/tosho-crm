@@ -112,8 +112,8 @@ export function FinanceMargin({ teamId, userId }: FinanceMarginProps) {
       </p>
 
       {rows.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border/60 bg-muted/10 p-8 text-center">
-          <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-background">
+        <div className="rounded-xl border border-dashed border-line bg-muted/10 p-8 text-center">
+          <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-background">
             <TrendingUp className="h-5 w-5 text-muted-foreground" />
           </div>
           <p className="text-sm text-muted-foreground">
@@ -121,15 +121,15 @@ export function FinanceMargin({ teamId, userId }: FinanceMarginProps) {
           </p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-border/60">
-          <div className="hidden grid-cols-[1.5fr_repeat(4,minmax(0,1fr))] gap-2 border-b border-border/60 bg-muted/20 px-4 py-2 text-2xs font-semibold uppercase tracking-wide text-muted-foreground sm:grid">
+        <div className="overflow-hidden rounded-xl border border-line">
+          <div className="hidden grid-cols-[1.5fr_repeat(4,minmax(0,1fr))] gap-2 border-b border-line-subtle bg-muted/20 px-4 py-2 text-2xs font-semibold uppercase tracking-wide text-muted-foreground sm:grid">
             <span>Замовлення</span>
             <span className="text-right">Виставлено</span>
             <span className="text-right">Отримано</span>
             <span className="text-right">Витрати</span>
             <span className="text-right">Маржа по оплатах</span>
           </div>
-          <div className="divide-y divide-border/50">
+          <div className="divide-y divide-line-subtle">
             {rows.map((row) => (
               <div
                 key={row.key}
@@ -167,7 +167,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "su
   return (
     <div
       className={cn(
-        "rounded-xl border border-border/40 bg-card p-4",
+        "rounded-xl border border-line bg-card p-4",
         tone === "danger" && "border-destructive/40 bg-destructive/5",
         tone === "success" && "flag-success"
       )}
