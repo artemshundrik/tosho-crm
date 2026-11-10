@@ -100,6 +100,7 @@ export const formatCurrencyCompact = (value: number, currency?: string | null) =
 export const CANCEL_REASON_OPTIONS = [
   "Бюджет не підходить",
   "Обрали іншого підрядника",
+  "Програний тендер",
   "Замовили інший продукт",
   "Змінились вимоги/бриф",
   "Втрата актуальності",
