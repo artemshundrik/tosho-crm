@@ -36,7 +36,7 @@ Set these before backup:
 
 ```bash
 export BACKUP_ROOT='./backups'
-export KEEP_STORAGE_ARCHIVES='8'
+export KEEP_STORAGE_ARCHIVES='1'   # local copies; history lives in Dropbox
 ```
 
 Optional Storage backup:
@@ -114,7 +114,15 @@ Notes:
   tar archive and from the `*.tar.gz` retention prune. Safe to delete to reclaim space — the
   next run just re-mirrors (one full egress pull again).
 - `--delete` makes the mirror a faithful snapshot of current bucket state. History of objects
-  deleted from storage is still preserved in the older dated archives (retention: 8 weekly).
+  deleted from storage is still preserved in the older dated archives in Dropbox
+  (8 weekly + 6 monthly). Locally only the newest archive is kept (`KEEP_STORAGE_ARCHIVES=1`):
+  every archive is a full snapshot (~13 GB in Nov 2026), so 8 local copies duplicated Dropbox
+  and took ~90 GB of laptop disk.
+
+To check that local archives really are in Dropbox before freeing disk, run
+`npm run backup:verify` (read-only). It lists `CRM Backups` in Dropbox and compares every
+local `*.tar.gz` by size and Dropbox `content_hash`, i.e. byte for byte; `--no-hash` skips
+the hashing (~45 s for 90 GB) and compares sizes only.
 
 Failure/staleness safeguards (added after the 2026-07-12 incident, where an offline Sunday run
 wrote a 280-byte empty archive that was uploaded to Dropbox and marked "success"):
