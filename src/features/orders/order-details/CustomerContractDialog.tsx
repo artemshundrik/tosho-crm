@@ -5,6 +5,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { AlertTriangle, FileSignature, Loader2 } from "@/components/icons/appIcons";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { SEGMENTED_GROUP } from "@/components/ui/controlStyles";
 import {
   Dialog,
   DialogContent,
@@ -16,6 +17,7 @@ import {
 import { FileDropZone } from "@/components/ui/file-drop-zone";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SegmentedGroup } from "@/components/ui/segmented-group";
 import { DateInput } from "@/components/ui/picker-input";
 import {
   CUSTOMER_CONTRACT_ACCEPT,
@@ -30,6 +32,7 @@ import {
 import { SIGNATURE_VIA_LABELS, type SignatureVia } from "@/features/orders/orderApprovals";
 import type { DerivedOrderRecord } from "@/features/orders/orderRecords";
 import { canManageOrderDocuments } from "@/lib/permissions";
+import { cn } from "@/lib/utils";
 
 const SIGN_OPTIONS: SignatureVia[] = ["vchasno", "paper", "medoc"];
 
@@ -221,6 +224,7 @@ export function CustomerContractEntry({
               </Label>
               <Input
                 id="customer-contract-number"
+                controlSize="lg"
                 value={form.number}
                 disabled={saving}
                 onChange={(event) => setForm((current) => ({ ...current, number: event.target.value }))}
@@ -248,34 +252,40 @@ export function CustomerContractEntry({
                 onChange={(event) => setForm((current) => ({ ...current, validUntil: event.target.value }))}
               />
             </div>
-            <div className="grid gap-1">
-              <span className="text-xs font-medium">Підписано</span>
-              <div className="flex flex-wrap gap-1.5">
-                {SIGN_OPTIONS.map((via) => (
-                  <Button
-                    key={via}
-                    type="button"
-                    size="xs"
-                    variant={form.signedVia === via ? "primary" : "outline"}
-                    aria-pressed={form.signedVia === via}
-                    disabled={saving}
-                    onClick={() => setForm((current) => ({ ...current, signedVia: via }))}
-                  >
-                    {SIGNATURE_VIA_LABELS[via]}
-                  </Button>
-                ))}
-              </div>
-            </div>
+            {/* Автопролонгація — про той самий термін, тож стоїть поруч із «Діє до», на рівні поля. */}
+            <label
+              htmlFor="customer-contract-prolongation"
+              className="flex h-10 cursor-pointer items-center gap-2 self-end text-sm"
+            >
+              <Checkbox
+                id="customer-contract-prolongation"
+                checked={form.autoProlongation}
+                disabled={saving}
+                onCheckedChange={(value) => setForm((current) => ({ ...current, autoProlongation: value === true }))}
+              />
+              Автопролонгація
+            </label>
           </div>
-          <label htmlFor="customer-contract-prolongation" className="flex cursor-pointer items-center gap-2 text-sm">
-            <Checkbox
-              id="customer-contract-prolongation"
-              checked={form.autoProlongation}
-              disabled={saving}
-              onCheckedChange={(value) => setForm((current) => ({ ...current, autoProlongation: value === true }))}
-            />
-            Автопролонгація
-          </label>
+
+          <div className="grid gap-1">
+            <span className="text-xs font-medium">Підписано</span>
+            <SegmentedGroup className={cn(SEGMENTED_GROUP, "flex w-full")} aria-label="Де підписано договір">
+              {SIGN_OPTIONS.map((via) => (
+                <Button
+                  key={via}
+                  type="button"
+                  variant="segmented"
+                  size="xs"
+                  className="flex-1"
+                  aria-pressed={form.signedVia === via}
+                  disabled={saving}
+                  onClick={() => setForm((current) => ({ ...current, signedVia: via }))}
+                >
+                  {SIGNATURE_VIA_LABELS[via]}
+                </Button>
+              ))}
+            </SegmentedGroup>
+          </div>
 
           <DialogFooter>
             <Button type="button" variant="ghost" disabled={saving} onClick={() => setOpen(false)}>
