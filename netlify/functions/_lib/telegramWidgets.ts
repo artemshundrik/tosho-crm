@@ -4,7 +4,12 @@ import sharp from "sharp";
 
 import type { InlineKeyboard } from "../_telegram";
 
-import { EVENING_WIDGET_HTML, TEAM_WIDGET_HTML } from "./telegramWidgetTemplates.generated";
+import {
+  ABSENCE_WIDGET_HTML,
+  EVENING_WIDGET_HTML,
+  MORNING_WIDGET_HTML,
+  TEAM_WIDGET_HTML,
+} from "./telegramWidgetTemplates.generated";
 
 /**
  * Звіти як віджети Telegram (Bot API 10.4): справжній HTML у повідомленні з
@@ -101,6 +106,72 @@ export function buildEveningWidget(data: {
   const chatData = JSON.stringify({ t: data.title, d: data.date, m: period(data.month), w: period(data.week), s: data.tiles });
   if (bytes(chatData) > DATA_LIMIT || compressedSize(EVENING_WIDGET_HTML) > HTML_LIMIT) return null;
   return { html: EVENING_WIDGET_HTML, chatData, caption: data.caption, keyboard: data.keyboard };
+}
+
+// --- Ранок -------------------------------------------------------------------
+
+export type MorningWidgetData = {
+  /** «вт, 10 листопада». */
+  date: string;
+  /** YYYY-MM-DD за Києвом: маркер «зараз» показується лише в той самий день. */
+  dayKey: string;
+  /** «🎉 Сьогодні свято — …» або порожньо. */
+  holiday: string;
+  /** Дедлайни прорахунків сьогодні: хвилина доби за Києвом. */
+  quoteDeadlines: number[];
+  today: { quotesDue: number; designDue: number; quotesOverdue: number; designOverdue: number; revisions: number };
+  funnel: {
+    awaiting: number;
+    awaitingStale: number;
+    oldestDays: number;
+    estimated: number;
+    monthQuotes: number;
+    /** «1,2–1,4 млн грн» — сума нових прорахунків за місяць. */
+    monthSum: string;
+    staleLeads: number;
+    recentLeads: number;
+  };
+  thresholds: { pipelineStaleDays: number; leadStaleDays: number };
+  /** Відсутні сьогодні: [«Олена Б.», «відпустка · до 14.11»]. */
+  out: Array<[string, string]>;
+  /** Решта рядків вкладки «Команда», від важливого до менш важливого. */
+  teamLines: string[];
+  footer: string;
+  caption: string;
+  keyboard?: InlineKeyboard;
+};
+
+export function buildMorningWidget(data: MorningWidgetData): WidgetContent | null {
+  // Кілька дедлайнів на одну годину — одна кулька з числом, а не стос.
+  const byMinute = new Map<number, number>();
+  for (const minute of data.quoteDeadlines) byMinute.set(minute, (byMinute.get(minute) ?? 0) + 1);
+  const t = data.today;
+  const f = data.funnel;
+  let out = data.out.map(([name, label]) => [plain(name), plain(label)] as [string, string]);
+  let lines = data.teamLines.map(plain);
+  const chatDataFor = () =>
+    JSON.stringify({
+      d: data.date,
+      k: data.dayKey,
+      h: plain(data.holiday),
+      q: [...byMinute.entries()].sort((a, b) => a[0] - b[0]),
+      s: [t.quotesDue, t.designDue, t.quotesOverdue, t.designOverdue, t.revisions],
+      f: [f.awaiting, f.awaitingStale, f.oldestDays, f.estimated, f.monthQuotes, f.staleLeads, f.recentLeads],
+      fm: plain(f.monthSum),
+      S: [data.thresholds.pipelineStaleDays, data.thresholds.leadStaleDays],
+      o: out,
+      t: lines,
+      x: plain(data.footer),
+    });
+  // Не влізло — спершу менш важливі рядки команди, потім відсутні з кінця.
+  let chatData = chatDataFor();
+  while (bytes(chatData) > DATA_LIMIT && (lines.length > 0 || out.length > 0)) {
+    if (lines.length > 0) lines = lines.slice(0, -1);
+    else out = out.slice(0, -1);
+    chatData = chatDataFor();
+  }
+  if (bytes(chatData) > DATA_LIMIT || compressedSize(MORNING_WIDGET_HTML) > HTML_LIMIT) return null;
+  return { html: MORNING_WIDGET_HTML, chatData, caption: data.caption, keyboard: data.keyboard };
 }
 
 // --- Команда ----------------------------------------------------------------
@@ -248,4 +319,65 @@ export async function buildTeamWidget(data: {
     }
   }
   return null;
+}
+
+// --- Заявка на відсутність ---------------------------------------------------
+
+export type AbsenceWidgetData = {
+  /** «Заявка · відпустка». */
+  title: string;
+  /** «⏳ стартує завтра» — для нагадувань; у свіжої заявки порожньо. */
+  urgent: string;
+  name: string;
+  /** «17 лист. – 28 лист.». */
+  range: string;
+  /** «12 кал. дн.» / «3 роб. дн.» або порожньо. */
+  days: string;
+  comment: string;
+  /** Понеділок, з якого починається календар. */
+  windowStart: string;
+  length: number;
+  /** Вихідні й свята — номери днів від windowStart. */
+  offDays: number[];
+  todayIndex: number;
+  requester: { from: number; to: number };
+  others: Array<{ name: string; kind: string; from: number; to: number; pending: boolean }>;
+  caption: string;
+};
+
+/** Більше рядків календар не вміщує у висоту віджета. */
+const MAX_ABSENCE_ROWS = 7;
+
+export function buildAbsenceWidget(data: AbsenceWidgetData): WidgetContent | null {
+  // Спершу ті, хто перетинається із заявкою: саме заради них віджет і є.
+  const overlaps = (o: { from: number; to: number }) => o.from <= data.requester.to && o.to >= data.requester.from;
+  const others = [...data.others].sort((a, b) => Number(overlaps(b)) - Number(overlaps(a)) || a.from - b.from);
+  let rows = others.slice(0, MAX_ABSENCE_ROWS);
+  const chatDataFor = () => {
+    const rest = others.slice(rows.length);
+    return JSON.stringify({
+      t: plain(data.title),
+      e: plain(data.urgent),
+      n: plain(data.name),
+      r: plain(data.range),
+      c: plain(data.days),
+      m: plain(data.comment).slice(0, 140),
+      s: data.windowStart,
+      L: data.length,
+      o: data.offDays,
+      y: data.todayIndex,
+      p: [
+        [shortName(data.name), "", data.requester.from, data.requester.to, 0],
+        ...rows.map((o) => [shortName(o.name), plain(o.kind), o.from, o.to, o.pending ? 1 : 0]),
+      ],
+      z: rest.length ? `Ще: ${rest.map((o) => shortName(o.name)).join(", ")}` : "",
+    });
+  };
+  let chatData = chatDataFor();
+  while (bytes(chatData) > DATA_LIMIT && rows.length > 0) {
+    rows = rows.slice(0, -1);
+    chatData = chatDataFor();
+  }
+  if (bytes(chatData) > DATA_LIMIT || compressedSize(ABSENCE_WIDGET_HTML) > HTML_LIMIT) return null;
+  return { html: ABSENCE_WIDGET_HTML, chatData, caption: data.caption };
 }

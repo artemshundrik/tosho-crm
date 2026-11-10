@@ -1,6 +1,6 @@
 import webpush from "web-push";
 import { type SupabaseClient } from "@supabase/supabase-js";
-import { escapeTelegramHtml, getTelegramBotToken, sendTelegramMessage } from "./_telegram";
+import { escapeTelegramHtml, getTelegramBotToken, sendTelegramMessage, sendTelegramWidget } from "./_telegram";
 import { isChannelEnabled } from "./_notificationCategories";
 
 // Приймаємо реальний Supabase service-role клієнт (як його створюють reminder-функції).
@@ -32,11 +32,21 @@ type NotificationInsertRow = {
    * кнопка веде одразу на потрібне, а не в список (REQ-343#p12).
    */
   telegramLinks?: Array<{ text: string; href: string }>;
+  /**
+   * Віджет (Bot API 10.4) замість тексту в Telegram. Теж не колонка. Кнопки
+   * лишаються ті самі; Telegram віджет не прийняв — іде звичайний текст.
+   */
+  telegramWidget?: { html: string; chatData: string; caption: string } | null;
 };
 
 /** Рядок для БД: без полів, яких немає в таблиці notifications. */
 export function toDbRow(row: NotificationInsertRow) {
-  const { telegramActions: _telegramActions, telegramLinks: _telegramLinks, ...dbRow } = row;
+  const {
+    telegramActions: _telegramActions,
+    telegramLinks: _telegramLinks,
+    telegramWidget: _telegramWidget,
+    ...dbRow
+  } = row;
   return dbRow;
 }
 
@@ -371,11 +381,16 @@ async function deliverTelegram(
     }
 
     const chatId = setting.telegram_chat_id;
+    const keyboard = buildNotificationKeyboard(row, buildTelegramUrl(row.href), buildTelegramUrl);
+    const widgetResult = row.telegramWidget ? await sendTelegramWidget(chatId, row.telegramWidget, { keyboard }) : null;
+    if (widgetResult && !widgetResult.ok && widgetResult.status !== 403 && widgetResult.errorCode !== 403) {
+      console.warn("[notifications] widget rejected, sending text", widgetResult.errorCode, widgetResult.description);
+    }
     const text = `<b>${escapeTelegramHtml(row.title)}</b>${row.body ? `\n${escapeTelegramHtml(row.body)}` : ""}`;
-    const result = await sendTelegramMessage(chatId, text, {
-      parseMode: "HTML",
-      replyMarkup: { inline_keyboard: buildNotificationKeyboard(row, buildTelegramUrl(row.href), buildTelegramUrl) },
-    });
+    const result =
+      widgetResult && (widgetResult.ok || widgetResult.status === 403 || widgetResult.errorCode === 403)
+        ? widgetResult
+        : await sendTelegramMessage(chatId, text, { parseMode: "HTML", replyMarkup: { inline_keyboard: keyboard } });
 
     if (result.ok) {
       telegramDelivered += 1;

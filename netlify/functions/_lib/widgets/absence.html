@@ -1,0 +1,72 @@
+<style>
+:root{--a:#E6007E;--e:#e5484d;--h:var(--tg-theme-hint-color,#8a8a8e);--s:var(--tg-theme-secondary-bg-color,#f1f1f4);--x:var(--tg-theme-text-color,#000);--b:var(--tg-theme-bg-color,#fff)}
+body{margin:0;padding:12px 14px;font:13px/1.35 system-ui,sans-serif;color:var(--x);-webkit-user-select:none;user-select:none}
+.t{display:flex;justify-content:space-between;align-items:center;font:600 15px system-ui,sans-serif}
+.t i{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--a);margin-right:8px;vertical-align:1px}
+.t em{font:500 12px system-ui,sans-serif;font-style:normal;color:var(--e)}
+.who{display:flex;align-items:center;gap:10px;margin-top:12px}
+.v{flex:none;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font:600 15px system-ui,sans-serif;color:#fff;background:var(--a)}
+.who b{display:block;font-size:17px}.who div span{color:var(--h)}
+.m{margin-top:8px;color:var(--h);font-style:italic}
+.st{margin-top:10px;padding:7px 10px;border-radius:10px;background:var(--s);font-weight:500}
+.st.w{background:rgba(229,72,77,.13);color:var(--e)}
+.cal{margin-top:12px}
+.row{display:grid;grid-template-columns:76px 1fr;align-items:center;gap:6px}
+.nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.nm.me{font-weight:600}
+.g{position:relative;display:grid;height:22px}
+.g>u{grid-row:1;border-radius:3px;text-decoration:none;transition:background .2s}
+.g>u.o{background:var(--s)}.g>u.y{box-shadow:inset 0 0 0 1.5px var(--a)}.g>u.on{background:rgba(230,0,126,.14)}
+.br{grid-row:1;align-self:center;height:12px;border-radius:6px;background:var(--h);opacity:.55;transform:scaleX(0);transform-origin:left;transition:transform .6s cubic-bezier(.2,.8,.2,1)}
+.br.p{background:none;box-shadow:inset 0 0 0 1.5px var(--h);opacity:.9}.br.me{background:var(--a);opacity:1;height:14px}
+.go .br{transform:none}
+.hd .g{height:auto;font-size:10px;color:var(--h);text-align:center;line-height:1.2}
+.hd .g>u{padding:1px 0}
+.sel{margin-top:10px;min-height:34px;color:var(--h)}
+.sel b{color:var(--x);font-weight:600}
+</style>
+<div class=t><span><i></i><span id=T></span></span><em id=E></em></div>
+<div class=who><span class=v id=V></span><div><b id=N></b><span id=R></span></div></div>
+<div class=m id=M></div>
+<div class=st id=S></div>
+<div class=cal id=C></div>
+<div class=sel id=Q></div>
+<script>
+const W=window.TelegramWidget||{onEvent(){}},$=i=>document.getElementById(i),WD=['нд','пн','вт','ср','чт','пт','сб'];
+const MO=['січня','лютого','березня','квітня','травня','червня','липня','серпня','вересня','жовтня','листопада','грудня'];
+let D,sel=-1;
+const day=i=>new Date(Date.parse(D.s+'T12:00:00Z')+i*864e5);
+const cols=(cls,fn)=>{let s='';for(let i=0;i<D.L;i++)s+='<u class="'+cls(i)+'" style=grid-column:'+(i+1)+'>'+(fn?fn(i):'')+'</u>';return s};
+const off=i=>D.o.includes(i)?'o':'',mark=i=>off(i)+(i===D.y?' y':'')+(i===sel?' on':'');
+const pl=(n,a,b,c)=>{const t=n%100,u=n%10;return t>10&&t<15?c:u==1?a:u>1&&u<5?b:c};
+function grid(){
+  const tpl='grid-template-columns:repeat('+D.L+',1fr);column-gap:'+(D.L>14?1:2)+'px';
+  let h='<div class="row hd"><span></span><div class=g style="'+tpl+'">'+cols(mark,i=>WD[day(i).getUTCDay()][0].toUpperCase()+'<br>'+day(i).getUTCDate())+'</div></div>';
+  D.p.forEach((p,j)=>{h+='<div class=row><span class="nm'+(j?'':' me')+'">'+p[0]+'</span><div class=g style="'+tpl+'">'+cols(mark)
+    +'<i class="br'+(j?'':' me')+(p[4]?' p':'')+'" style="grid-column:'+(Math.max(0,p[2])+1)+'/'+(Math.min(D.L-1,p[3])+2)+';transition-delay:'+(j?150+j*60:0)+'ms"></i></div></div>'});
+  if(D.z)h+='<div class=row><span></span><span style=color:var(--h)>'+D.z+'</span></div>';
+  $('C').innerHTML=h;
+}
+function pick(){
+  if(sel<0){$('Q').textContent='Торкніться дня, щоб побачити, хто відсутній';return}
+  const d=day(sel),who=D.p.slice(1).filter(p=>p[2]<=sel&&p[3]>=sel).map(p=>p[0]+' ('+p[1]+(p[4]?', заявка':'')+')');
+  $('Q').innerHTML='<b>'+WD[d.getUTCDay()]+', '+d.getUTCDate()+' '+MO[d.getUTCMonth()]+'</b>'+(D.o.includes(sel)?' · вихідний':'')+'<br>'+(who.length?'Ще відсутні: '+who.join(', '):'Більше нікого немає');
+}
+function init(){
+  try{D=JSON.parse(W.chatData)}catch(e){return}
+  const me=D.p[0],n=me[0].split(' ');
+  $('T').textContent=D.t;$('E').textContent=D.e||'';
+  $('V').textContent=n[0][0]+(n[1]||'')[0];$('N').textContent=D.n;$('R').textContent=D.r+(D.c?' · '+D.c:'');
+  $('M').hidden=!D.m;$('M').textContent=D.m?'«'+D.m+'»':'';
+  const k=new Set(D.p.slice(1).filter(p=>p[2]<=me[3]&&p[3]>=me[2]).map(p=>p[0])).size;
+  $('S').className='st'+(k?' w':'');$('S').textContent=k?'У ці дні ще '+pl(k,'відсутня','відсутні','відсутні')+' '+k+' '+pl(k,'людина','людини','людей'):'У ці дні всі інші на місці';
+  grid();pick();
+  requestAnimationFrame(()=>requestAnimationFrame(()=>document.body.classList.add('go')));
+}
+$('C').addEventListener('click',e=>{
+  const g=e.target.closest('.row')&&e.target.closest('.row').querySelector('.g');if(!g)return;
+  const r=g.getBoundingClientRect(),i=Math.floor((e.clientX-r.left)/r.width*D.L);if(i<0||i>=D.L)return;
+  sel=i===sel?-1:i;W.HapticFeedback&&W.HapticFeedback.selectionChanged();
+  document.querySelectorAll('.g>u').forEach(u=>u.classList.toggle('on',+u.style.gridColumnStart-1===sel));pick();
+});
+W.onEvent('chatDataChanged',init);init();W.ready&&W.ready();
+</script>

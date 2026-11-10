@@ -27,6 +27,11 @@ describe("toDbRow", () => {
     expect(dbRow).not.toHaveProperty("telegramLinks");
   });
 
+  it("віджет теж не їде в INSERT", () => {
+    const dbRow = toDbRow({ ...baseRow, telegramWidget: { html: "<b>x</b>", chatData: "{}", caption: "c" } });
+    expect(dbRow).not.toHaveProperty("telegramWidget");
+  });
+
   it("рядок без кнопок лишається таким, як був", () => {
     expect(toDbRow(baseRow)).toEqual(baseRow);
   });

@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { assertCronAuthorized } from "./_cronAuth";
 import { deliverNotifications } from "./_notificationDelivery";
 import { absenceDecisionActions } from "./_lib/absenceDecisionButtons";
+import { loadAbsenceRequestWidget } from "./_lib/absenceWidget";
 import { NOTIFY_FROM_HOUR, NOTIFY_UNTIL_HOUR, isQuietHour } from "./_lib/quietHours";
 
 type HttpEvent = {
@@ -78,6 +79,8 @@ type PendingNotificationRow = {
   type: "info" | "success" | "warning";
   /** Кнопки-дії в Telegram — див. _notificationDelivery. У базу не пишуться. */
   telegramActions?: Array<{ text: string; callbackData: string }>;
+  /** Календар «хто ще відсутній» під заявкою — див. _lib/absenceWidget. */
+  telegramWidget?: { html: string; chatData: string; caption: string } | null;
 };
 
 const TEAM_EVENTS_TIME_ZONE = "Europe/Kiev";
@@ -579,6 +582,17 @@ export const handler = async (event: HttpEvent) => {
             type: "info",
           };
 
+      // Один віджет на заявку, хоч би скільки було тих, хто вирішує. Лише коли є кому слати.
+      const fresh = approvers.filter((id) => !existingKeys.has(`${id}::${href}`));
+      const widget =
+        fresh.length > 0
+          ? await loadAbsenceRequestWidget(adminClient, {
+              absence: { ...request, kind: request.kind ?? "other" },
+              requesterName,
+              urgent: urgent ? ((request.start_date ?? "") <= todayKey ? "⏳ вже почалась" : "⏳ стартує завтра") : "",
+            })
+          : null;
+
       for (const approverId of approvers) {
         const dedupeKey = `${approverId}::${href}`;
         if (existingKeys.has(dedupeKey)) continue;
@@ -589,6 +603,7 @@ export const handler = async (event: HttpEvent) => {
           // Пул уже відфільтрований за правом вирішувати саме цю заявку, тож
           // кнопка не приведе до 403. Права все одно перевіряються при кліку.
           telegramActions: absenceDecisionActions(request.id),
+          telegramWidget: widget,
         });
       }
     }

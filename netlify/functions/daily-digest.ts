@@ -21,6 +21,7 @@ import {
 } from "./_lib/digestRich";
 import {
   buildEveningWidget,
+  buildMorningWidget,
   buildTeamWidget,
   fitCaption,
   plural,
@@ -490,8 +491,14 @@ async function buildBusinessMorning(admin: AdminClient, members: MemberRow[], no
   );
   let quotesDueToday = 0;
   let quotesOverdue = 0;
+  // Для шкали дня у віджеті: дата й час у deadline_at — це вже київський годинник.
+  const quoteDeadlineMinutes: number[] = [];
   for (const quote of openQuotes) {
     if (!quote.deadline_at) continue;
+    if (quote.deadline_at.slice(0, 10) === todayKey) {
+      const [hours, minutes] = quote.deadline_at.slice(11, 16).split(":").map(Number);
+      if (Number.isFinite(hours) && Number.isFinite(minutes)) quoteDeadlineMinutes.push(hours * 60 + minutes);
+    }
     const instant = wallClockToInstant(quote.deadline_at);
     if (instant.getTime() < now.getTime()) quotesOverdue += 1;
     else if (instant.toISOString() < today.endIso) quotesDueToday += 1;
@@ -577,6 +584,11 @@ async function buildBusinessMorning(admin: AdminClient, members: MemberRow[], no
   if (designOverdue > 0) todaySection.push(`• Прострочено макетів: ${designOverdue}`);
   if (pendingRevisions > 0) todaySection.push(`• Правки без відповіді: ${pendingRevisions}`);
   if (todaySection.length > 0) lines.push("", "<b>Сьогодні</b>", ...todaySection);
+
+  // Те саме для вкладки «Команда» у віджеті: коротко, без розмітки.
+  const widgetOut: Array<[string, string]> = [];
+  const widgetTeam: string[] = [];
+  let widgetHoliday = "";
 
   // --- Відсутності: хто поза грою сьогодні, що зміниться завтра, що висить ---
   // Джерело — журнал tosho.team_absences (workspace-скоуп, не team!): той
@@ -670,6 +682,7 @@ async function buildBusinessMorning(admin: AdminClient, members: MemberRow[], no
         `• 🎉 Сьогодні свято — ${escapeTelegramHtml(holiday.name)}` +
           (holiday.isWorkday ? " (працюємо)" : "")
       );
+      widgetHoliday = `🎉 Сьогодні свято — ${holiday.name}${holiday.isWorkday ? " (працюємо)" : ""}`;
     }
     if (outToday.length > 0) {
       const parts = outToday.map((r) => {
@@ -677,6 +690,10 @@ async function buildBusinessMorning(admin: AdminClient, members: MemberRow[], no
         return `${nameByUser.get(r.user_id!)} (${absKindLabel(r)}, ${until})`;
       });
       absenceSection.push(`• Сьогодні відсутні: ${escapeTelegramHtml(parts.join(" · "))}`);
+      for (const r of outToday) {
+        const until = r.end_date === todayKey ? "останній день" : `до ${formatAbsenceShort(r.end_date!)}`;
+        widgetOut.push([nameByUser.get(r.user_id!) ?? "—", `${absKindLabel(r)} · ${until}`]);
+      }
     }
     const tomorrowBits: string[] = [];
     if (backTomorrow.length > 0) {
@@ -693,6 +710,7 @@ async function buildBusinessMorning(admin: AdminClient, members: MemberRow[], no
     }
     if (tomorrowBits.length > 0) {
       absenceSection.push(`• Завтра: ${escapeTelegramHtml(tomorrowBits.join(" · "))}`);
+      widgetTeam.push(`Завтра: ${tomorrowBits.join(" · ")}`);
     }
 
     const pendingRows = ((pendingAbs.data ?? []) as AbsRow[]).filter(
@@ -702,6 +720,7 @@ async function buildBusinessMorning(admin: AdminClient, members: MemberRow[], no
       absenceSection.push(
         `• 🏠 З дому: ${escapeTelegramHtml(wfhToday.map((r) => nameByUser.get(r.user_id!) ?? "—").join(" · "))}`
       );
+      widgetTeam.unshift(`🏠 З дому: ${wfhToday.map((r) => nameByUser.get(r.user_id!) ?? "—").join(", ")}`);
     }
     if (pendingRows.length > 0) {
       const oldestDays = pendingRows.reduce((oldest, r) => {
@@ -713,6 +732,7 @@ async function buildBusinessMorning(admin: AdminClient, members: MemberRow[], no
         `• ⏳ Заявок без рішення: ${pendingRows.length}` +
           (oldestDays > 0 ? ` (найстаршій ${oldestDays} дн)` : "")
       );
+      widgetTeam.push(`⏳ Заявок без рішення: ${pendingRows.length}${oldestDays > 0 ? ` (найстаршій ${oldestDays} дн)` : ""}`);
     }
 
     if (absenceSection.length > 0) lines.push("", "<b>Відсутності</b>", ...absenceSection);
@@ -736,6 +756,11 @@ async function buildBusinessMorning(admin: AdminClient, members: MemberRow[], no
     tail.push(
       `😴 Не заходили ${MEMBER_ABSENT_DAYS}+ днів: ${absent.length} — ${escapeTelegramHtml(names)}` +
         (absent.length > 5 ? ` …і ще ${absent.length - 5}` : "")
+    );
+    widgetTeam.push(
+      `😴 Не заходили ${MEMBER_ABSENT_DAYS}+ днів: ` +
+        absent.slice(0, 4).map((r) => shortName((r.member.fullName ?? "").trim() || "—")).join(", ") +
+        (absent.length > 4 ? ` і ще ${absent.length - 4}` : "")
     );
   }
 
@@ -772,6 +797,53 @@ async function buildBusinessMorning(admin: AdminClient, members: MemberRow[], no
     dueToday + overdue === 0
       ? "🌤 Дедлайнів на сьогодні немає"
       : `🎯 Дедлайнів сьогодні: ${dueToday}` + (overdue > 0 ? ` · уже прострочено: ${overdue}` : "");
+  const widgetFooter = [
+    paymentsByCurrency.size > 0
+      ? `Платежі на ${PAYMENT_HORIZON_DAYS} днів: ` +
+        Array.from(paymentsByCurrency.entries())
+          .map(([currency, entry]) => `${formatMoney(entry.sum, currency)} (${entry.count})`)
+          .join(" · ")
+      : "",
+    orders.length > 0
+      ? `Учора ${orders.length} ${plural(orders.length, ["замовлення", "замовлення", "замовлень"])} на ${formatMoneyRange(ordersSum, formatMoney)}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  const widget = buildMorningWidget({
+    date: `${cardDate(todayKey)}, ${WEEKDAY_SHORT[new Date(`${todayKey}T12:00:00Z`).getUTCDay()]}`,
+    dayKey: todayKey,
+    holiday: widgetHoliday,
+    quoteDeadlines: quoteDeadlineMinutes,
+    today: {
+      quotesDue: quotesDueToday,
+      designDue: designDueToday,
+      quotesOverdue,
+      designOverdue,
+      revisions: pendingRevisions,
+    },
+    funnel: {
+      awaiting: awaitingApproval.length,
+      awaitingStale,
+      oldestDays: awaitingOldestDays,
+      estimated: estimated.length,
+      monthQuotes: monthQuoteIds.length,
+      monthSum: monthQuoteIds.length > 0 ? formatMoneyRange(monthSum, formatMoney) : "",
+      staleLeads,
+      recentLeads: recentLeadsResult.count ?? 0,
+    },
+    thresholds: { pipelineStaleDays: PIPELINE_STALE_DAYS, leadStaleDays: LEAD_STALE_DAYS },
+    out: widgetOut,
+    teamLines: widgetTeam,
+    footer: widgetFooter,
+    caption: fitCaption([lead, ...(widgetOut.length > 0 ? [`📵 Сьогодні відсутні: ${widgetOut.map(([name]) => escapeTelegramHtml(name)).join(", ")}`] : [])]),
+    keyboard: [
+      [
+        { text: "🧮 Прорахунки", url: `${APP_URL}/orders/estimates` },
+        { text: "🎨 Дизайн", url: `${APP_URL}/design` },
+      ],
+    ],
+  });
   const rich: RichContent = {
     html: `<p>${lead}</p>${legacyToRich(lines.join("\n"), { dropTitle: true })}`,
     photo,
@@ -787,6 +859,7 @@ async function buildBusinessMorning(admin: AdminClient, members: MemberRow[], no
   return {
     tone,
     rich,
+    widget,
     text: lines.join("\n"),
     keyboard: [
       [
@@ -1405,7 +1478,7 @@ function richOf(digest: { text: string; keyboard: RichContent["keyboard"]; rich?
   return digest.rich ?? { html: legacyToRich(digest.text), keyboard: digest.keyboard, silent: true };
 }
 
-/** Віджет є не в кожного звіту: технічний і ранок поки йдуть Rich. */
+/** Віджет є не в кожного звіту: технічний поки йде Rich. */
 function widgetOf(digest: object): WidgetContent | null {
   return "widget" in digest ? ((digest.widget as WidgetContent | null) ?? null) : null;
 }

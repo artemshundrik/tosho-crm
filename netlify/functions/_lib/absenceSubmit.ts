@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { deliverNotifications } from "../_notificationDelivery";
 import { absenceDecisionActions } from "./absenceDecisionButtons";
+import { loadAbsenceRequestWidget } from "./absenceWidget";
 import { isQuietHour } from "./quietHours";
 
 // Спільна логіка подання відсутності — для двох ротів одного процесу:
@@ -267,6 +268,10 @@ export async function notifySubmittedAbsence(
     // отримує не кожен адресат. Роль заявника видно з того ж списку: у колі
     // approvers лежать саме owner і CEO.
     const requesterPrivileged = recipientRows.some((row) => row.userId === absence.user_id);
+    // Заявці — календар «хто ще відсутній у ці дні»; факту (лікарняний) він ні до чого.
+    const widget = approvedFact
+      ? null
+      : await loadAbsenceRequestWidget(adminClient, { absence, requesterName: actorName, comment });
 
     await deliverNotifications(
       adminClient,
@@ -288,6 +293,7 @@ export async function notifySubmittedAbsence(
           !approvedFact && (row.isOwner || !requesterPrivileged)
             ? absenceDecisionActions(absence.id)
             : undefined,
+        telegramWidget: widget,
       })),
       { category: approvedFact ? "team_events" : "team_absences" }
     );

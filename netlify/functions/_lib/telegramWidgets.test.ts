@@ -2,7 +2,15 @@ import { deflateSync } from "node:zlib";
 
 import { describe, expect, it } from "vitest";
 
-import { buildEveningWidget, buildTeamWidget, fitCaption, plural } from "./telegramWidgets";
+import { mondayOf, windowLength } from "./absenceWidget";
+import {
+  buildAbsenceWidget,
+  buildEveningWidget,
+  buildMorningWidget,
+  buildTeamWidget,
+  fitCaption,
+  plural,
+} from "./telegramWidgets";
 
 /**
  * Віджет, що не вліз у ліміти Telegram, не падає — звіт мовчки йде запасним
@@ -106,5 +114,88 @@ describe("buildTeamWidget", () => {
   it("нікого довше п'яти хвилин — віджета немає, лишається запасний звіт", async () => {
     const widget = await buildTeamWidget({ date: "d", people: [person("А", 600, 2)], absent: [], caption: "c" });
     expect(widget).toBeNull();
+  });
+});
+
+describe("buildMorningWidget", () => {
+  const base = {
+    date: "10 листопада, вт",
+    dayKey: "2026-11-10",
+    holiday: "",
+    quoteDeadlines: [600, 600, 1080],
+    today: { quotesDue: 3, designDue: 5, quotesOverdue: 14, designOverdue: 13, revisions: 26 },
+    funnel: { awaiting: 57, awaitingStale: 0, oldestDays: 13, estimated: 42, monthQuotes: 9, monthSum: "607 083 ₴", staleLeads: 15, recentLeads: 22 },
+    thresholds: { pipelineStaleDays: 30, leadStaleDays: 14 },
+    out: [] as Array<[string, string]>,
+    teamLines: [],
+    footer: "",
+    caption: "c",
+  };
+
+  it("дедлайни на одну хвилину — одна кулька з числом", () => {
+    const widget = buildMorningWidget(base);
+    expect(JSON.parse(widget!.chatData).q).toEqual([[600, 2], [1080, 1]]);
+    expect(zipped(widget!.html)).toBeLessThan(4096);
+  });
+
+  it("не влізло в 1024 байти — спершу ріжуться рядки команди, потім відсутні", () => {
+    const out = Array.from({ length: 30 }, (_, i): [string, string] => [`Людина${i} Прізвище`, "відпустка · до 14.11"]);
+    const widget = buildMorningWidget({ ...base, out, teamLines: ["🏠 З дому: усі"] });
+    const data = JSON.parse(widget!.chatData);
+    expect(Buffer.byteLength(widget!.chatData)).toBeLessThanOrEqual(1024);
+    expect(data.t).toEqual([]);
+    expect(data.o.length).toBeGreaterThan(0);
+    expect(data.o.length).toBeLessThan(30);
+  });
+});
+
+describe("календар заявки", () => {
+  it("починається з понеділка того тижня", () => {
+    expect(mondayOf("2026-11-17")).toBe("2026-11-16");
+    expect(mondayOf("2026-11-16")).toBe("2026-11-16");
+    expect(mondayOf("2026-11-22")).toBe("2026-11-16");
+  });
+
+  it("цілі тижні, не менше двох і не більше трьох", () => {
+    expect(windowLength("2026-11-16", "2026-11-17")).toBe(14);
+    expect(windowLength("2026-11-16", "2026-12-02")).toBe(21);
+    expect(windowLength("2026-11-16", "2027-01-30")).toBe(21);
+  });
+});
+
+describe("buildAbsenceWidget", () => {
+  const base = {
+    title: "Заявка · відпустка",
+    urgent: "",
+    name: "Юлія Кубенко",
+    range: "17 лист. – 28 лист.",
+    days: "12 кал. дн.",
+    comment: "",
+    windowStart: "2026-11-16",
+    length: 14,
+    offDays: [5, 6, 12, 13],
+    todayIndex: -1,
+    requester: { from: 1, to: 12 },
+    caption: "c",
+  };
+
+  it("першим рядком заявник, далі ті, хто перетинається із заявкою", () => {
+    const widget = buildAbsenceWidget({
+      ...base,
+      others: [
+        { name: "Ян Один", kind: "відпустка", from: 13, to: 13, pending: false },
+        { name: "Ліна Два", kind: "day-off", from: 5, to: 5, pending: true },
+      ],
+    });
+    const rows = JSON.parse(widget!.chatData).p;
+    expect(rows.map((r: unknown[]) => r[0])).toEqual(["Юлія К.", "Ліна Д.", "Ян О."]);
+    expect(rows[1][4]).toBe(1);
+  });
+
+  it("більше семи людей — решта іменами в рядку «Ще»", () => {
+    const others = Array.from({ length: 10 }, (_, i) => ({ name: `Колега${i} Прізвище`, kind: "відпустка", from: 2, to: 3, pending: false }));
+    const data = JSON.parse(buildAbsenceWidget({ ...base, others })!.chatData);
+    expect(data.p).toHaveLength(8);
+    expect(data.z).toMatch(/^Ще: /);
   });
 });
