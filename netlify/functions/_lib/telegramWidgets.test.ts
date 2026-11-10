@@ -3,6 +3,7 @@ import { deflateSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 
 import { mondayOf, windowLength } from "./absenceWidget";
+import { buildDevNewsWidget, parseStackTitle } from "./devNewsWidget";
 import {
   buildAbsenceWidget,
   buildEveningWidget,
@@ -197,5 +198,34 @@ describe("buildAbsenceWidget", () => {
     const data = JSON.parse(buildAbsenceWidget({ ...base, others })!.chatData);
     expect(data.p).toHaveLength(8);
     expect(data.z).toMatch(/^Ще: /);
+  });
+});
+
+describe("buildDevNewsWidget", () => {
+  const item = (source: "stack" | "claude" | "watch" | "apply", title: string, note?: string) => ({
+    source,
+    key: title,
+    title,
+    url: `https://example.com/${encodeURIComponent(title)}`,
+    note,
+  });
+
+  it("версії стеку розбираються на назву, звідки, куди й вагу", () => {
+    expect(parseStackTitle(item("stack", "@supabase/* 2.80.0 → 3.0.0 · 4 пакети", "мажор — може зламати"))).toEqual([
+      "@supabase/* · 4 пакети", "2.80.0", "3.0.0", 2, "https://example.com/%40supabase%2F*%202.80.0%20%E2%86%92%203.0.0%20%C2%B7%204%20%D0%BF%D0%B0%D0%BA%D0%B5%D1%82%D0%B8",
+    ]);
+  });
+
+  it("довгі розбори коротшають, доки віджет не влізе; чужий </script> не закриває наш", () => {
+    const writeup = "Це речення про статтю, яке пояснює, що вона дасть нашій CRM. ".repeat(40);
+    const widget = buildDevNewsWidget(
+      [item("stack", "oxlint 1.90.0 → 1.93.0"), ...Array.from({ length: 4 }, (_, i) => item("apply", `Стаття ${i} </script>`, writeup))],
+      "10 листопада",
+      []
+    );
+    expect(widget).not.toBeNull();
+    expect(zipped(widget!.html)).toBeLessThan(4096);
+    expect(widget!.html.match(/<\/script>/g)).toHaveLength(2);
+    expect(widget!.caption).toContain("4 статті з розбором");
   });
 });

@@ -4,6 +4,7 @@ import { assertCronAuthorized } from "./_cronAuth";
 import { chatCostUsd } from "./_aiPricing";
 import { logAiUsage } from "./_aiUsageLog";
 import { isCategoryVisibleForRole } from "./_notificationCategories";
+import { buildDevNewsWidget } from "./_lib/devNewsWidget";
 import { loadMembers, sendDigest, type AdminClient, type MemberRow } from "./_lib/digestDelivery";
 import { STACK_SNAPSHOT } from "../../src/data/stackSnapshot.generated";
 import {
@@ -781,6 +782,7 @@ export const handler = async (event: HttpEvent) => {
         tookMs: Date.now() - startedAt,
         catchUpDays: catchUpDays || null,
         message: message.text,
+        widget: Boolean(buildDevNewsWidget(message.items, kievDayLabel(now), message.keyboard)),
       });
     }
 
@@ -801,7 +803,9 @@ export const handler = async (event: HttpEvent) => {
       recipients,
       "dev_news",
       message.text,
-      message.keyboard
+      message.keyboard,
+      null,
+      buildDevNewsWidget(message.items, kievDayLabel(now), message.keyboard)
     );
 
     // Запам'ятовуємо лише те, що справді пішло. Якщо доставити не вдалось
