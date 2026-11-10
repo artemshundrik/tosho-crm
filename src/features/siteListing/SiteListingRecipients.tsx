@@ -66,7 +66,7 @@ export function SiteListingRecipients({ teamId }: { teamId: string | null }) {
           type="button"
           disabled={!ready}
           aria-label={tip ?? "Кому сповіщення про нові моделі"}
-          className="-my-1 inline-flex items-center rounded-full px-1.5 py-1 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 disabled:pointer-events-none"
+          className="-my-1 inline-flex items-center rounded-full px-1.5 py-1 text-muted-foreground transition-colors hover:bg-tint hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 disabled:pointer-events-none"
         >
           <HoverTip label={tip}>
             <span className="flex items-center gap-1.5">
@@ -108,7 +108,7 @@ export function SiteListingRecipients({ teamId }: { teamId: string | null }) {
           <ul>
             {members.map((member) => (
               <li key={member.userId}>
-                <label className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/40">
+                <label className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-tint">
                   <Checkbox
                     checked={selectedIds.has(member.userId)}
                     onCheckedChange={(value) => toggle(member.userId, value === true)}

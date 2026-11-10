@@ -465,7 +465,7 @@ function renderInAppToastContent({
               <button
                 type="button"
                 onClick={onAction}
-                className="inline-flex h-8 items-center rounded-full border border-line-strong bg-background px-3 text-xs font-semibold text-foreground transition-colors hover:bg-muted/70"
+                className="inline-flex h-8 items-center rounded-full border border-line-strong bg-background px-3 text-xs font-semibold text-foreground transition-colors hover:bg-tint"
               >
                 {actionLabel}
               </button>
@@ -2115,7 +2115,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                               onClick={() => setCmdkOpen(true)}
                             />
                             <div className="absolute inset-y-0 right-2 flex items-center pointer-coarse:hidden">
-                              <kbd className="pointer-events-none inline-flex h-6 select-none items-center gap-1 rounded-md border border-line bg-muted/70 px-2.5 font-mono text-3xs font-medium text-muted-foreground">
+                              <kbd className="pointer-events-none inline-flex h-6 select-none items-center gap-1 rounded-md border border-line bg-tint px-2.5 font-mono text-3xs font-medium text-muted-foreground">
                                 <span className="text-2xs">⌘</span>K
                               </kbd>
                             </div>
@@ -2171,7 +2171,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                               setMobileMenuOpen(false);
                               setTabBarSettingsOpen(true);
                             }}
-                            className="flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                            className="flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-tint hover:text-foreground"
                           >
                             <SlidersHorizontal className="h-4 w-4 shrink-0" />
                             <span className="min-w-0 flex-1 truncate">Налаштувати смугу вкладок</span>
@@ -2224,7 +2224,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 // Наведення нейтральне, як у решти полів: світлішає фон, рамка
                 // лишається своя. Рожевий обідок робив із поля рекламу модуля —
                 // сам колір бренду живе в пігулці праворуч, і цього досить.
-                className="group/search inline-flex h-(--control-h) w-[320px] cursor-pointer items-center gap-2 rounded-lg border border-line-strong bg-muted/40 pl-3.5 pr-1 text-sm text-muted-foreground transition-all duration-base hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:border-foreground/50"
+                className="group/search inline-flex h-(--control-h) w-[320px] cursor-pointer items-center gap-2 rounded-lg border border-line-strong bg-tint pl-3.5 pr-1 text-sm text-muted-foreground transition-all duration-base hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:border-foreground/50"
               >
                 <Search className="h-4 w-4 shrink-0 opacity-70" />
                 {/* Не «Пошук»: те саме поле тепер і шукає, і питає ToSho AI.
@@ -2289,7 +2289,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                   trigger={
                     <button
                       type="button"
-                      className="hidden lg:inline-flex h-(--control-h) items-center gap-3 whitespace-nowrap rounded-lg px-2.5 transition-colors duration-base hover:bg-muted/50 cursor-pointer"
+                      className="hidden lg:inline-flex h-(--control-h) items-center gap-3 whitespace-nowrap rounded-lg px-2.5 transition-colors duration-base hover:bg-tint cursor-pointer"
                       aria-label={
                         usdUahRate || eurUahRate
                           ? `Курси валют: долар ${usdUahRate ? usdUahRate.toFixed(2) : "не вказано"}, євро ${eurUahRate ? eurUahRate.toFixed(2) : "не вказано"}`

@@ -30,7 +30,7 @@ type TabsVariant = "default" | "underline"
 const TabsListContext = React.createContext<TabsVariant>("default")
 
 const DEFAULT_LIST =
-  "inline-flex h-(--control-h) items-center justify-center rounded-lg border border-line-strong bg-muted/40 p-0.5 text-muted-foreground"
+  "inline-flex h-(--control-h) items-center justify-center rounded-lg border border-line-strong bg-tint p-0.5 text-muted-foreground"
 
 const UNDERLINE_LIST = cn(TAB_BAR_ROW, "h-auto border-b border-line-subtle bg-transparent p-0")
 

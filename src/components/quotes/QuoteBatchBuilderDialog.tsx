@@ -500,7 +500,7 @@ const ChipDropdown: React.FC<{
           )}
         >
           {selected?.imageUrl ? (
-            <span className="mr-2 flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-md border border-line bg-muted/30">
+            <span className="mr-2 flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-md border border-line bg-tint-subtle">
               <img src={selected.imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
             </span>
           ) : (
@@ -537,11 +537,11 @@ const ChipDropdown: React.FC<{
               >
                 <span className="flex min-w-0 flex-1 items-center gap-3 text-left">
                   {option.imageUrl ? (
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md border border-line bg-muted/30">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md border border-line bg-tint-subtle">
                       <img src={option.imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
                     </span>
                   ) : (
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line bg-muted/20 text-muted-foreground">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line bg-tint-subtle text-muted-foreground">
                       {icon}
                     </span>
                   )}
@@ -1999,7 +1999,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
           {contentReady ? (
           <>
           <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[340px_minmax(0,1fr)]">
-            <aside className="min-h-0 overflow-y-auto border-b border-line-subtle bg-muted/10 p-3 lg:border-b-0 lg:border-r">
+            <aside className="min-h-0 overflow-y-auto border-b border-line-subtle bg-tint-subtle p-3 lg:border-b-0 lg:border-r">
               <div className="mb-4 flex items-center justify-between gap-2">
                 <div>
                   <div className="text-sm font-semibold text-foreground">Товари</div>
@@ -2032,7 +2032,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                       )}
                     >
                       <div className="flex gap-3">
-                        <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-line bg-muted/30">
+                        <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-line bg-tint-subtle">
                           {imageUrl ? (
                             <img
                               src={imageUrl}
@@ -2274,7 +2274,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                                       Вставте посилання Avanprint або заповніть вручну.
                                     </div>
                                   </div>
-                                  <div className="rounded-xl border border-line bg-muted/10 p-2">
+                                  <div className="rounded-xl border border-line bg-tint-subtle p-2">
                                     <div className="flex gap-2">
                                       <Input
                                         value={quickModelImportUrl}
@@ -2310,7 +2310,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                                     ) : null}
                                   </div>
                                   <div className="grid gap-3 sm:grid-cols-[112px_minmax(0,1fr)]">
-                                    <div className="aspect-square overflow-hidden rounded-xl border border-line bg-muted/20">
+                                    <div className="aspect-square overflow-hidden rounded-xl border border-line bg-tint-subtle">
                                       {quickModelImageUrl.trim() && !quickModelImageErrored ? (
                                         <img
                                           src={quickModelImageUrl.trim()}
@@ -2425,7 +2425,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                       ) : (
                         <div className="space-y-3">
                           {activeProduct.printApplications.map((app, index) => (
-                            <div key={app.id} className="rounded-lg border border-line bg-muted/10 p-3">
+                            <div key={app.id} className="rounded-lg border border-line bg-tint-subtle p-3">
                               <div className="mb-3 flex items-center justify-between gap-2">
                                 <div className="flex items-center gap-2 text-sm font-semibold">
                                   <Palette className="h-4 w-4 text-muted-foreground" />

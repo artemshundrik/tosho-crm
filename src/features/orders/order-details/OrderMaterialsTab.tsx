@@ -68,7 +68,7 @@ function AssetTile({
       title={asset.label}
       className="group flex min-w-0 flex-col overflow-hidden rounded-lg border border-line bg-background text-left transition-colors hover:border-line-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
     >
-      <div className="relative aspect-[4/3] w-full border-b border-line-subtle bg-muted/20">
+      <div className="relative aspect-[4/3] w-full border-b border-line-subtle bg-tint-subtle">
         {stored && hasImagePreview(stored) ? (
           <StorageObjectImage
             bucket={stored.storageBucket}
@@ -206,7 +206,7 @@ function MaterialViewer({
                 </div>
               </div>
             </div>
-            <div className="relative bg-muted/15">
+            <div className="relative bg-tint-subtle">
               <StorageObjectImage
                 key={current.asset.id}
                 bucket={current.asset.storageBucket}

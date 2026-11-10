@@ -208,7 +208,7 @@ export function DevRequestLog({
                    * Рядок — кнопка, а не div з onClick: інакше в нього не
                    * потрапити з клавіатури, і жодного стану фокуса не буде.
                    */}
-                  <div className="group flex items-center gap-3 px-3 py-1.5 transition-colors hover:bg-muted/40">
+                  <div className="group flex items-center gap-3 px-3 py-1.5 transition-colors hover:bg-tint">
                     <button
                       type="button"
                       onClick={() => onSelect(request)}

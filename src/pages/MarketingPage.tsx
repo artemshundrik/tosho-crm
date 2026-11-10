@@ -1016,7 +1016,7 @@ export default function MarketingPage() {
               }
             }}
           >
-            <div className={cn("relative w-full overflow-hidden bg-muted/30", VISUAL_ASPECT_CLASS)}>
+            <div className={cn("relative w-full overflow-hidden bg-tint-subtle", VISUAL_ASPECT_CLASS)}>
               {/* Card covers render ~300px wide, so use the 640px "preview" variant
                   (avg ~25KB) instead of the blurry 160px thumb. Cheap now that images
                   are lazy + signed URLs are stable, so each cover downloads once. */}
@@ -1090,7 +1090,7 @@ export default function MarketingPage() {
                   {record.tags.slice(0, 3).map((tag) => (
                     <span
                       key={tag}
-                      className="rounded-full border border-line bg-muted/40 px-2 py-0.5 text-3xs font-medium text-muted-foreground"
+                      className="rounded-full border border-line bg-tint px-2 py-0.5 text-3xs font-medium text-muted-foreground"
                     >
                       {tag}
                     </span>
@@ -1365,7 +1365,7 @@ export default function MarketingPage() {
           {selected && selectedRecord ? (
             <>
               {/* Image side */}
-              <div className="relative flex flex-col bg-muted/40 md:min-h-[520px]">
+              <div className="relative flex flex-col bg-tint md:min-h-[520px]">
                 <div className="relative flex min-h-[240px] flex-1 items-center justify-center">
                   <StorageObjectImage
                     bucket={selected.bucket}
@@ -1565,7 +1565,7 @@ export default function MarketingPage() {
                   ) : null}
 
                   {/* Meta */}
-                  <div className="grid grid-cols-1 gap-x-4 gap-y-2 rounded-xl border border-line bg-muted/20 p-3.5 text-xs sm:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-x-4 gap-y-2 rounded-xl border border-line bg-tint-subtle p-3.5 text-xs sm:grid-cols-2">
                     <span className="inline-flex items-center gap-1.5 text-muted-foreground">
                       <CalendarDays className="h-3.5 w-3.5" />
                       {formatDate(selected.createdAt)}
@@ -1623,7 +1623,7 @@ export default function MarketingPage() {
                       {selectedRecord.tags.map((tag) => (
                         <span
                           key={tag}
-                          className="inline-flex items-center gap-1 rounded-full border border-line bg-muted/40 py-0.5 pl-2.5 pr-1 text-xs font-medium text-foreground"
+                          className="inline-flex items-center gap-1 rounded-full border border-line bg-tint py-0.5 pl-2.5 pr-1 text-xs font-medium text-foreground"
                         >
                           {tag}
                           <button
@@ -1683,7 +1683,7 @@ export default function MarketingPage() {
                         {selectedRecord.checklist.map((item) => (
                           <li
                             key={item.id}
-                            className="group/check flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/40"
+                            className="group/check flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-tint"
                           >
                             <Checkbox
                               id={`check-${item.id}`}

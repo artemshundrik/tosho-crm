@@ -257,7 +257,7 @@ export function DealsSection(props: {
             key={`${kind}-${item.id}`}
             type="button"
             onClick={() => (kind === "quote" ? props.onOpenQuote(item.id) : props.onOpenOrder(item.id))}
-            className="-mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-md border-t border-line-subtle px-2 py-2 text-left text-sm first-of-type:border-t-0 hover:bg-muted/60"
+            className="-mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-md border-t border-line-subtle px-2 py-2 text-left text-sm first-of-type:border-t-0 hover:bg-tint"
           >
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="font-mono text-xs text-muted-foreground">{item.number ?? "—"}</span>
@@ -271,7 +271,7 @@ export function DealsSection(props: {
                 <span
                   className={cn(
                     "rounded-full border px-2 py-px text-2xs font-medium",
-                    kind === "quote" ? quoteStatusClasses[status] : "border-line bg-muted/30 text-muted-foreground",
+                    kind === "quote" ? quoteStatusClasses[status] : "border-line bg-tint-subtle text-muted-foreground",
                   )}
                 >
                   {label}
@@ -403,7 +403,7 @@ export function DesignTasksSection({ tasks, onOpen }: { tasks: CustomerLinkedIte
           key={task.id}
           type="button"
           onClick={() => onOpen(task.id)}
-          className="-mx-2 flex min-h-9 w-[calc(100%+1rem)] items-center gap-2 rounded-md px-2 text-left text-sm hover:bg-muted/60"
+          className="-mx-2 flex min-h-9 w-[calc(100%+1rem)] items-center gap-2 rounded-md px-2 text-left text-sm hover:bg-tint"
         >
           <span className="w-[104px] shrink-0 font-mono text-xs">{task.number ?? "—"}</span>
           <span className="min-w-0 flex-1 truncate">{task.title}</span>

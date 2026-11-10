@@ -998,7 +998,7 @@ function PayrollNoteCell({
                 // сімнадцять яскравих плюсів були б тим самим шумом, від якого
                 // ми щойно позбулись, звузивши колонку. На наведенні рядком
                 // проявляється, на власному — стає повноцінною кнопкою.
-                "text-muted-foreground/25 hover:bg-muted/60 hover:text-foreground group-hover/row:text-muted-foreground/60"
+                "text-muted-foreground/25 hover:bg-tint hover:text-foreground group-hover/row:text-muted-foreground/60"
           )}
         >
           {hasNote ? (

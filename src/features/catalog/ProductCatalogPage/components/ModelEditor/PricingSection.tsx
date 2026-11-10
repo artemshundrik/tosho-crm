@@ -59,14 +59,14 @@ export function PricingSection({
       </div>
 
       {draftPriceMode === "fixed" ? (
-        <div className="rounded-lg border border-dashed border-line bg-muted/10 p-4">
+        <div className="rounded-lg border border-dashed border-line bg-tint-subtle p-4">
           <p className="text-sm text-muted-foreground">
             Фіксована ціна буде встановлюватись під час створення прорахунку замовлення.
           </p>
         </div>
       ) : (
         <div className="rounded-xl border border-line bg-gradient-to-br from-muted/10 to-transparent overflow-hidden">
-          <div className="grid grid-cols-[1fr_1fr_48px] gap-3 px-5 py-3 bg-muted/30 border-b text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          <div className="grid grid-cols-[1fr_1fr_48px] gap-3 px-5 py-3 bg-tint-subtle border-b text-xs font-semibold text-muted-foreground uppercase tracking-wider">
             <div>Від (шт.)</div>
             <div>До (шт.)</div>
             <div></div>

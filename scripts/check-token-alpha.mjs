@@ -11,8 +11,10 @@
  * ЩО ПЕРЕВІРЯЄ. Для кожної пари «утиліта-токен» (bg-muted, text-foreground…)
  * у `src/**\/*.{ts,tsx,css}` дозволені лише ті прозорості, що вже записані в
  * ALLOW. Нового значення не з'являється; зникло останнє вживання — прибери
- * його і звідси (список тільки коротшає). На лініях (`*-line*`) прозорість
- * заборонена зовсім: їхня сила — змінна в src/index.css.
+ * його і звідси (список тільки коротшає). На лініях (`*-line*`) і підкладках
+ * (`bg-muted`, `bg-tint*`) прозорість заборонена зовсім: їхня сила — змінна в
+ * src/index.css. Підкладка — це `bg-tint-subtle`, `bg-tint` або суцільна
+ * `bg-muted`.
  *
  * ЯК ВИПРАВИТИ. Візьми значення, яке вже є в ALLOW для цієї пари, — найближче
  * до потрібного. Справді треба новий відтінок — це нове ІМ'Я в
@@ -22,7 +24,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const ROOT = path.resolve("src");
-const TOKENS = "muted-foreground|muted|foreground|background|card|primary|popover|accent|secondary|input|line-subtle|line-strong|line";
+const TOKENS = "muted-foreground|muted|foreground|background|card|primary|popover|accent|secondary|input|line-subtle|line-strong|line|tint-subtle|tint";
 const RE = new RegExp(
   `(?<![\\w-])(bg|text|border|ring|divide|outline|from|via|to|fill|stroke)(?:-[trblxyse])?-(${TOKENS})/(\\d+|\\[[0-9.]+\\])(?![\\w\\]])`,
   "g",
@@ -34,7 +36,6 @@ const ALLOW = {
   "bg-background": ["[0.055]", "[0.08]", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55", "60", "65", "68", "70", "75", "80", "82", "85", "90", "95"],
   "bg-card": ["30", "40", "55", "60", "70", "72", "75", "80", "82", "88", "90", "95"],
   "bg-foreground": ["[0.02]", "[0.05]", "[0.06]", "[0.07]", "[0.18]", "[0.28]", "5", "10", "12", "15", "20", "25", "30", "45", "55", "60", "80", "90"],
-  "bg-muted": ["[0.02]", "[0.03]", "[0.04]", "[0.06]", "[0.08]", "5", "10", "15", "20", "25", "30", "35", "40", "45", "50", "60", "70", "80"],
   "bg-muted-foreground": ["15", "25", "30", "35", "40", "50", "55", "60", "70"],
   "bg-popover": ["95"],
   "bg-primary": ["[0.04]", "[0.05]", "[0.07]", "5", "8", "10", "12", "15", "20", "25", "30", "45", "60", "70", "80"],
@@ -58,6 +59,12 @@ const ALLOW = {
 };
 // ALLOW:END
 
+// Коментарі не перевіряємо: у них старі написання згадуються як історія.
+// Вирізаємо зі збереженням переносів, щоб номери рядків лишались правдивими.
+function stripComments(src) {
+  return src.replace(/\/\*[\s\S]*?\*\/|(?<![:\w"'`])\/\/[^\n]*/g, (m) => m.replace(/[^\n]/g, " "));
+}
+
 function walk(dir, out) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name);
@@ -70,7 +77,7 @@ function walk(dir, out) {
 const seen = {};
 const where = {};
 for (const file of walk(ROOT, [])) {
-  const lines = fs.readFileSync(file, "utf8").split("\n");
+  const lines = stripComments(fs.readFileSync(file, "utf8")).split("\n");
   lines.forEach((line, i) => {
     for (const m of line.matchAll(RE)) {
       const pair = `${m[1]}-${m[2]}`;
@@ -103,6 +110,7 @@ if (added.length || stale.length) {
     console.error(`Нова прозорість на токені — ${added.length}:`);
     for (const a of added) console.error(`  ${a}`);
     console.error("Візьми значення, що вже є для цієї пари, або заведи іменований токен у tailwind.config.js.");
+    console.error("Замість bg-muted/NN: bg-tint-subtle (ледь помітна), bg-tint (звичайна, наведення), bg-muted (суцільна).");
   }
   if (stale.length) {
     console.error(`У коді більше немає — прибери з ALLOW у scripts/check-token-alpha.mjs: ${stale.join(", ")}`);

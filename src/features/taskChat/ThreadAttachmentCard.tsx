@@ -88,7 +88,7 @@ export function ThreadAttachmentCard({ attachment }: { attachment: ThreadAttachm
     <button
       type="button"
       onClick={() => setPreviewOpen(true)}
-      className="flex w-full items-center gap-2.5 rounded-xl border border-line-strong bg-card px-2.5 py-2 text-left transition-colors hover:bg-muted/50"
+      className="flex w-full items-center gap-2.5 rounded-xl border border-line-strong bg-card px-2.5 py-2 text-left transition-colors hover:bg-tint"
     >
       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
         {broken ? <ImageOff className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
@@ -161,7 +161,7 @@ function PreviewDialog({
             <a
               href={source}
               download={attachment.fileName}
-              className="ml-auto mr-8 inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-line-strong px-3 text-xs font-medium transition-colors hover:bg-muted/60"
+              className="ml-auto mr-8 inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-line-strong px-3 text-xs font-medium transition-colors hover:bg-tint"
             >
               <Download className="h-3.5 w-3.5" />
               Завантажити
@@ -170,7 +170,7 @@ function PreviewDialog({
         </div>
 
         {isImage && source ? (
-          <div className="flex max-h-[calc(92vh-58px)] items-center justify-center overflow-auto bg-muted/30 p-2">
+          <div className="flex max-h-[calc(92vh-58px)] items-center justify-center overflow-auto bg-tint-subtle p-2">
             <img src={source} alt={attachment.fileName} className="max-h-[calc(92vh-74px)] w-auto object-contain" />
           </div>
         ) : (

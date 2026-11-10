@@ -156,7 +156,7 @@ export function DesignTasksTable<T extends DesignTableTask>({
                             className="size-8 shrink-0 rounded-md border border-line bg-white object-contain"
                           />
                         ) : (
-                          <span className="grid size-8 shrink-0 place-items-center rounded-md border border-line bg-muted/25 text-muted-foreground">
+                          <span className="grid size-8 shrink-0 place-items-center rounded-md border border-line bg-tint-subtle text-muted-foreground">
                             <Package className="size-4" />
                           </span>
                         )
@@ -179,7 +179,7 @@ export function DesignTasksTable<T extends DesignTableTask>({
                     {task.assigneeUserId ? (
                       <AvatarBase src={assigneeAvatar(task)} name={assignee} fallback={getInitials(assignee)} size={24} />
                     ) : (
-                      <span className="grid size-6 shrink-0 place-items-center rounded-full border border-line bg-muted/35 text-muted-foreground">
+                      <span className="grid size-6 shrink-0 place-items-center rounded-full border border-line bg-tint text-muted-foreground">
                         <User className="size-3.5" />
                       </span>
                     )}

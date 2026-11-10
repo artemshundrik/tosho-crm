@@ -121,7 +121,7 @@ export function ImportItemPhoto({
 
   if (!preview) {
     return (
-      <div className={cn(base, "aspect-square flex items-center justify-center bg-muted/40")} aria-hidden>
+      <div className={cn(base, "aspect-square flex items-center justify-center bg-tint")} aria-hidden>
         <ImageOff className="h-3.5 w-3.5 text-muted-foreground/40" />
       </div>
     );
@@ -129,7 +129,7 @@ export function ImportItemPhoto({
 
   if (preview.status === "pending") {
     return (
-      <div className={cn(base, "aspect-square animate-pulse bg-muted/60")} aria-label={`Фото «${name}» ще їде`} />
+      <div className={cn(base, "aspect-square animate-pulse bg-tint")} aria-label={`Фото «${name}» ще їде`} />
     );
   }
 
@@ -151,7 +151,7 @@ export function ImportItemPhoto({
 
   return (
     <div
-      className={cn(base, "aspect-square flex items-center justify-center bg-muted/40")}
+      className={cn(base, "aspect-square flex items-center justify-center bg-tint")}
       title={preview.reason}
       aria-label={`Фото «${name}» не доїхало: ${preview.reason}`}
     >
@@ -559,7 +559,7 @@ export function ImportDraftRow({
         тому між ними немає ані знаків додавання, ані підсумку.
       */}
       {isPrintModel ? null : (
-        <div className="flex items-center gap-1.5 border-t border-line-subtle bg-muted/20 px-3 py-2">
+        <div className="flex items-center gap-1.5 border-t border-line-subtle bg-tint-subtle px-3 py-2">
         {/*
           Ліва частина стискається, права — ні. Поки нанесення не назвали,
           смуга пропонує методи, і їх завжди більше, ніж влазить: без цього
@@ -643,7 +643,7 @@ function PoolCandidatesBlock({
             type="button"
             onClick={() => onPick?.(product)}
             aria-label={`Обрати «${product.name}»`}
-            className="flex min-w-0 items-center gap-2 rounded-lg border border-line px-2 py-1.5 text-left transition-colors hover:border-line-strong hover:bg-muted/50"
+            className="flex min-w-0 items-center gap-2 rounded-lg border border-line px-2 py-1.5 text-left transition-colors hover:border-line-strong hover:bg-tint"
           >
             <PoolCandidatePhoto url={product.imageUrl} />
             <span className="min-w-0">
@@ -668,7 +668,7 @@ function PoolCandidatesBlock({
 
 /** Фото картки кандидата — 40×40, обрізане під квадрат: тут це підказка, не паспорт товару. */
 function PoolCandidatePhoto({ url }: { url: string | null }) {
-  const base = "h-10 w-10 shrink-0 overflow-hidden rounded-md border border-line bg-muted/40";
+  const base = "h-10 w-10 shrink-0 overflow-hidden rounded-md border border-line bg-tint";
   if (!url) {
     return (
       <span className={cn(base, "grid place-items-center")} aria-hidden>

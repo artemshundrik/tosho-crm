@@ -113,7 +113,7 @@ export function IntegrationCard({
         "grid w-full gap-3 rounded-section border border-line-strong bg-card p-4 text-left",
         CARD_ROWS,
         "transition-[background-color,border-color,box-shadow] duration-base ease-out motion-reduce:transition-none",
-        "hover:border-line-strong hover:bg-muted/30",
+        "hover:border-line-strong hover:bg-tint",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
       )}
     >

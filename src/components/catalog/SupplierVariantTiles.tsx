@@ -96,9 +96,9 @@ export function SupplierVariantTiles({
             event.stopPropagation();
             onPick(variant);
           }}
-          className="flex items-center gap-2 rounded-md border border-line-strong py-1 pl-1 pr-2.5 text-left transition-colors hover:border-foreground hover:bg-muted/60"
+          className="flex items-center gap-2 rounded-md border border-line-strong py-1 pl-1 pr-2.5 text-left transition-colors hover:border-foreground hover:bg-tint"
         >
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded bg-muted/40">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded bg-tint">
             <VariantPhoto url={variant.imageUrl} label={variant.label} />
           </span>
           <span className="min-w-0">

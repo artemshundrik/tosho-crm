@@ -361,7 +361,7 @@ function TimerTaskRow({
           ? "border-success-soft-border bg-success-soft text-success-foreground"
           : paused
             ? "border-warning-soft-border bg-warning-soft text-warning-foreground"
-          : "border-line bg-muted/10 text-foreground"
+          : "border-line bg-tint-subtle text-foreground"
       )}
     >
       <div className="flex min-w-0 items-start gap-2">
@@ -380,7 +380,7 @@ function TimerTaskRow({
                 пауза
                 </span>
               ) : statusLabel ? (
-                <span className="shrink-0 rounded-full border border-line bg-muted/30 px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-normal text-muted-foreground">
+                <span className="shrink-0 rounded-full border border-line bg-tint-subtle px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-normal text-muted-foreground">
                   {statusLabel}
                 </span>
               ) : null
@@ -440,7 +440,7 @@ function TimerTaskRow({
 function TimerTaskList({ controller, compact = false }: { controller: DesignerTimerController; compact?: boolean }) {
   if (controller.loading && controller.tasks.length === 0) {
     return (
-      <div className="flex items-center justify-center gap-2 rounded-lg border border-line bg-muted/10 px-3 py-4 text-sm text-muted-foreground">
+      <div className="flex items-center justify-center gap-2 rounded-lg border border-line bg-tint-subtle px-3 py-4 text-sm text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin" />
         Завантажуємо таймери
       </div>
@@ -457,7 +457,7 @@ function TimerTaskList({ controller, compact = false }: { controller: DesignerTi
 
   if (controller.tasks.length === 0) {
     return (
-      <div className="rounded-lg border border-line bg-muted/10 px-3 py-4 text-sm text-muted-foreground">
+      <div className="rounded-lg border border-line bg-tint-subtle px-3 py-4 text-sm text-muted-foreground">
         Останніх таймерів ще немає.
       </div>
     );
@@ -512,7 +512,7 @@ export function DesignerHeaderTimerWidget({
               ? "border-success-soft-border bg-success-soft text-success-foreground hover:bg-success-soft/80"
               : currentPaused
                 ? "border-warning-soft-border bg-warning-soft text-warning-foreground hover:bg-warning-soft/80"
-              : "border-transparent bg-transparent text-foreground hover:bg-muted/40"
+              : "border-transparent bg-transparent text-foreground hover:bg-tint"
           )}
           aria-label="Таймер дизайнера"
           title={currentTask ? getTimerStateLabel(currentTask) : "Таймер дизайнера"}

@@ -314,7 +314,7 @@ export default function FinancesPage() {
 function PlaceholderSection({ section }: { section: FinanceSection }) {
   const Icon = section.icon;
   return (
-    <div className="rounded-xl border border-dashed border-line bg-muted/10 p-10 text-center">
+    <div className="rounded-xl border border-dashed border-line bg-tint-subtle p-10 text-center">
       <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl border border-line bg-background">
         <Icon className="h-5 w-5 text-muted-foreground" />
       </div>

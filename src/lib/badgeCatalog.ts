@@ -157,8 +157,8 @@ export const BADGE_CATALOG_TABS: BadgeCatalogTab[] = [
         items: [
           { label: "Owner", note: "Привілейований доступ", className: "tone-accent", variant: "outline", source: ["src/pages/TeamMembersPage.tsx"] },
           { label: "Admin", note: "Адмінський доступ", className: "border-info-soft-border bg-info-soft text-info-foreground", variant: "outline", source: ["src/pages/TeamMembersPage.tsx"] },
-          { label: "Base Role", note: "Нейтральний role badge", className: "bg-muted/50 border-line text-muted-foreground", variant: "outline", source: ["src/pages/TeamMembersPage.tsx"] },
-          { label: "Job Role", note: "Посада відображається м’якше", className: "bg-muted/30 border-line text-muted-foreground", variant: "outline", source: ["src/pages/TeamMembersPage.tsx"] },
+          { label: "Base Role", note: "Нейтральний role badge", className: "bg-tint border-line text-muted-foreground", variant: "outline", source: ["src/pages/TeamMembersPage.tsx"] },
+          { label: "Job Role", note: "Посада відображається м’якше", className: "bg-tint-subtle border-line text-muted-foreground", variant: "outline", source: ["src/pages/TeamMembersPage.tsx"] },
         ],
       },
       {
@@ -266,9 +266,9 @@ export const BADGE_CATALOG_TABS: BadgeCatalogTab[] = [
         label: "Methods And Places",
         description: "Каталожні pills для місць друку та методів нанесення.",
         items: [
-          { label: "Рукав", note: "Print position pill", renderAs: "tag", className: "inline-flex items-center gap-2 rounded-full border border-line bg-muted/40 px-3 py-1 text-xs font-medium text-foreground", source: ["src/features/catalog/ProductCatalogPage/components/ContentHeader.tsx"] },
+          { label: "Рукав", note: "Print position pill", renderAs: "tag", className: "inline-flex items-center gap-2 rounded-full border border-line bg-tint px-3 py-1 text-xs font-medium text-foreground", source: ["src/features/catalog/ProductCatalogPage/components/ContentHeader.tsx"] },
           { label: "Шовкодрук", note: "Method pill", renderAs: "tag", className: "inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-medium text-primary", source: ["src/features/catalog/ProductCatalogPage/components/ContentHeader.tsx"] },
-          { label: "Додати місце", note: "Dashed add pill", renderAs: "tag", className: "inline-flex items-center gap-1.5 rounded-full border border-dashed border-line bg-muted/20 px-3 py-1 text-xs font-medium text-muted-foreground", source: ["src/features/catalog/ProductCatalogPage/components/ContentHeader.tsx"] },
+          { label: "Додати місце", note: "Dashed add pill", renderAs: "tag", className: "inline-flex items-center gap-1.5 rounded-full border border-dashed border-line bg-tint-subtle px-3 py-1 text-xs font-medium text-muted-foreground", source: ["src/features/catalog/ProductCatalogPage/components/ContentHeader.tsx"] },
           { label: "Додати метод", note: "Dashed add method pill", renderAs: "tag", className: "inline-flex items-center gap-1.5 rounded-full border border-dashed border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary", source: ["src/features/catalog/ProductCatalogPage/components/ContentHeader.tsx"] },
         ],
       },

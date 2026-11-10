@@ -122,9 +122,9 @@ export const SupplierPoolRow: React.FC<{ product: SupplierPoolProduct }> = ({ pr
   const unit = supplierVariantUnit(product);
 
   return (
-    <div className="rounded-lg transition-colors hover:bg-muted/40">
+    <div className="rounded-lg transition-colors hover:bg-tint">
       <div className="flex items-center gap-3 px-2 py-2">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-line bg-muted/50">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-line bg-tint">
           <PoolPhoto url={imageUrl} className="h-4 w-4" />
         </span>
 
@@ -229,7 +229,7 @@ export const SupplierPoolRow: React.FC<{ product: SupplierPoolProduct }> = ({ pr
                     : "border-line-strong text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
               >
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded bg-muted/50">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded bg-tint">
                   <PoolPhoto url={variant.imageUrl} className="h-3 w-3" />
                 </span>
                 <span className="max-w-[9rem] truncate">{variant.label ?? "Без підпису"}</span>

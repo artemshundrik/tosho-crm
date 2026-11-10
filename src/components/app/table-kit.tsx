@@ -246,8 +246,8 @@ export const TABLE_MONEY_TEXT = "figure text-right font-medium text-foreground";
  * сповіщення з описом.
  */
 export const FEED_ROW =
-  "flex w-full min-w-0 items-center gap-3 border-b border-line-subtle px-4 text-left text-sm transition-colors last:border-b-0 hover:bg-muted/30";
+  "flex w-full min-w-0 items-center gap-3 border-b border-line-subtle px-4 text-left text-sm transition-colors last:border-b-0 hover:bg-tint";
 
 /** Підпис групи в стрічці («Сьогодні», «Вчора») — як шапка колонки таблиці. */
 export const FEED_GROUP_LABEL =
-  "flex h-9 items-center border-b border-line-subtle bg-muted/20 px-4 text-xs font-medium text-muted-foreground";
+  "flex h-9 items-center border-b border-line-subtle bg-tint-subtle px-4 text-xs font-medium text-muted-foreground";

@@ -122,7 +122,7 @@ export function FinanceAccountsView({ teamId, canSeeSensitive }: FinanceAccounts
       />
 
       {visibleAccounts.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-line bg-muted/10 p-8 text-center">
+        <div className="rounded-xl border border-dashed border-line bg-tint-subtle p-8 text-center">
           <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-background">
             <Wallet className="h-5 w-5 text-muted-foreground" />
           </div>

@@ -257,13 +257,13 @@ function VisualCard({
   return (
     <div
       className={cn(
-        "group rounded-xl border p-3 transition-colors hover:bg-muted/10",
+        "group rounded-xl border p-3 transition-colors hover:bg-tint-subtle",
         selected ? "border-success-soft-border" : "border-line"
       )}
     >
       <button
         type="button"
-        className="flex h-32 w-full items-center justify-center overflow-hidden rounded-lg bg-muted/20 text-left transition-transform hover:scale-[1.01] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 disabled:cursor-default disabled:hover:scale-100"
+        className="flex h-32 w-full items-center justify-center overflow-hidden rounded-lg bg-tint-subtle text-left transition-transform hover:scale-[1.01] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 disabled:cursor-default disabled:hover:scale-100"
         onClick={() => onPreview(file)}
         disabled={!previewImage}
         aria-label={previewImage ? `Переглянути ${displayName}` : displayName}
@@ -411,7 +411,7 @@ function MiniVisual({
       onClick={() => (previewable ? onPreview(file) : onDownload(file))}
       aria-label={previewable ? `Переглянути ${displayName}` : `Завантажити ${displayName}`}
       className={cn(
-        "relative flex h-[54px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted/20 transition-transform hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
+        "relative flex h-[54px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-tint-subtle transition-transform hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
         selected ? "border-success-soft-border ring-2 ring-success-soft-border/60" : "border-line-strong"
       )}
     >
@@ -475,7 +475,7 @@ export function QuoteDesignTaskCardView({
   return (
     <article className="overflow-hidden rounded-xl border border-line bg-card">
       <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-start sm:gap-4 sm:p-4">
-        <span className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-line bg-muted/20">
+        <span className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-line bg-tint-subtle">
           {task.imageUrl ? (
             <img src={task.imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
           ) : (
@@ -558,7 +558,7 @@ export function QuoteDesignTaskCardView({
                   <button
                     type="button"
                     onClick={onToggle}
-                    className="flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-lg border border-dashed border-line-strong text-xs font-semibold tabular-nums text-muted-foreground hover:bg-muted/30 hover:text-foreground"
+                    className="flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-lg border border-dashed border-line-strong text-xs font-semibold tabular-nums text-muted-foreground hover:bg-tint hover:text-foreground"
                     aria-label={`Показати ще ${extra} візуалів`}
                   >
                     +{extra}
@@ -579,7 +579,7 @@ export function QuoteDesignTaskCardView({
         type="button"
         onClick={onToggle}
         aria-expanded={expanded}
-        className="flex w-full items-center justify-center gap-1.5 border-t border-line-subtle py-1.5 text-2xs font-medium text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foreground/20"
+        className="flex w-full items-center justify-center gap-1.5 border-t border-line-subtle py-1.5 text-2xs font-medium text-muted-foreground transition-colors hover:bg-tint hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-foreground/20"
       >
         {expanded ? "Згорнути" : "ТЗ повністю й усі візуали"}
         <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-180")} />
@@ -671,7 +671,7 @@ export function QuoteDesignMaterials({
         {canAdd && materials.length > 0 ? (
           <label
             className={cn(
-              "inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-lg border border-line px-2.5 text-2xs font-semibold text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground",
+              "inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-lg border border-line px-2.5 text-2xs font-semibold text-muted-foreground transition-colors hover:bg-tint hover:text-foreground",
               uploading && "pointer-events-none opacity-60"
             )}
           >
@@ -704,10 +704,10 @@ export function QuoteDesignMaterials({
                     alt={displayName}
                     variant="thumb"
                     hoverPreview
-                    className="h-9 w-9 shrink-0 rounded-lg border border-line bg-muted/30"
+                    className="h-9 w-9 shrink-0 rounded-lg border border-line bg-tint-subtle"
                   />
                 ) : (
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted/30 text-3xs font-bold uppercase text-muted-foreground">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-tint-subtle text-3xs font-bold uppercase text-muted-foreground">
                     {extension ?? <Paperclip className="h-4 w-4" />}
                   </span>
                 )}

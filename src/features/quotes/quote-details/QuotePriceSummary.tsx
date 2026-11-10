@@ -113,7 +113,7 @@ export function QuotePriceSummary({
             <button
               type="button"
               onClick={onToggle}
-              className="ml-auto grid h-6 w-6 shrink-0 self-center place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+              className="ml-auto grid h-6 w-6 shrink-0 self-center place-items-center rounded-md text-muted-foreground transition-colors hover:bg-tint hover:text-foreground"
               aria-expanded={open}
               aria-label={open ? "Згорнути склад ціни" : "Показати склад ціни"}
             >

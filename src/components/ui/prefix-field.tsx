@@ -25,7 +25,7 @@ export function PrefixField({
     <div
       data-invalid={invalid ? "true" : undefined}
       className={cn(
-        "flex h-(--control-h) w-full items-center overflow-hidden rounded-lg border border-line bg-muted/40 text-sm transition-all duration-base ease-out",
+        "flex h-(--control-h) w-full items-center overflow-hidden rounded-lg border border-line bg-tint text-sm transition-all duration-base ease-out",
         "focus-within:bg-background focus-within:ring-1 focus-within:ring-[hsl(var(--soft-ring))]",
         "data-[invalid=true]:border-destructive/60 data-[invalid=true]:bg-danger-soft/30",
         className

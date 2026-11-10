@@ -653,7 +653,7 @@ export function DesignersDashboard({
   if (loadError || !analytics) {
     return (
       <div className="px-4 pt-4 pb-4 sm:px-5">
-        <div className="rounded-section border border-dashed border-line bg-muted/5 px-4 py-10 text-center text-sm text-muted-foreground">
+        <div className="rounded-section border border-dashed border-line bg-tint-subtle px-4 py-10 text-center text-sm text-muted-foreground">
           {loadError ? "Не вдалося порахувати аналітику. Спробуйте оновити сторінку." : "Немає даних для аналітики."}
         </div>
       </div>
@@ -1067,7 +1067,7 @@ export function DesignersDashboard({
       <section className="overflow-hidden rounded-xl border border-line bg-background/70">
         {/* Ряд 1 — перемикач скоупу + місяць */}
         <div className="flex flex-wrap items-center gap-2 px-4 pt-4">
-          <div className="inline-flex flex-wrap items-center gap-1 rounded-xl border border-line bg-muted/40 p-1">
+          <div className="inline-flex flex-wrap items-center gap-1 rounded-xl border border-line bg-tint p-1">
             {canSeeAll ? (
               <button
                 type="button"
@@ -1113,7 +1113,7 @@ export function DesignersDashboard({
           <div className="ml-auto flex items-center gap-2">
             {/* Пояснення, чому цифри неповні, а не попередження — нейтральний тон. */}
             {isCurrentMonth ? (
-              <span className="hidden items-center gap-1.5 rounded-full border border-line bg-muted/50 px-2.5 py-1 text-3xs font-medium text-muted-foreground sm:inline-flex">
+              <span className="hidden items-center gap-1.5 rounded-full border border-line bg-tint px-2.5 py-1 text-3xs font-medium text-muted-foreground sm:inline-flex">
                 <CalendarIcon className="h-3 w-3" />
                 поточний місяць
               </span>
@@ -1187,7 +1187,7 @@ export function DesignersDashboard({
                           setPrintVariant(option.key);
                           setPrintPending(true);
                         }}
-                        className="cursor-pointer rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-muted/60"
+                        className="cursor-pointer rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-tint"
                       >
                         <span className="block text-xs font-semibold text-foreground">{option.title}</span>
                         <span className="block text-3xs text-muted-foreground">{option.hint}</span>
@@ -1280,7 +1280,7 @@ export function DesignersDashboard({
       </section>
 
       {analytics.truncated ? (
-        <div className="rounded-section border border-line bg-muted/50 px-4 py-2 text-xs text-muted-foreground">
+        <div className="rounded-section border border-line bg-tint px-4 py-2 text-xs text-muted-foreground">
           Даних дуже багато — найстаріші місяці можуть бути неповними (уперлись у ліміт вибірки).
         </div>
       ) : null}
@@ -1325,7 +1325,7 @@ export function DesignersDashboard({
               ) : null}
               {showPeers ? (
                 <span className="inline-flex items-center gap-1.5">
-                  <span className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border border-line bg-muted/40" aria-hidden="true" />
+                  <span className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border border-line bg-tint" aria-hidden="true" />
                   колеги
                 </span>
               ) : null}
@@ -2059,7 +2059,7 @@ export function DesignersDashboard({
                       onClick={() => selectScope(selected ? "team" : designer.id)}
                       className={cn(
                         "grid w-full cursor-pointer grid-cols-[26px_minmax(190px,1.4fr)_60px_60px_78px_92px_minmax(150px,1fr)_22px] items-center gap-3 rounded-xl border border-transparent px-2 py-2.5 text-left transition-colors",
-                        "hover:bg-muted/10",
+                        "hover:bg-tint-subtle",
                         selected && "border-primary/25 bg-primary/5 hover:bg-primary/5"
                       )}
                     >
@@ -2128,7 +2128,7 @@ export function DesignersDashboard({
                             );
                           })
                         ) : (
-                          <span className="h-full w-full rounded bg-muted/40" aria-hidden="true" />
+                          <span className="h-full w-full rounded bg-tint" aria-hidden="true" />
                         )}
                       </span>
                       <ChevronRight className="h-4 w-4 text-muted-foreground/60" />
@@ -2177,7 +2177,7 @@ export function DesignersDashboard({
                             type="button"
                             onClick={() => selectScope(selected ? "team" : designer.id)}
                             className={cn(
-                              "flex w-full min-w-[170px] cursor-pointer items-center gap-2 rounded-lg border border-transparent px-1.5 py-1 text-left transition-colors hover:bg-muted/10",
+                              "flex w-full min-w-[170px] cursor-pointer items-center gap-2 rounded-lg border border-transparent px-1.5 py-1 text-left transition-colors hover:bg-tint-subtle",
                               selected && "border-primary/25 bg-primary/5"
                             )}
                           >
@@ -2256,7 +2256,7 @@ export function DesignersDashboard({
                     <tr>
                       <td className="pr-1">
                         <div className="flex min-w-[170px] items-center gap-2 px-1.5 py-1">
-                          <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line bg-muted/30 text-muted-foreground">
+                          <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line bg-tint-subtle text-muted-foreground">
                             <Users className="h-3.5 w-3.5" />
                           </span>
                           <span className="truncate text-xs font-semibold text-muted-foreground">
@@ -2281,7 +2281,7 @@ export function DesignersDashboard({
                 </tbody>
               </table>
             ) : filesRows.length === 0 ? (
-              <div className="mx-2 rounded-section border border-dashed border-line bg-muted/5 px-4 py-10 text-center text-sm text-muted-foreground">
+              <div className="mx-2 rounded-section border border-dashed border-line bg-tint-subtle px-4 py-10 text-center text-sm text-muted-foreground">
                 За {monthShort(months[mi].value)} немає завантажених файлів.
               </div>
             ) : (
@@ -2335,7 +2335,7 @@ export function DesignersDashboard({
                             type="button"
                             onClick={() => selectScope(selected ? "team" : designer.id)}
                             className={cn(
-                              "flex w-full min-w-[170px] cursor-pointer items-center gap-2 rounded-lg border border-transparent px-1.5 py-1 text-left transition-colors hover:bg-muted/10",
+                              "flex w-full min-w-[170px] cursor-pointer items-center gap-2 rounded-lg border border-transparent px-1.5 py-1 text-left transition-colors hover:bg-tint-subtle",
                               selected && "border-primary/25 bg-primary/5"
                             )}
                           >
@@ -2392,7 +2392,7 @@ export function DesignersDashboard({
                     <tr>
                       <td className="pr-1">
                         <div className="flex min-w-[170px] items-center gap-2 px-1.5 py-1">
-                          <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line bg-muted/30 text-muted-foreground">
+                          <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line bg-tint-subtle text-muted-foreground">
                             <Users className="h-3.5 w-3.5" />
                           </span>
                           <span className="truncate text-xs font-semibold text-muted-foreground">Команда · разом</span>
@@ -2532,7 +2532,7 @@ export function DesignersDashboard({
             </div>
           ) : null}
           {worksList.length === 0 ? (
-            <div className="mt-3 rounded-section border border-dashed border-line bg-muted/5 px-4 py-8 text-center text-sm text-muted-foreground">
+            <div className="mt-3 rounded-section border border-dashed border-line bg-tint-subtle px-4 py-8 text-center text-sm text-muted-foreground">
               За цей місяць немає завантажених файлів.
             </div>
           ) : (
@@ -2627,13 +2627,13 @@ export function DesignersDashboard({
                               alt={file.fileName}
                               variant="thumb"
                               hoverPreview
-                              className="h-10 w-10 shrink-0 rounded-md border border-line bg-muted/30"
+                              className="h-10 w-10 shrink-0 rounded-md border border-line bg-tint-subtle"
                             />
                           ) : (
                             <span
                               key={file.id}
                               className={cn(
-                                "flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-line bg-muted/25 text-3xs font-semibold uppercase text-muted-foreground",
+                                "flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-line bg-tint-subtle text-3xs font-semibold uppercase text-muted-foreground",
                                 file.deleted && "opacity-60 line-through"
                               )}
                               title={file.deleted ? `${file.fileName} · видалено пізніше` : file.fileName}
@@ -2643,7 +2643,7 @@ export function DesignersDashboard({
                           );
                         })}
                         {group.files.length > 8 ? (
-                          <span className="flex h-10 items-center rounded-md border border-line bg-muted/25 px-2 text-3xs font-medium tabular-nums text-muted-foreground">
+                          <span className="flex h-10 items-center rounded-md border border-line bg-tint-subtle px-2 text-3xs font-medium tabular-nums text-muted-foreground">
                             +{group.files.length - 8}
                           </span>
                         ) : null}

@@ -222,7 +222,7 @@ export function ImprintPickerDialog({
           позицію впізнають у рядку.
         */}
         <DialogHeader className="flex-row items-center gap-3 space-y-0 border-b border-line-subtle px-4 py-3 pr-12 text-left shrink-0">
-          <div className="h-11 w-11 shrink-0 overflow-hidden rounded-md border border-line bg-muted/40">
+          <div className="h-11 w-11 shrink-0 overflow-hidden rounded-md border border-line bg-tint">
             <img
               src={product.imageUrl ?? currentView?.src ?? ""}
               alt=""
@@ -254,7 +254,7 @@ export function ImprintPickerDialog({
               товаром — не прикраса: футболка майже біла, і на рівному сірому
               вона губила край, а на світлій плямі під собою тримає силует.
             */}
-            <div className="relative flex flex-1 items-center justify-center overflow-hidden rounded-inner border border-line bg-muted/50">
+            <div className="relative flex flex-1 items-center justify-center overflow-hidden rounded-inner border border-line bg-tint">
               <div
                 aria-hidden
                 className="pointer-events-none absolute inset-0"
@@ -359,7 +359,7 @@ export function ImprintPickerDialog({
                   type="button"
                   aria-expanded={othersOpen}
                   onClick={() => setOthersOpen((was) => !was)}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition-colors duration-base ease-out hover:bg-muted/60 hover:text-foreground motion-reduce:transition-none"
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition-colors duration-base ease-out hover:bg-tint hover:text-foreground motion-reduce:transition-none"
                 >
                   <ChevronRight
                     className={cn(
@@ -421,7 +421,7 @@ export function ImprintPickerDialog({
             </div>
 
             {sheet.typicalMm ? (
-              <p className="mx-4 mt-3 rounded-md border border-line bg-muted/30 px-2.5 py-2 text-2xs leading-relaxed text-muted-foreground">
+              <p className="mx-4 mt-3 rounded-md border border-line bg-tint-subtle px-2.5 py-2 text-2xs leading-relaxed text-muted-foreground">
                 Типово {sheet.typicalMm[0]} × {sheet.typicalMm[1]} мм за нашими прорахунками. Точний розмір
                 ставить дизайнер у ТЗ.
               </p>
@@ -430,7 +430,7 @@ export function ImprintPickerDialog({
           </div>
         </div>
 
-        <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-line-subtle bg-muted/20 px-4 py-3">
+        <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-line-subtle bg-tint-subtle px-4 py-3">
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
             {draft.length === 0 ? (
               <span className="text-xs text-muted-foreground">Нанесення немає</span>
@@ -442,7 +442,7 @@ export function ImprintPickerDialog({
                     "inline-flex h-8 items-center gap-1.5 rounded-full border pl-3 pr-1.5 text-xs font-medium transition-colors duration-base ease-out",
                     pair.key === active?.key
                       ? "border-control-active-border bg-control-active text-foreground"
-                      : "border-line bg-muted/10 text-muted-foreground"
+                      : "border-line bg-tint-subtle text-muted-foreground"
                   )}
                 >
                   <button type="button" onClick={() => setActiveKey(pair.key)} className="min-w-0 truncate">
@@ -500,7 +500,7 @@ function RailRow({
       onClick={onSelect}
       className={cn(
         "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors duration-base ease-out motion-reduce:transition-none",
-        checked ? "bg-control-active" : "hover:bg-muted/60",
+        checked ? "bg-control-active" : "hover:bg-tint",
         muted && !checked && "text-muted-foreground",
         disabled && "pointer-events-none text-control-disabled-fg hover:bg-transparent"
       )}

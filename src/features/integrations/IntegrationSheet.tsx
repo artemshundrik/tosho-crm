@@ -126,7 +126,7 @@ export function IntegrationSheet({
         <SheetHeader className="space-y-0">
           <div className="flex items-start gap-3">
             {definition.Mark ? (
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted/60">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-tint">
                 <definition.Mark className="h-6 w-6" />
               </span>
             ) : (

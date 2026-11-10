@@ -142,7 +142,7 @@ export function FeatureOnboardingDialog({ feature, open, onOpenChange }: Props) 
             </div>
 
             {/* ── Праворуч: вікно, у якому фіча працює ── */}
-            <div className="relative grid place-items-center border-t border-line-subtle bg-muted/40 p-6 md:border-l md:border-t-0 md:p-7">
+            <div className="relative grid place-items-center border-t border-line-subtle bg-tint p-6 md:border-l md:border-t-0 md:p-7">
               <div
                 aria-hidden="true"
                 className="pointer-events-none absolute inset-0"
@@ -154,7 +154,7 @@ export function FeatureOnboardingDialog({ feature, open, onOpenChange }: Props) 
               />
               {LIVE_DEMO_KEYS.includes(feature.key) ? (
                 <div className="relative w-full max-w-[360px] overflow-hidden rounded-xl border border-line bg-card">
-                  <div className="flex items-center gap-1.5 border-b border-line-subtle bg-muted/60 px-3 py-2">
+                  <div className="flex items-center gap-1.5 border-b border-line-subtle bg-tint px-3 py-2">
                     <span className="h-2 w-2 rounded-full bg-border" />
                     <span className="h-2 w-2 rounded-full bg-border" />
                     <span className="h-2 w-2 rounded-full bg-border" />
@@ -650,7 +650,7 @@ function DictationDemo() {
             type="button"
             aria-label="Продиктувати голосом"
             onClick={start}
-            className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+            className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-tint hover:text-foreground"
           >
             <Mic className="h-3.5 w-3.5" />
           </button>

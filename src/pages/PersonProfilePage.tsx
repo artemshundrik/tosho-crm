@@ -416,7 +416,7 @@ export default function PersonProfilePage() {
           assetVariant="md"
           size={72}
           shape="circle"
-          className="border-line bg-muted/50"
+          className="border-line bg-tint"
           fallbackClassName="text-lg font-bold"
           availability={person.availabilityStatus}
           inactive={inactive}
@@ -1046,7 +1046,7 @@ function PersonAccessSection({
                         ? "bg-card text-foreground shadow-[inset_0_0_0_1px_hsl(var(--border)/0.55)]"
                         : "text-muted-foreground",
                       interactive && "cursor-pointer",
-                      interactive && !lock.checked && "hover:bg-muted/60 hover:text-foreground",
+                      interactive && !lock.checked && "hover:bg-tint hover:text-foreground",
                       interactive && lock.checked && "hover:bg-card/80",
                       !interactive && "cursor-not-allowed"
                     )}

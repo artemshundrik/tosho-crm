@@ -130,7 +130,7 @@ export function TeamMemberCard({
         // Підйому теж немає: пробували на піксель, Артем відхилив 28.08.2026 —
         // на щільній сітці карток рух під курсором помітніший за саму реакцію.
         "transition-[background-color,border-color] duration-base ease-out motion-reduce:transition-none",
-        person.profileHref && "cursor-pointer hover:border-line-strong hover:bg-muted/30"
+        person.profileHref && "cursor-pointer hover:border-line-strong hover:bg-tint"
       )}
     >
       <div className="flex items-start gap-3 p-4 pb-0">

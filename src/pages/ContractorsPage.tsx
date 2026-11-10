@@ -261,7 +261,7 @@ function ServiceTags({ value, limit, nowrap = false }: { value?: string | null; 
       {shown.map((tag) => (
         <span
           key={tag}
-          className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full border border-line bg-muted/40 px-2 py-0.5 text-2xs font-medium text-foreground"
+          className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full border border-line bg-tint px-2 py-0.5 text-2xs font-medium text-foreground"
         >
           {tag}
         </span>
@@ -361,7 +361,7 @@ function ContractorDetail({
   const links = collectContractorLinks(row);
 
   return (
-    <div className="rounded-inner bg-muted/40 p-3.5">
+    <div className="rounded-inner bg-tint p-3.5">
       <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
         {contact || phones.length > 0 || links.length > 0 ? (
           <DetailField label="Звʼязок">
@@ -1229,7 +1229,7 @@ export default function ContractorsPage() {
         }}
       >
         <SheetContent className="w-full gap-0 p-0 sm:max-w-[760px]">
-          <div className="shrink-0 border-b bg-muted/20 px-6 py-4">
+          <div className="shrink-0 border-b bg-tint-subtle px-6 py-4">
             <SheetHeader>
               <SheetTitle className="text-base font-medium">
               {editingRow
@@ -1414,7 +1414,7 @@ export default function ContractorsPage() {
               <div
                 role="radiogroup"
                 aria-label="Періодичність нагадування"
-                className="flex gap-1 rounded-xl border border-line bg-muted/40 p-1"
+                className="flex gap-1 rounded-xl border border-line bg-tint p-1"
               >
                 {(["none", "weekly", "monthly"] as ContractorReminderRepeat[]).map((option) => {
                   const active = form.reminderRepeat === option;

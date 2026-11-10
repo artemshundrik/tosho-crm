@@ -4754,7 +4754,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                   <div className="relative">
                     <button
                       type="button"
-                      className="peer flex h-5 w-5 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+                      className="peer flex h-5 w-5 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-tint hover:text-foreground"
                       aria-label="Інформація про тиражі"
                       onClick={(event) => event.preventDefault()}
                     >
@@ -4790,7 +4790,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 <div className="py-4 text-sm text-destructive">{runsError}</div>
               ) : runs.length === 0 && items.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 py-12 text-center">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted/60">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-tint">
                     <Package className="h-4 w-4 text-muted-foreground" />
                   </div>
                   <div>
@@ -4812,7 +4812,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                           <div className="flex min-w-0 items-center gap-3">
                             {section.imageUrl ? (
-                              <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted/20">
+                              <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-tint-subtle">
                                 <KanbanImageZoomPreview
                                   imageUrl={section.imageUrl}
                                   zoomImageUrl={section.zoomImageUrl ?? section.imageUrl}
@@ -4822,7 +4822,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 />
                               </div>
                             ) : (
-                              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-line bg-muted/30">
+                              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-line bg-tint-subtle">
                                 <Package className="h-5 w-5 text-muted-foreground/60" />
                               </div>
                             )}
@@ -4886,7 +4886,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                             "group cursor-pointer rounded-xl border px-3 py-2.5 transition-colors",
                             isSelected
                               ? "border-primary/30 bg-primary/[0.04]"
-                              : "border-line hover:bg-muted/10"
+                              : "border-line hover:bg-tint-subtle"
                           )}
                         >
                           <div className="space-y-4 xl:hidden">
@@ -4921,7 +4921,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               <div className="space-y-1">
                                 <div className="text-2xs font-medium text-muted-foreground">Кількість</div>
                                 <NumberInput
-                                  className="h-10 cursor-text border-transparent bg-muted/15 px-3 tabular-nums text-base hover:border-line-strong focus:border-line-strong focus:bg-card"
+                                  className="h-10 cursor-text border-transparent bg-tint-subtle px-3 tabular-nums text-base hover:border-line-strong focus:border-line-strong focus:bg-card"
                                   value={run.quantity}
                                   disabled={disabled}
                                   onClick={(e) => e.stopPropagation()}
@@ -4933,7 +4933,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               <div className="space-y-1">
                                 <div className="text-2xs font-medium text-muted-foreground">{`Модель · ${quote.currency}`}</div>
                                 <NumberInput
-                                  className={cn("h-10 cursor-text border-transparent bg-muted/15 px-3 tabular-nums text-base hover:border-line-strong focus:border-line-strong focus:bg-card", modelPriceVatRing)}
+                                  className={cn("h-10 cursor-text border-transparent bg-tint-subtle px-3 tabular-nums text-base hover:border-line-strong focus:border-line-strong focus:bg-card", modelPriceVatRing)}
                                   value={run.unit_price_model}
                                   disabled={disabled}
                                   title={modelPriceVatHint}
@@ -4945,7 +4945,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               <div className="space-y-1">
                                 <div className="text-2xs font-medium text-muted-foreground">{`Нанесення · ${quote.currency}`}</div>
                                 <NumberInput
-                                  className="h-10 cursor-text border-transparent bg-muted/15 px-3 tabular-nums text-base hover:border-line-strong focus:border-line-strong focus:bg-card"
+                                  className="h-10 cursor-text border-transparent bg-tint-subtle px-3 tabular-nums text-base hover:border-line-strong focus:border-line-strong focus:bg-card"
                                   value={run.unit_price_print}
                                   disabled={disabled}
                                   onClick={(e) => e.stopPropagation()}
@@ -4956,7 +4956,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                               <div className="space-y-1">
                                 <div className="text-2xs font-medium text-muted-foreground">{`Логістика · ${quote.currency}`}</div>
                                 <NumberInput
-                                  className="h-10 cursor-text border-transparent bg-muted/15 px-3 tabular-nums text-base hover:border-line-strong focus:border-line-strong focus:bg-card placeholder:text-muted-foreground/40"
+                                  className="h-10 cursor-text border-transparent bg-tint-subtle px-3 tabular-nums text-base hover:border-line-strong focus:border-line-strong focus:bg-card placeholder:text-muted-foreground/40"
                                   value={run.logistics_cost}
                                   disabled={disabled}
                                   onClick={(e) => e.stopPropagation()}
@@ -5011,7 +5011,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 <div className="space-y-1">
                                   <NumberInput
                                     controlSize="sm"
-                                    className="cursor-text border-transparent bg-muted/15 px-2 tabular-nums text-sm hover:border-line-strong focus:border-line-strong focus:bg-card"
+                                    className="cursor-text border-transparent bg-tint-subtle px-2 tabular-nums text-sm hover:border-line-strong focus:border-line-strong focus:bg-card"
                                     value={run.quantity}
                                     disabled={disabled}
                                     onClick={(e) => e.stopPropagation()}
@@ -5024,7 +5024,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 <div className="space-y-1">
                                   <NumberInput
                                     controlSize="sm"
-                                    className={cn("cursor-text border-transparent bg-muted/15 px-2 tabular-nums text-sm hover:border-line-strong focus:border-line-strong focus:bg-card", modelPriceVatRing)}
+                                    className={cn("cursor-text border-transparent bg-tint-subtle px-2 tabular-nums text-sm hover:border-line-strong focus:border-line-strong focus:bg-card", modelPriceVatRing)}
                                     value={run.unit_price_model}
                                     disabled={disabled}
                                     title={modelPriceVatHint}
@@ -5037,7 +5037,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                                 <div className="space-y-1">
                                   <NumberInput
                                     controlSize="sm"
-                                    className="cursor-text border-transparent bg-muted/15 px-2 tabular-nums text-sm hover:border-line-strong focus:border-line-strong focus:bg-card"
+                                    className="cursor-text border-transparent bg-tint-subtle px-2 tabular-nums text-sm hover:border-line-strong focus:border-line-strong focus:bg-card"
                                     value={run.unit_price_print}
                                     disabled={disabled}
                                     onClick={(e) => e.stopPropagation()}
@@ -5048,7 +5048,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
 
                                 <div className="space-y-1">
                                   <NumberInput
-                                    className="h-8 cursor-text border-transparent bg-muted/15 px-2 tabular-nums text-sm hover:border-line-strong focus:border-line-strong focus:bg-card placeholder:text-muted-foreground/40"
+                                    className="h-8 cursor-text border-transparent bg-tint-subtle px-2 tabular-nums text-sm hover:border-line-strong focus:border-line-strong focus:bg-card placeholder:text-muted-foreground/40"
                                     value={run.logistics_cost}
                                     disabled={disabled}
                                     onClick={(e) => e.stopPropagation()}
@@ -5528,7 +5528,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             </span>
           </DialogTitle>
         </DialogHeader>
-        <div className="flex justify-center overflow-auto rounded-xl bg-muted/15 p-2 sm:p-3">
+        <div className="flex justify-center overflow-auto rounded-xl bg-tint-subtle p-2 sm:p-3">
           {visualizationPreview?.url ? (
             <img
               src={visualizationPreview.url}
@@ -5574,7 +5574,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         }}
       >
         <DialogContent className="overflow-hidden p-0 sm:max-w-[560px]">
-          <DialogHeader className="border-b border-line-subtle bg-muted/10 p-5">
+          <DialogHeader className="border-b border-line-subtle bg-tint-subtle p-5">
             <DialogTitle className="text-lg">Зміна статусу</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 p-5">
@@ -5614,7 +5614,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
               />
             </div>
           </div>
-          <DialogFooter className="border-t border-line-subtle bg-muted/5 px-5 py-4">
+          <DialogFooter className="border-t border-line-subtle bg-tint-subtle px-5 py-4">
             <Button
               size="sm"
               variant="outline"
@@ -5661,11 +5661,11 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
         }}
       >
         <DialogContent className="overflow-hidden p-0 sm:max-w-[560px]">
-          <DialogHeader className="border-b border-line-subtle bg-muted/10 p-5">
+          <DialogHeader className="border-b border-line-subtle bg-tint-subtle p-5">
             <DialogTitle className="text-lg">Скасування прорахунку</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 p-5">
-            <div className="rounded-lg border border-line bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
+            <div className="rounded-lg border border-line bg-tint-subtle px-4 py-3 text-xs text-muted-foreground">
               Вкажи причину скасування — вона збережеться в історії та допоможе аналізу.
             </div>
             <div className="grid gap-4">
@@ -5696,7 +5696,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             </div>
             {cancelError && <div className="text-xs text-destructive">{cancelError}</div>}
           </div>
-          <DialogFooter className="border-t border-line-subtle bg-muted/5 px-5 py-4">
+          <DialogFooter className="border-t border-line-subtle bg-tint-subtle px-5 py-4">
             <Button
               size="sm"
               variant="outline"

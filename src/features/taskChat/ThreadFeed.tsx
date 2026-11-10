@@ -127,7 +127,7 @@ export function ThreadFeed({
               type="button"
               onClick={() => toggleDay(block.key)}
               aria-expanded={!collapsed}
-              className="sticky top-1 z-10 mx-auto inline-flex items-center gap-1.5 rounded-full border border-line-strong bg-muted px-2.5 py-0.5 text-2xs font-semibold text-muted-foreground transition-colors hover:bg-muted/70"
+              className="sticky top-1 z-10 mx-auto inline-flex items-center gap-1.5 rounded-full border border-line-strong bg-muted px-2.5 py-0.5 text-2xs font-semibold text-muted-foreground transition-colors hover:bg-tint"
             >
               {block.label}
               <span className="font-normal opacity-75">· {block.count}</span>

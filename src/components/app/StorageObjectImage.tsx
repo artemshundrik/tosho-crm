@@ -167,7 +167,7 @@ export function StorageObjectImage({
   return (
     <div
       ref={anchorRef}
-      className={cn("relative grid place-items-center overflow-hidden bg-muted/20", className)}
+      className={cn("relative grid place-items-center overflow-hidden bg-tint-subtle", className)}
       onMouseEnter={() => {
         if (!hoverPreview) return;
         void ensureHoverSrc();

@@ -43,7 +43,7 @@ export function QuoteItemsCellContent({
         {extra > 0 ? <span className="shrink-0 text-xs text-muted-foreground">+{extra}</span> : null}
         {qty ? <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{qty}</span> : null}
         {quoteType && quoteType !== "merch" ? (
-          <span className="inline-flex h-4 shrink-0 items-center gap-1 rounded-full border border-line bg-muted/20 px-1.5 text-3xs font-semibold text-muted-foreground">
+          <span className="inline-flex h-4 shrink-0 items-center gap-1 rounded-full border border-line bg-tint-subtle px-1.5 text-3xs font-semibold text-muted-foreground">
             {TypeIcon ? createElement(TypeIcon, { className: "h-3 w-3" }) : null}
             {quoteTypeLabel(quoteType)}
           </span>
@@ -102,7 +102,7 @@ export function QuoteMembershipBadges({
 export function QuoteGroupHeaderRow({ group, colSpan }: { group: QuoteTableGroup<unknown>; colSpan: number }) {
   return (
     <TableRow className="hover:bg-transparent">
-      <TableCell colSpan={colSpan} className="bg-muted/30 py-1.5">
+      <TableCell colSpan={colSpan} className="bg-tint-subtle py-1.5">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span className={cn("size-2 rounded-[3px]", quoteStatusDotClass[group.status] ?? "bg-muted-foreground")} aria-hidden />
           <span className="font-medium text-foreground">{statusLabels[group.status] ?? "Без стану"}</span>

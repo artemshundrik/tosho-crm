@@ -209,7 +209,7 @@ export function ThemeSwitcher({
                   "group cursor-pointer gap-2.5 rounded-lg px-2 py-0 text-md font-medium",
                   // Вибране показує ТІЛЬКИ галочка: ні плитки під іконкою, ні
                   // обводки рядка (рішення Артема 2026-08-16 — простіше меню).
-                  "focus:bg-transparent focus:text-foreground data-[highlighted]:bg-muted/60 data-[highlighted]:text-foreground"
+                  "focus:bg-transparent focus:text-foreground data-[highlighted]:bg-tint data-[highlighted]:text-foreground"
                 )}
                 style={{ height: ROW_HEIGHT }}
               >

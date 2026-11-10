@@ -35,7 +35,7 @@ export function QuoteItemThumb({ specPreset, preview, alt }: QuoteItemThumbProps
         zoomImageUrl={preview.zoomUrl}
         alt={alt}
         loadStrategy="eager"
-        className="h-20 w-20 rounded-xl border-line bg-muted/20 ring-1 ring-line [&>div]:rounded-xl"
+        className="h-20 w-20 rounded-xl border-line bg-tint-subtle ring-1 ring-line [&>div]:rounded-xl"
         imageClassName="object-cover"
       />
     );

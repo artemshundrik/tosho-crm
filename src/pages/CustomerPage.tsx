@@ -376,7 +376,7 @@ export default function CustomerPage() {
                             delivery.begin();
                             setDeliveryOpen(true);
                           }}
-                          className="-mx-2 rounded-md px-2 py-1 text-left text-sm hover:bg-muted/60"
+                          className="-mx-2 rounded-md px-2 py-1 text-left text-sm hover:bg-tint"
                         >
                           {formatCustomerDeliveryPointSummary(point)}
                           {point.isDefault && form.deliveryPoints.length > 1 ? (

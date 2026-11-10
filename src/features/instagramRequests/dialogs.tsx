@@ -117,7 +117,7 @@ export function PassDialog({
               type="button"
               aria-pressed={target === manager.userId}
               onClick={() => setTarget(manager.userId)}
-              className={cn("flex w-full flex-col gap-1 border-t border-line-subtle px-4 py-2.5 text-left hover:bg-muted/50", target === manager.userId && "bg-primary/8")}
+              className={cn("flex w-full flex-col gap-1 border-t border-line-subtle px-4 py-2.5 text-left hover:bg-tint", target === manager.userId && "bg-primary/8")}
             >
               <span className="flex items-center gap-1.5 text-xs">
                 <AvatarBase

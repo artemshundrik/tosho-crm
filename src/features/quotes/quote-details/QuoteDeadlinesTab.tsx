@@ -126,7 +126,7 @@ function DateTile({ value, tone, empty }: { value: string | null; tone: Tone; em
     <div
       className={cn(
         "flex h-20 w-20 shrink-0 flex-col items-center justify-center rounded-xl border leading-none",
-        tone === "neutral" ? "border-line bg-muted/40" : toneSubtleClass[tone]
+        tone === "neutral" ? "border-line bg-tint" : toneSubtleClass[tone]
       )}
     >
       <span
@@ -330,7 +330,7 @@ export function QuoteDeadlinesTab({
                 </div>
 
                 {isEditing ? (
-                  <div className="space-y-4 border-t border-line-subtle bg-muted/[0.03] p-3 sm:p-4 sm:pl-[112px]">
+                  <div className="space-y-4 border-t border-line-subtle bg-tint-subtle p-3 sm:p-4 sm:pl-[112px]">
                     <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_140px]">
                       <div className="space-y-1.5">
                         <div className="text-xs text-muted-foreground">Дата</div>

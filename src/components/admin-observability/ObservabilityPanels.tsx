@@ -177,7 +177,7 @@ function toneClasses(tone: ObservabilityTone) {
   if (tone === "good") return "border-success-soft-border bg-success-soft text-success-foreground";
   if (tone === "danger") return "border-danger-soft-border bg-danger-soft text-danger-foreground";
   if (tone === "warning") return "border-warning-soft-border bg-warning-soft text-warning-foreground";
-  return "border-line bg-muted/40 text-muted-foreground";
+  return "border-line bg-tint text-muted-foreground";
 }
 
 function statusDotClasses(tone: ObservabilityTone) {
@@ -211,7 +211,7 @@ function RangeSegmented({
   options: Array<{ value: string; label: string }>;
 }) {
   return (
-    <div className="inline-flex flex-wrap items-center gap-1 rounded-xl border border-line bg-muted/35 p-1">
+    <div className="inline-flex flex-wrap items-center gap-1 rounded-xl border border-line bg-tint p-1">
       {options.map((option) => (
         <Button
           key={option.value}
@@ -262,7 +262,7 @@ function MetricCard({ icon: Icon, title, value, hint, badge }: MetricCardConfig)
   return (
     <section className="rounded-xl border border-line bg-card/95 p-5">
       <div className="flex items-start justify-between gap-3">
-        <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-line bg-muted/50">
+        <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-line bg-tint">
           <Icon className="h-5 w-5 text-foreground" />
         </div>
         {badge ? (
@@ -353,7 +353,7 @@ function TrendCard({
         </div>
         <div className="flex flex-col items-end gap-2">
           {valueLabel ? (
-            <div className="rounded-full border border-line bg-muted/25 px-3 py-1 text-xs font-medium text-muted-foreground">
+            <div className="rounded-full border border-line bg-tint-subtle px-3 py-1 text-xs font-medium text-muted-foreground">
               {valueLabel}
             </div>
           ) : null}
@@ -406,7 +406,7 @@ function TrendCard({
         </ResponsiveContainer>
       </div>
       {latestValue !== undefined ? (
-        <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-line bg-muted/20 px-4 py-3">
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-line bg-tint-subtle px-4 py-3">
           <div className="text-sm text-muted-foreground">Остання точка</div>
           <div className="text-sm font-semibold text-foreground">{formatter(latestValue)}</div>
         </div>
@@ -450,7 +450,7 @@ export function OverviewTabPanel({
           </div>
           <div className="mt-5 grid gap-3 xl:grid-cols-4">
             {latestVsPreviousCards.map((item) => (
-              <div key={item.key} className="rounded-xl border border-line bg-muted/20 px-4 py-4">
+              <div key={item.key} className="rounded-xl border border-line bg-tint-subtle px-4 py-4">
                 <div className="text-sm font-medium text-muted-foreground">{item.title}</div>
                 <div className="mt-2 text-2xl font-semibold text-foreground">{item.value}</div>
                 <div className="mt-1 text-sm text-muted-foreground">{item.hint}</div>
@@ -563,7 +563,7 @@ export function OverviewTabPanel({
         <div className="mt-1 text-sm text-muted-foreground">Це скорочений список без зайвого шуму. Не все на цій сторінці варте однакової уваги.</div>
         <div className="mt-5 space-y-3">
           {operationalPriorityRows.map((item) => (
-            <div key={item.title} className="flex items-start gap-3 rounded-xl border border-line bg-muted/20 px-4 py-3">
+            <div key={item.title} className="flex items-start gap-3 rounded-xl border border-line bg-tint-subtle px-4 py-3">
               <div className="mt-0.5 h-2.5 w-2.5 rounded-full bg-primary" />
               <div>
                 <div className="text-sm font-semibold text-foreground">{item.title}</div>
@@ -608,7 +608,7 @@ export function AttachmentsTabPanel({
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <div className="rounded-xl border border-line bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+            <div className="rounded-xl border border-line bg-tint-subtle px-4 py-3 text-sm text-muted-foreground">
               {formatCompactCount(attachmentAuditRows.length)} файлів · {formatBytes(attachmentAuditBytes)}
             </div>
             <Button type="button" variant="outline" onClick={onRefreshAttachmentAudit} disabled={attachmentAuditLoading || !workspaceId}>
@@ -740,11 +740,11 @@ export function AttachmentsTabPanel({
                                   alt={row.fileName}
                                   variant="thumb"
                                   hoverPreview
-                                  className="h-14 w-14 rounded-xl border border-line bg-muted/20"
+                                  className="h-14 w-14 rounded-xl border border-line bg-tint-subtle"
                                   imageClassName="object-cover"
                                 />
                               ) : (
-                                <div className="grid h-14 w-14 place-items-center rounded-xl border border-line bg-muted/20 text-xs text-muted-foreground">
+                                <div className="grid h-14 w-14 place-items-center rounded-xl border border-line bg-tint-subtle text-xs text-muted-foreground">
                                   {row.extension?.toUpperCase() ?? "FILE"}
                                 </div>
                               )}
@@ -862,21 +862,21 @@ export function BackupsTabPanel({
             </div>
 
             <div className="mt-5 grid gap-3 lg:grid-cols-3">
-              <div className="rounded-xl border border-line bg-muted/20 px-4 py-4">
+              <div className="rounded-xl border border-line bg-tint-subtle px-4 py-4">
                 <div className="text-xs font-medium uppercase tracking-caps text-muted-foreground">Останній успіх</div>
                 <div className="mt-2 text-sm font-semibold text-foreground">{section.latestSuccessLabel}</div>
               </div>
-              <div className="rounded-xl border border-line bg-muted/20 px-4 py-4">
+              <div className="rounded-xl border border-line bg-tint-subtle px-4 py-4">
                 <div className="text-xs font-medium uppercase tracking-caps text-muted-foreground">Розмір архіву</div>
                 <div className="mt-2 text-sm font-semibold text-foreground">{section.latestSuccessSize}</div>
               </div>
-              <div className="rounded-xl border border-line bg-muted/20 px-4 py-4">
+              <div className="rounded-xl border border-line bg-tint-subtle px-4 py-4">
                 <div className="text-xs font-medium uppercase tracking-caps text-muted-foreground">Retention</div>
                 <div className="mt-2 text-sm font-semibold text-foreground">{section.retentionHint}</div>
               </div>
             </div>
 
-            <div className="mt-4 rounded-xl border border-line bg-muted/20 px-4 py-4">
+            <div className="mt-4 rounded-xl border border-line bg-tint-subtle px-4 py-4">
               <div className="text-xs font-medium uppercase tracking-caps text-muted-foreground">Dropbox</div>
               <div className="mt-2 break-all text-sm text-foreground">{section.latestDropboxPath}</div>
             </div>
@@ -1061,7 +1061,7 @@ export function TelegramTabPanel() {
                 { label: "Увімкнули", value: stats.funnel.enabled },
               ].map((step, i, arr) => (
                 <div key={step.label} className="flex items-center gap-3">
-                  <div className="rounded-xl border border-line bg-muted/40 px-4 py-2 text-center">
+                  <div className="rounded-xl border border-line bg-tint px-4 py-2 text-center">
                     <div className="text-2xl font-semibold tracking-tight text-foreground">{step.value}</div>
                     <div className="mt-0.5 text-xs text-muted-foreground">{step.label}</div>
                   </div>
@@ -1275,7 +1275,7 @@ export function AiUsageTabPanel({ workspaceId }: { workspaceId: string | null })
             ToSho AI, транскрипція голосу та пошук — вартість запитів до OpenAI.
           </div>
         </div>
-        <div className="inline-flex items-center gap-1 rounded-full border border-line bg-muted/30 p-1">
+        <div className="inline-flex items-center gap-1 rounded-full border border-line bg-tint-subtle p-1">
           {AI_USAGE_RANGES.map((r) => (
             <Button
               key={r.key}
@@ -1397,7 +1397,7 @@ export function AiUsageTabPanel({ workspaceId }: { workspaceId: string | null })
                           </span>
                         </div>
                         <div className="mt-1.5 flex items-center gap-2">
-                          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted/60">
+                          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-tint">
                             <div
                               className="h-full rounded-full bg-primary/70"
                               style={{ width: `${Math.max(2, (person.usd / maxPersonUsd) * 100)}%` }}
@@ -1569,7 +1569,7 @@ export function RuntimeErrorsTabPanel({ teamId }: { teamId: string | null }) {
             Падіння клієнтської частини — те, про що раніше дізнавались із робочого чату.
           </div>
         </div>
-        <div className="inline-flex items-center gap-1 rounded-xl border border-line bg-muted/30 p-1">
+        <div className="inline-flex items-center gap-1 rounded-xl border border-line bg-tint-subtle p-1">
           {RUNTIME_ERROR_RANGES.map((range) => (
             <Button
               key={range.key}
@@ -1632,7 +1632,7 @@ export function RuntimeErrorsTabPanel({ teamId }: { teamId: string | null }) {
                     <button
                       type="button"
                       onClick={() => setOpenKey(expanded ? null : group.key)}
-                      className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40"
+                      className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-tint"
                       aria-expanded={expanded}
                     >
                       <Bug className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden />
@@ -1665,7 +1665,7 @@ export function RuntimeErrorsTabPanel({ teamId }: { teamId: string | null }) {
                       />
                     </button>
                     {expanded ? (
-                      <div className="space-y-3 border-t border-line-subtle bg-muted/20 px-4 py-3 text-xs">
+                      <div className="space-y-3 border-t border-line-subtle bg-tint-subtle px-4 py-3 text-xs">
                         <div className="flex flex-wrap gap-x-6 gap-y-1 text-muted-foreground">
                           <span>Перший раз: {formatErrorMoment(group.firstAt)}</span>
                           <span>Джерело: {[...group.sources].join(", ") || "—"}</span>

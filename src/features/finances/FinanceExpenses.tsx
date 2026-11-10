@@ -928,7 +928,7 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
           "overflow-hidden rounded-xl border border-line bg-card",
           // Порожній місяць — приглушено, але клікабельно: журнал відкривається,
           // і запис додається просто звідси.
-          dormant && "border-dashed bg-muted/20",
+          dormant && "border-dashed bg-tint-subtle",
           // Перехід зі сповіщення «закрити місяць» підсвічує саме ті рядки,
           // про які написали — інакше в довгому списку їх ще треба знайти.
           missingEntry && highlightMissing && "border-warning/60 ring-1 ring-warning/25"
@@ -1027,7 +1027,7 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
                 type="button"
                 onClick={() => toggleJournal(expense.id)}
                 aria-expanded={journalOpen}
-                className="flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-muted/50"
+                className="flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-tint"
               >
                 <div className="text-right">
                   <div
@@ -1086,7 +1086,7 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
       {loading ? (
         <FinanceSkeleton variant="stats" />
       ) : visibleExpenses.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-line bg-muted/10 p-8 text-center">
+        <div className="rounded-xl border border-dashed border-line bg-tint-subtle p-8 text-center">
           <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-background">
             <PiggyBank className="h-5 w-5 text-muted-foreground" />
           </div>
@@ -1163,7 +1163,7 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
                   s.items.length > 0 ? (
                     <div className="grid gap-2">{s.items.map(renderRow)}</div>
                   ) : (
-                    <div className="rounded-xl border border-dashed border-line bg-muted/10 p-6 text-center text-sm text-muted-foreground">
+                    <div className="rounded-xl border border-dashed border-line bg-tint-subtle p-6 text-center text-sm text-muted-foreground">
                       Немає змінних витрат за {monthLabel(selectedMonth)}.
                     </div>
                   )
@@ -1181,7 +1181,7 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
               <button
                 type="button"
                 onClick={() => setArchiveOpen((v) => !v)}
-                className="flex w-full items-center gap-2 rounded-lg px-1 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:bg-muted/40"
+                className="flex w-full items-center gap-2 rounded-lg px-1 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:bg-tint"
               >
                 <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", !archiveOpen && "-rotate-90")} />
                 <Archive className="h-3.5 w-3.5" />
@@ -1265,7 +1265,7 @@ function ExpenseSection({
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-1.5 py-2 text-left transition-colors hover:bg-muted/40"
+        className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-1.5 py-2 text-left transition-colors hover:bg-tint"
       >
         <span className={cn("h-2.5 w-2.5 shrink-0 rounded-[3px]", colorClass)} />
         <span className="text-sm font-semibold text-foreground">{label}</span>
@@ -1752,7 +1752,7 @@ function ExpenseDialog({
                     "flex cursor-pointer items-start gap-2.5 rounded-xl border p-3 text-left transition-colors disabled:pointer-events-none disabled:opacity-60",
                     active
                       ? "border-primary/50 bg-primary/5 ring-1 ring-primary/30"
-                      : "border-line hover:border-line-strong hover:bg-muted/40"
+                      : "border-line hover:border-line-strong hover:bg-tint"
                   )}
                 >
                   <div
@@ -1760,7 +1760,7 @@ function ExpenseDialog({
                       "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border",
                       active
                         ? "border-primary/40 bg-primary/10 text-primary"
-                        : "border-line bg-muted/30 text-muted-foreground"
+                        : "border-line bg-tint-subtle text-muted-foreground"
                     )}
                   >
                     <Icon className="h-4 w-4" />
@@ -1793,7 +1793,7 @@ function ExpenseDialog({
                     Сума | Періодичність знизу. Колонки вирівняні, нічого не тісниться. */}
                 <div className="space-y-2.5">
                   {recurRows.map((row) => (
-                    <div key={row.id} className="space-y-2.5 rounded-xl border border-line bg-muted/10 p-3">
+                    <div key={row.id} className="space-y-2.5 rounded-xl border border-line bg-tint-subtle p-3">
                       <div className="grid gap-2.5 sm:grid-cols-2">
                         <div className="grid gap-1.5">
                           <Label className="text-2xs font-normal uppercase tracking-wide text-muted-foreground">
@@ -1897,7 +1897,7 @@ function ExpenseDialog({
               </div>
 
               {/* Спільні поля — застосуються до всіх платежів у списку */}
-              <div className="rounded-xl border border-line bg-muted/10 p-3">
+              <div className="rounded-xl border border-line bg-tint-subtle p-3">
                 <div className="mb-2 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Спільне для всіх
                 </div>
@@ -2092,7 +2092,7 @@ function ExpenseDialog({
                   {/* Нагадування про платіж — має сенс лише коли є конкретна дата списання. */}
                   {varyingRecurring ? null : (
                     <div className="grid gap-2 sm:col-span-2">
-                      <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-line bg-muted/10 p-3">
+                      <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-line bg-tint-subtle p-3">
                         <Checkbox
                           checked={reminderEnabled}
                           onCheckedChange={(v) => setReminderEnabled(v === true)}
@@ -2258,7 +2258,7 @@ function ExpenseDialog({
               </div>
 
               {isRecurring ? (
-                <div className="rounded-xl border border-line bg-muted/10 px-3 py-2.5 text-xs sm:col-span-2">
+                <div className="rounded-xl border border-line bg-tint-subtle px-3 py-2.5 text-xs sm:col-span-2">
                   {varyingRecurring ? (
                     <span className="text-muted-foreground">
                       Сума змінна — кожну оплату з датою й коментарем додаси в журналі (у списку витрат).
@@ -2284,7 +2284,7 @@ function ExpenseDialog({
 
               {/* Розподіл на замовлення — тільки разова: підписка не належить замовленню. */}
               {expenseKind === "one_off" && !purchaseLocked ? (
-                <div className="rounded-xl border border-line bg-muted/10 p-3 sm:col-span-2">
+                <div className="rounded-xl border border-line bg-tint-subtle p-3 sm:col-span-2">
                   <div className="mb-2 flex items-center justify-between">
                     <Label className="text-xs uppercase tracking-wide text-muted-foreground">
                       Розподіл на замовлення

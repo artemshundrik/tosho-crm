@@ -113,7 +113,7 @@ function FeaturePlate({ collapsed }: { collapsed: boolean }) {
         onClick={() => navigate(`/features?open=${mode.feature.key}`)}
         className="group/plate grid w-full cursor-pointer overflow-hidden rounded-xl border border-line-strong bg-card text-left transition-colors hover:border-foreground/25"
       >
-        <span className="relative grid h-14 place-items-center border-b border-line-subtle bg-muted/60">
+        <span className="relative grid h-14 place-items-center border-b border-line-subtle bg-tint">
           <span
             aria-hidden="true"
             className="absolute inset-0"

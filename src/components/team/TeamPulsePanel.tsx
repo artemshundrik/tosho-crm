@@ -576,7 +576,7 @@ export function TeamPulsePanel({
                 type="button"
                 onClick={() => onSelectPerson(entry.userId)}
                 title={`Відкрити картку: ${person.displayName}`}
-                className="flex w-full cursor-pointer items-center gap-3 border-b border-line-strong px-4 py-3 text-left transition-colors last:border-0 hover:bg-muted/40"
+                className="flex w-full cursor-pointer items-center gap-3 border-b border-line-strong px-4 py-3 text-left transition-colors last:border-0 hover:bg-tint"
               >
                 <div className="relative shrink-0">
                   <AvatarBase
@@ -586,7 +586,7 @@ export function TeamPulsePanel({
                     assetVariant="xs"
                     size={30}
                     shape="circle"
-                    className="border-line bg-muted/50"
+                    className="border-line bg-tint"
                     fallbackClassName="text-2xs font-bold"
                     presence={person.online ? "online" : "offline"}
                   />
@@ -670,7 +670,7 @@ export function TeamPulsePanel({
                       assetVariant="xs"
                       size={26}
                       shape="circle"
-                      className="-ml-1.5 border-line bg-muted/50 ring-2 ring-card first:ml-0"
+                      className="-ml-1.5 border-line bg-tint ring-2 ring-card first:ml-0"
                       fallbackClassName="text-3xs font-bold"
                     />
                   ))}

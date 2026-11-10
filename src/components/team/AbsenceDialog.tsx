@@ -313,7 +313,7 @@ export function AbsenceDialog({
               role="radiogroup"
               aria-label="Тип відсутності"
               className={cn(
-                "grid gap-1 rounded-xl border border-line bg-muted/40 p-1",
+                "grid gap-1 rounded-xl border border-line bg-tint p-1",
                 // 5 типів в один рядок уже не влазять — підписи ламались на
                 // два рядки і пігулки пливли по висоті. Сітка дає рівні ряди:
                 // 5 → 3+2; 4 (режим заявки) → 2×2 на вузькому, один ряд на sm.

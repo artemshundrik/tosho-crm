@@ -110,7 +110,7 @@ export function OrderStageStrip({
                 onClick={() => onStageChange(active ? null : item.id)}
                 className={cn(
                   "flex min-w-0 flex-col gap-0.5 rounded-lg border px-2.5 py-1.5 text-left transition-colors",
-                  active ? "border-line-strong bg-muted/50" : "border-transparent hover:bg-muted/40"
+                  active ? "border-line-strong bg-muted" : "border-transparent hover:bg-tint"
                 )}
               >
                 <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
@@ -129,7 +129,7 @@ export function OrderStageStrip({
 
       <Link
         to={ROUTES.ordersQueue}
-        className="group flex flex-col justify-between gap-3 rounded-xl border border-line-strong bg-card p-4 transition-colors hover:bg-muted/30 max-md:gap-1.5 max-md:p-3"
+        className="group flex flex-col justify-between gap-3 rounded-xl border border-line-strong bg-card p-4 transition-colors hover:bg-tint max-md:gap-1.5 max-md:p-3"
       >
         <div>
           <div className="text-sm font-semibold text-foreground">Черга з прорахунків</div>

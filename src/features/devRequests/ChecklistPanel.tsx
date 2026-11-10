@@ -140,7 +140,7 @@ export function ChecklistPanel({
             const StateIcon = CHECK_STATE_ICONS[item.state];
             const days = waitingDays(item);
             return (
-              <div key={item.id} className="rounded-lg px-1 py-1 hover:bg-muted/20">
+              <div key={item.id} className="rounded-lg px-1 py-1 hover:bg-tint">
                 <div className="flex items-start gap-2.5">
                   <HoverTip asChild label={`${CHECK_STATE_LABELS[item.state]} — натисни, щоб змінити`}>
                     <button
@@ -151,7 +151,7 @@ export function ChecklistPanel({
                       className={cn(
                         "mt-px shrink-0 rounded-md p-0.5 transition-colors",
                         toneTextClass[CHECK_STATE_TONE[item.state]],
-                        canManage ? "cursor-pointer hover:bg-muted/50" : "cursor-default"
+                        canManage ? "cursor-pointer hover:bg-tint" : "cursor-default"
                       )}
                     >
                       <StateIcon className="h-4 w-4" />

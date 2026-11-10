@@ -450,7 +450,7 @@ function ImprintChip({
                   setOpen(false);
                   onRemove();
                 }}
-                className="mt-1 flex w-full items-center rounded-md border-t border-line-subtle px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted/60"
+                className="mt-1 flex w-full items-center rounded-md border-t border-line-subtle px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-tint"
               >
                 Прибрати нанесення
               </button>
@@ -501,7 +501,7 @@ function ListRow({
       role="option"
       aria-selected={checked}
       onClick={onSelect}
-      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted/60"
+      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-tint"
     >
       <span className="min-w-0 flex-1 truncate">{label}</span>
       {checked ? <Check className="h-3.5 w-3.5 shrink-0" /> : null}

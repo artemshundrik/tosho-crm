@@ -189,7 +189,7 @@ function FactRow({
   children: React.ReactNode;
 }) {
   return (
-    <div className={cn(expanded && "bg-muted/20")}>
+    <div className={cn(expanded && "bg-tint-subtle")}>
       <div className="flex items-center gap-3 px-4 py-3">
         <Icon
           className={cn(
@@ -652,7 +652,7 @@ export function NovaPoshtaTtnDialog({
           </div>
         ) : shownTtn ? (
           <div className="space-y-4 px-5 py-4">
-            <div className="rounded-xl border border-line bg-muted/30 p-4">
+            <div className="rounded-xl border border-line bg-tint-subtle p-4">
               <div className="text-xs uppercase tracking-wide text-muted-foreground">Номер ТТН</div>
               <div className="mt-1 font-mono text-2xl font-semibold tracking-wide">{shownTtn.number}</div>
               <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground">
@@ -1062,7 +1062,7 @@ export function NovaPoshtaTtnDialog({
         </div>
 
         {!loading && !shownTtn && !notConfigured && senderReady && recipient && cargo ? (
-          <div className="shrink-0 border-t border-line-subtle bg-muted/20 px-5 py-3">
+          <div className="shrink-0 border-t border-line-subtle bg-tint-subtle px-5 py-3">
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div className="min-w-0">
                 {preview ? (

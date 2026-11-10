@@ -197,7 +197,7 @@ export const CatalogModelPicker: React.FC<CatalogModelPickerProps> = ({
           )}
         >
           {selected?.imageUrl ? (
-            <span className="mr-2 flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-md border border-line bg-muted/30">
+            <span className="mr-2 flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-md border border-line bg-tint-subtle">
               <img src={selected.imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
             </span>
           ) : (
@@ -257,7 +257,7 @@ export const CatalogModelPicker: React.FC<CatalogModelPickerProps> = ({
                         choose(group.primaryValue);
                       }}
                     >
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md border border-line bg-muted/20">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md border border-line bg-tint-subtle">
                         {group.primaryImageUrl ? (
                           <img src={group.primaryImageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
                         ) : (
@@ -314,7 +314,7 @@ export const CatalogModelPicker: React.FC<CatalogModelPickerProps> = ({
                             )}
                             onClick={() => choose(variantValue)}
                           >
-                            <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md border border-line bg-muted/20">
+                            <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md border border-line bg-tint-subtle">
                               {imageUrl ? (
                                 <img src={imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
                               ) : (

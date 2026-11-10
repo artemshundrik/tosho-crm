@@ -62,7 +62,8 @@ UI implementation rules:
 - prefer semantic design tokens such as `info/success/warning/danger` surfaces over hardcoded palette classes like `pink-50`, `sky-50`, `violet-200`, etc.
 - new UI states must be valid in both light and dark theme on the first implementation, not patched later
 - borders are written with one of three roles, never with an opacity picked by eye: `border-line-subtle` (divider inside a surface, `divide-*`), `border-line` (outline of a card, panel, badge), `border-line-strong` (button, field, hover state). `border-border/NN` is rejected by `npm run check:line-tokens`
-- do not invent a new opacity on a neutral token (`bg-muted/NN`, `bg-card/NN`, `text-muted-foreground/NN`, …): reuse a value already listed for that pair in `scripts/check-token-alpha.mjs`; a genuinely new shade becomes a named token in `tailwind.config.js`, not another number after the slash. The list only shrinks
+- neutral fills on top of a card come in three strengths: `bg-tint-subtle` (barely visible plane: section, row, empty state), `bg-tint` (chip, segment, hover), `bg-muted` (solid, selected). `bg-muted/NN` is rejected by `npm run check:token-alpha`; a selected state must stay one step stronger than the hover of its neighbours
+- do not invent a new opacity on a neutral token (`bg-card/NN`, `bg-background/NN`, `text-muted-foreground/NN`, …): reuse a value already listed for that pair in `scripts/check-token-alpha.mjs`; a genuinely new shade becomes a named token in `tailwind.config.js`, not another number after the slash. The list only shrinks
 - when a pattern repeats more than once on a page or across modules, consolidate it before adding more one-off variants
 - avatar surfaces must reuse the canonical member/avatar helpers rather than page-local URL assembly
 - customer/lead/company logo surfaces must reuse normalized logo helpers and `EntityAvatar`, not raw table values without normalization

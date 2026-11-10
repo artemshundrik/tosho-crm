@@ -1632,7 +1632,7 @@ export function TeamPage() {
                       <button
                         type="button"
                         onClick={() => setTab("calendar")}
-                        className="mt-1 flex w-full items-center justify-center gap-1 border-t border-line-subtle py-2 text-2xs font-semibold text-primary transition-colors hover:bg-muted/40"
+                        className="mt-1 flex w-full items-center justify-center gap-1 border-t border-line-subtle py-2 text-2xs font-semibold text-primary transition-colors hover:bg-tint"
                       >
                         Ще {upcomingEvents.length - EVENTS_PREVIEW_COUNT}{" "}
                         {pluralEvents(upcomingEvents.length - EVENTS_PREVIEW_COUNT)} →

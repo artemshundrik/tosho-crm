@@ -54,7 +54,7 @@ export function ThreadReactions({ reactions, userId, memberName, onToggle, align
                     "inline-flex h-[22px] items-center gap-1 rounded-full border px-1.5 text-2xs tabular-nums transition-colors",
                     mine
                       ? "border-foreground/30 bg-foreground/10 font-semibold text-foreground"
-                      : "border-line-strong bg-card text-foreground/80 hover:bg-muted/60"
+                      : "border-line-strong bg-card text-foreground/80 hover:bg-tint"
                   )}
                 >
                   <span className="text-md leading-none">{emoji}</span>
@@ -71,7 +71,7 @@ export function ThreadReactions({ reactions, userId, memberName, onToggle, align
             <button
               type="button"
               aria-label="Додати реакцію"
-              className="grid h-[22px] w-[22px] place-items-center rounded-full border border-line-strong bg-card text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+              className="grid h-[22px] w-[22px] place-items-center rounded-full border border-line-strong bg-card text-muted-foreground transition-colors hover:bg-tint hover:text-foreground"
             >
               <SmilePlus className="h-3 w-3" />
             </button>
@@ -123,7 +123,7 @@ export function ThreadReactionBar({
           key={emoji}
           type="button"
           onClick={() => onPick(emoji)}
-          className="grid h-6 w-6 place-items-center rounded-full text-sm leading-none transition-colors hover:bg-muted/70"
+          className="grid h-6 w-6 place-items-center rounded-full text-sm leading-none transition-colors hover:bg-tint"
         >
           {emoji}
         </button>
@@ -136,7 +136,7 @@ export function ThreadReactionBar({
           <button
             type="button"
             aria-label="Інші реакції"
-            className="grid h-6 w-6 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
+            className="grid h-6 w-6 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-tint hover:text-foreground"
           >
             <SmilePlus className="h-3 w-3" />
           </button>
@@ -149,7 +149,7 @@ export function ThreadReactionBar({
           <button
             type="button"
             aria-label="Дії з повідомленням"
-            className="grid h-6 w-6 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
+            className="grid h-6 w-6 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-tint hover:text-foreground"
           >
             <MoreHorizontal className="h-3.5 w-3.5" />
           </button>

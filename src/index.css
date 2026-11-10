@@ -80,6 +80,9 @@
     --line-subtle-alpha: 0.4;
     --line-alpha: 0.6;
     --line-strong-alpha: 1;
+    /* Сила двох підкладок (colors.tint): так само по одній змінній. */
+    --tint-subtle-alpha: 0.2;
+    --tint-alpha: 0.5;
     --input: 225 9% 87%;
     
     /* --- BRAND TOKENS (single knob) --- */
@@ -1345,7 +1348,7 @@
     @apply border-line bg-card/80 shadow-sm;
   }
   .quote-muted-card {
-    @apply border border-line bg-muted/20 shadow-sm;
+    @apply border border-line bg-tint-subtle shadow-sm;
   }
 
   .quote-kind-badge-kp {
@@ -1637,7 +1640,7 @@
     color: hsl(var(--warning-foreground));
   }
   .quote-activity-accent-default {
-    @apply bg-muted/40 text-muted-foreground border-line;
+    @apply bg-tint text-muted-foreground border-line;
   }
 
   .cmd-highlight {

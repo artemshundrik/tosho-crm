@@ -205,7 +205,7 @@ export function ViewAsDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                       })
                     }
                     className={cn(
-                      "flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-muted/40",
+                      "flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-tint",
                       viewAs?.kind === "person" &&
                         viewAs.userId === member.userId &&
                         "bg-primary/5 ring-1 ring-primary/25"
@@ -248,11 +248,11 @@ export function ViewAsDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                   type="button"
                   onClick={() => pick({ kind: "role", jobRole: role.key, label: role.label })}
                   className={cn(
-                    "flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-muted/40",
+                    "flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-tint",
                     viewAs?.kind === "role" && viewAs.jobRole === role.key && "bg-primary/5 ring-1 ring-primary/25"
                   )}
                 >
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line bg-muted/40">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line bg-tint">
                     <Briefcase className="h-3.5 w-3.5 text-muted-foreground" />
                   </span>
                   {/* Без підпису під назвою: він однаковий у всіх рядках, тож

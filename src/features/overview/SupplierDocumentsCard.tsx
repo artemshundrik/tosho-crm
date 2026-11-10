@@ -71,7 +71,7 @@ function groupBySupplier(pending: PendingReceipts["pending"], now: Date): Suppli
 const orderHref = (orderId: string) => `/orders/production/${orderId}`;
 
 const rowLinkClass =
-  "flex flex-wrap items-baseline gap-x-2 gap-y-0.5 rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-muted/50";
+  "flex flex-wrap items-baseline gap-x-2 gap-y-0.5 rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-tint";
 
 /** Застарілий рядок: текст тоном попередження (приглушений сірий на жовтому тінті губиться), hover — теж жовтий. */
 const staleRowClass = cn(toneSubtleClass.warning, "hover:bg-warning-soft");

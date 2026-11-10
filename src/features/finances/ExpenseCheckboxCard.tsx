@@ -26,7 +26,7 @@ export function ExpenseCheckboxCard({
   return (
     <label
       className={cn(
-        "flex cursor-pointer items-start gap-2.5 rounded-xl border border-line bg-muted/10 p-3",
+        "flex cursor-pointer items-start gap-2.5 rounded-xl border border-line bg-tint-subtle p-3",
         className
       )}
     >

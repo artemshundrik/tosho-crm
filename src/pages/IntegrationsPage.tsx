@@ -130,7 +130,7 @@ export default function IntegrationsPage() {
         // зрізало краєм. Горизонтальна прокрутка замість переносу: перемикач
         // має лишатись однією смугою.
         <div className="-mx-1 overflow-x-auto px-1 pb-1">
-          <SegmentedGroup className="inline-flex w-max gap-1 rounded-lg bg-muted/50 p-1">
+          <SegmentedGroup className="inline-flex w-max gap-1 rounded-lg bg-tint p-1">
             {FILTERS.map((key) => (
               <Button
                 key={key}

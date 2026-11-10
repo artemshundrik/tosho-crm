@@ -382,7 +382,7 @@ export const ContractRevisionsPanel = ({
         </div>
 
         {canCeoDecide ? (
-          <div className="mt-4 rounded-lg border border-line bg-muted/[0.04] p-3">
+          <div className="mt-4 rounded-lg border border-line bg-tint-subtle p-3">
             <div className="text-sm font-semibold text-foreground">Рішення CEO</div>
             <Textarea
               value={ceoCommentDraft[revision.id] ?? ""}
@@ -428,7 +428,7 @@ export const ContractRevisionsPanel = ({
                     </div>
                   ) : null}
                 </div>
-                <div className="space-y-3 rounded-lg border border-line bg-muted/[0.04] p-3">
+                <div className="space-y-3 rounded-lg border border-line bg-tint-subtle p-3">
                   {revision.sections.map((section, index) => {
                     const previousBody = previousMap?.get(section.id);
                     const changed = previousMap !== null && previousBody !== section.bodyHtml;
@@ -517,7 +517,7 @@ export const ContractRevisionsPanel = ({
 
       {editorOpen ? (
         <div className="space-y-4">
-          <div className="rounded-lg border border-line bg-muted/[0.04] p-3 text-sm">
+          <div className="rounded-lg border border-line bg-tint-subtle p-3 text-sm">
             <div className="font-semibold text-foreground">
               {action?.kind === "edit"
                 ? `Редагування v${action.revision.revisionNumber}`
@@ -575,7 +575,7 @@ export const ContractRevisionsPanel = ({
       ) : (
         <div className="space-y-3">
           {revisions.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-line bg-muted/10 p-6 text-center text-sm text-muted-foreground">
+            <div className="rounded-lg border border-dashed border-line bg-tint-subtle p-6 text-center text-sm text-muted-foreground">
               Договір ще не створено. Натисніть «Створити Договір (v1)», щоб згенерувати першу версію зі стандартного шаблону.
             </div>
           ) : (

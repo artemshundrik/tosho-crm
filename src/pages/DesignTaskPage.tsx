@@ -8651,7 +8651,7 @@ export default function DesignTaskPage() {
           "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-1 text-xs font-medium tabular-nums transition-colors",
           isActive
             ? "border-success/40 bg-success/10 text-success-foreground"
-            : "border-line bg-muted/30 text-muted-foreground"
+            : "border-line bg-tint-subtle text-muted-foreground"
         )}
         title={isActive ? "Таймер цієї правки активний" : "Час, витрачений на цю правку"}
       >
@@ -8702,7 +8702,7 @@ export default function DesignTaskPage() {
     if (linkedCount === 0 && !(canManageLink && hasAttachable)) return null;
 
     return (
-      <div className="mt-3 rounded-lg border border-line bg-muted/10 p-2.5">
+      <div className="mt-3 rounded-lg border border-line bg-tint-subtle p-2.5">
         <div className="mb-2 flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
             <ImageIcon className="h-3.5 w-3.5" />
@@ -8778,7 +8778,7 @@ export default function DesignTaskPage() {
               return (
                 <div
                   key={file.id}
-                  className="group/thumb relative h-16 w-16 overflow-hidden rounded-lg border border-line bg-muted/30"
+                  className="group/thumb relative h-16 w-16 overflow-hidden rounded-lg border border-line bg-tint-subtle"
                 >
                   <button
                     type="button"
@@ -8928,7 +8928,7 @@ export default function DesignTaskPage() {
       <div className={cn("flex flex-col gap-1.5", options?.className)}>
         <div className="flex flex-wrap items-center gap-2">
           {stateText ? (
-            <span className="inline-flex items-center gap-2 rounded-lg bg-muted/60 px-3 py-1.5 text-sm text-muted-foreground">
+            <span className="inline-flex items-center gap-2 rounded-lg bg-tint px-3 py-1.5 text-sm text-muted-foreground">
               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/60" />
               {stateText}
             </span>
@@ -9032,7 +9032,7 @@ export default function DesignTaskPage() {
     );
 
     const sendPanel = (
-        <div className="rounded-xl border border-line bg-muted/10 p-4">
+        <div className="rounded-xl border border-line bg-tint-subtle p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="space-y-1">
               <div className="flex flex-wrap items-center gap-2">
@@ -9149,8 +9149,8 @@ export default function DesignTaskPage() {
         {statusLine}
 
         {groupedOutputs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-line bg-muted/5 px-4 py-10 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full border border-line bg-muted/20 text-muted-foreground">
+          <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-line bg-tint-subtle px-4 py-10 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full border border-line bg-tint-subtle text-muted-foreground">
               {kind === "visualization" ? <ImageIcon className="h-5 w-5" /> : <PencilLine className="h-5 w-5" />}
             </div>
             <div className="space-y-1">
@@ -9297,10 +9297,10 @@ export default function DesignTaskPage() {
                                 alt={displayName}
                                 variant="thumb"
                                 hoverPreview
-                                className="h-11 w-11 shrink-0 rounded-lg border border-line bg-muted/30"
+                                className="h-11 w-11 shrink-0 rounded-lg border border-line bg-tint-subtle"
                               />
                             ) : (
-                              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-line bg-muted/30 text-3xs font-semibold uppercase text-muted-foreground">
+                              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-line bg-tint-subtle text-3xs font-semibold uppercase text-muted-foreground">
                                 {ext}
                               </div>
                             )}
@@ -9311,7 +9311,7 @@ export default function DesignTaskPage() {
                                   <div className="flex min-w-0 items-center gap-1.5">
                                     {fileVersion && fileVersion > 1 ? (
                                       <span
-                                        className="shrink-0 rounded-md border border-line bg-muted/60 px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide text-muted-foreground"
+                                        className="shrink-0 rounded-md border border-line bg-tint px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide text-muted-foreground"
                                         title={`Версія ${fileVersion} — завантажено після ${fileVersion - 1}-ї правки`}
                                       >
                                         v{fileVersion}
@@ -9469,7 +9469,7 @@ export default function DesignTaskPage() {
                             onCheckedChange={() => toggleOutputSelection(rowKey)}
                             aria-label={`Вибрати матеріал: ${link.label}`}
                           />
-                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-line bg-muted/30 text-muted-foreground">
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-line bg-tint-subtle text-muted-foreground">
                             <Link2 className="h-4 w-4" />
                           </div>
 
@@ -10258,7 +10258,7 @@ export default function DesignTaskPage() {
                             return (
                               <div
                                 key={attachment.id}
-                                className="group relative h-24 overflow-hidden rounded-md border border-line bg-muted/20"
+                                className="group relative h-24 overflow-hidden rounded-md border border-line bg-tint-subtle"
                               >
                                 <button
                                   type="button"
@@ -10383,7 +10383,7 @@ export default function DesignTaskPage() {
                   ) : null}
 
                   {briefChangeRequests.length === 0 && !changeRequestOpen ? (
-                    <div className="rounded-lg border border-dashed border-line bg-muted/5 px-4 py-8 text-center">
+                    <div className="rounded-lg border border-dashed border-line bg-tint-subtle px-4 py-8 text-center">
                       <MessageSquare className="mx-auto mb-2 h-8 w-8 text-muted-foreground/30" />
                       <p className="text-sm text-muted-foreground">Правок ще немає</p>
                       <p className="mt-1 text-xs text-muted-foreground">
@@ -10515,7 +10515,7 @@ export default function DesignTaskPage() {
                                     <button
                                       key={attachment.id}
                                       type="button"
-                                      className="group relative h-24 overflow-hidden rounded-md border border-line-strong bg-muted/20 transition-colors hover:border-primary/40"
+                                      className="group relative h-24 overflow-hidden rounded-md border border-line-strong bg-tint-subtle transition-colors hover:border-primary/40"
                                       onClick={() =>
                                         void openStorageFilePreview({
                                           storage_bucket: attachment.storage_bucket,
@@ -10597,7 +10597,7 @@ export default function DesignTaskPage() {
                                             "peer inline-flex h-7 items-center gap-1 rounded-full border px-2 text-xs transition-colors",
                                             reactedByMe
                                               ? "border-primary/40 bg-primary/10 text-primary"
-                                              : "border-line bg-muted/30 text-foreground hover:border-line-strong hover:bg-muted/50"
+                                              : "border-line bg-tint-subtle text-foreground hover:border-line-strong hover:bg-tint"
                                           )}
                                         >
                                           <span className="text-sm leading-none">{emoji}</span>
@@ -10865,7 +10865,7 @@ export default function DesignTaskPage() {
                               type="button"
                               className={cn(
                                 "flex w-full items-center gap-3 px-3 py-2 text-left transition-colors",
-                                index === mentionActiveIndex ? "bg-foreground/10 text-foreground" : "hover:bg-muted/60"
+                                index === mentionActiveIndex ? "bg-foreground/10 text-foreground" : "hover:bg-tint"
                               )}
                               onMouseDown={(event) => {
                                 event.preventDefault();
@@ -10935,7 +10935,7 @@ export default function DesignTaskPage() {
                                 {formatDate(comment.created_at, true)}
                               </span>
                             </div>
-                            <div className="mt-1 w-fit max-w-full whitespace-pre-wrap break-words rounded-xl rounded-tl-sm border border-line bg-muted/20 px-3 py-2 text-sm line-clamp-3">
+                            <div className="mt-1 w-fit max-w-full whitespace-pre-wrap break-words rounded-xl rounded-tl-sm border border-line bg-tint-subtle px-3 py-2 text-sm line-clamp-3">
                               {renderInlineRichText(comment.body ?? "", { highlightMentions: true })}
                             </div>
                           </div>
@@ -10971,7 +10971,7 @@ export default function DesignTaskPage() {
                             {formatDate(comment.created_at, true)}
                           </span>
                         </div>
-                        <div className="mt-1 w-fit max-w-full whitespace-pre-wrap break-words rounded-xl rounded-tl-sm border border-line bg-muted/20 px-3 py-2 text-sm">
+                        <div className="mt-1 w-fit max-w-full whitespace-pre-wrap break-words rounded-xl rounded-tl-sm border border-line bg-tint-subtle px-3 py-2 text-sm">
                           {renderInlineRichText(comment.body ?? "", { highlightMentions: true })}
                         </div>
                       </div>
@@ -11129,9 +11129,9 @@ export default function DesignTaskPage() {
                     return (
                       <div
                         key={file.id}
-                        className="overflow-hidden rounded-xl border border-line bg-muted/5 transition-colors hover:border-line-strong"
+                        className="overflow-hidden rounded-xl border border-line bg-tint-subtle transition-colors hover:border-line-strong"
                       >
-                        <div className="relative aspect-[16/10] w-full overflow-hidden bg-muted/20">
+                        <div className="relative aspect-[16/10] w-full overflow-hidden bg-tint-subtle">
                           {isVideoFile ? (
                             <StorageObjectVideo
                               bucket={file.storage_bucket}
@@ -11346,7 +11346,7 @@ export default function DesignTaskPage() {
                   <TabsTrigger value="visualization" className="gap-2">
                     <ImageIcon className="h-4 w-4" />
                     <span>Візуал</span>
-                    <span className="rounded-full border border-line bg-muted/60 px-1.5 py-0.5 text-3xs tabular-nums text-muted-foreground">
+                    <span className="rounded-full border border-line bg-tint px-1.5 py-0.5 text-3xs tabular-nums text-muted-foreground">
                       {designOutputCountByKind.visualization}
                     </span>
                     {selectedVisualizationOutputFileIds.length > 0 ? (
@@ -11358,7 +11358,7 @@ export default function DesignTaskPage() {
                   <TabsTrigger value="layout" className="gap-2">
                     <PencilLine className="h-4 w-4" />
                     <span>Макет</span>
-                    <span className="rounded-full border border-line bg-muted/60 px-1.5 py-0.5 text-3xs tabular-nums text-muted-foreground">
+                    <span className="rounded-full border border-line bg-tint px-1.5 py-0.5 text-3xs tabular-nums text-muted-foreground">
                       {designOutputCountByKind.layout}
                     </span>
                     {selectedLayoutOutputFileIds.length > 0 ? (
@@ -11487,7 +11487,7 @@ export default function DesignTaskPage() {
                       </div>
                       <div className="text-3xs uppercase tracking-caps text-muted-foreground">Фінал</div>
                     </div>
-                    <div className="rounded-lg border border-line bg-muted/30 px-3 py-1.5 text-center">
+                    <div className="rounded-lg border border-line bg-tint-subtle px-3 py-1.5 text-center">
                       <div className="text-base font-semibold tabular-nums text-foreground">
                         {dropboxExportPlan.filter((entry) => entry.role === "archive").length}
                       </div>
@@ -11590,7 +11590,7 @@ export default function DesignTaskPage() {
                 ) : null}
 
                 {dropboxDetailsOpen ? (
-                  <div className="space-y-3 border-t border-line-subtle bg-muted/10 p-4">
+                  <div className="space-y-3 border-t border-line-subtle bg-tint-subtle p-4">
                     <p className="text-xs text-muted-foreground">
                       Погоджені файли → <span className="font-medium text-foreground">Фінал</span>, решта →{" "}
                       <span className="font-medium text-foreground">Архів</span>.
@@ -11674,7 +11674,7 @@ export default function DesignTaskPage() {
               заголовка тягнеться від краю до краю, а має-селектор підсвічує
               всю секцію — незалежно від того, куди саме навели, на підпис чи
               на стрілку. */}
-          <section className="shrink-0 overflow-hidden rounded-inner border border-line bg-card transition-colors has-[.details-toggle:hover]:bg-muted/40">
+          <section className="shrink-0 overflow-hidden rounded-inner border border-line bg-card transition-colors has-[.details-toggle:hover]:bg-tint">
             <button
               type="button"
               onClick={toggleDetailsCollapsed}
@@ -11925,9 +11925,9 @@ export default function DesignTaskPage() {
                     {quoteItem?.spec_preset ? (
                       <PrintModelTile presetKey={quoteItem.spec_preset} className="h-8 w-8 rounded-md" iconClassName="h-5 w-5" />
                     ) : productPreviewUrl ? (
-                      <KanbanImageZoomPreview imageUrl={productPreviewUrl} zoomImageUrl={productZoomPreviewUrl ?? productPreviewUrl} alt={quoteItem?.name ?? "Товар"} loadStrategy="eager" className="h-8 w-8 shrink-0 rounded-md border border-line bg-muted/30" />
+                      <KanbanImageZoomPreview imageUrl={productPreviewUrl} zoomImageUrl={productZoomPreviewUrl ?? productPreviewUrl} alt={quoteItem?.name ?? "Товар"} loadStrategy="eager" className="h-8 w-8 shrink-0 rounded-md border border-line bg-tint-subtle" />
                     ) : (
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line bg-muted/30">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line bg-tint-subtle">
                         <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" />
                       </div>
                     )}
@@ -12194,7 +12194,7 @@ export default function DesignTaskPage() {
             </div>
           )}
 
-          <DialogFooter className="flex-row items-center justify-between gap-3 border-t border-line-subtle bg-muted/[0.02] px-5 py-3 space-y-0">
+          <DialogFooter className="flex-row items-center justify-between gap-3 border-t border-line-subtle bg-tint-subtle px-5 py-3 space-y-0">
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span>{briefDraft.length} символів</span>
               <span>·</span>
@@ -12332,7 +12332,7 @@ export default function DesignTaskPage() {
               {(["visualization", "layout"] as DesignOutputKind[]).map((kind) => {
                 const plan = dropboxPlanByKind[kind];
                 return (
-                  <div key={`dropbox-dialog-${kind}`} className="rounded-xl border border-line bg-muted/10 p-4">
+                  <div key={`dropbox-dialog-${kind}`} className="rounded-xl border border-line bg-tint-subtle p-4">
                     <div className="mb-3 flex items-center justify-between gap-2">
                       <div className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
                         {kind === "visualization" ? (
@@ -12561,7 +12561,7 @@ export default function DesignTaskPage() {
             {filePreview?.name ?? "Перегляд файлу"}
           </DialogTitle>
         </DialogHeader>
-          <div className="flex justify-center overflow-auto overscroll-contain rounded-xl bg-muted/15 p-2 sm:p-3">
+          <div className="flex justify-center overflow-auto overscroll-contain rounded-xl bg-tint-subtle p-2 sm:p-3">
             {filePreview?.kind === "image" ? (
               <img
                 src={filePreview.url}

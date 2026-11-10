@@ -315,8 +315,8 @@ function TurnRow({ item, active, onSelect }: { item: OverviewQueueItem; active: 
       aria-current={active || undefined}
       onClick={onSelect}
       className={cn(
-        "flex h-[38px] w-full min-w-0 items-center gap-2 border-l-2 border-transparent px-3 text-left text-sm transition-colors hover:bg-muted/50",
-        active && "border-l-foreground bg-muted/70 hover:bg-muted/70"
+        "flex h-[38px] w-full min-w-0 items-center gap-2 border-l-2 border-transparent px-3 text-left text-sm transition-colors hover:bg-tint",
+        active && "border-l-foreground bg-muted hover:bg-muted"
       )}
     >
       <span className={cn("size-1.5 shrink-0 rounded-[2px]", toneDotClass[item.chipTone])} title={item.chip} aria-hidden />

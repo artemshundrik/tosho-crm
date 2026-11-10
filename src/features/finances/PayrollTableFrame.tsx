@@ -139,7 +139,7 @@ export const FROZEN_PERSON =
   "after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:w-px after:bg-border " +
   "after:opacity-0 after:transition-opacity after:duration-base " +
   "group-data-[scrolled-x]/box:after:opacity-100 " +
-  "before:pointer-events-none before:absolute before:inset-0 group-hover/row:before:bg-muted/20";
+  "before:pointer-events-none before:absolute before:inset-0 group-hover/row:before:bg-tint-subtle";
 
 /**
  * Притиснутий підсумок («До виплати», «Загальна ЗП», нотатка, статус) —
@@ -148,7 +148,7 @@ export const FROZEN_PERSON =
  */
 const FROZEN_SUMMARY =
   "sticky z-[5] bg-background " +
-  "before:pointer-events-none before:absolute before:inset-0 group-hover/row:before:bg-muted/20";
+  "before:pointer-events-none before:absolute before:inset-0 group-hover/row:before:bg-tint-subtle";
 
 /**
  * Роздільник по лівому краю першої притиснутої колонки підсумку. Видно, лише

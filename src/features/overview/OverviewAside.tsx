@@ -100,7 +100,7 @@ function ActivityBody({ rows }: { rows: OverviewActivityRow[] }) {
         <Link
           key={row.id}
           to={row.href}
-          className="-mx-1.5 flex items-start gap-2 rounded-lg border-t border-line-subtle px-1.5 py-2 transition-colors first:border-t-0 hover:bg-muted/40"
+          className="-mx-1.5 flex items-start gap-2 rounded-lg border-t border-line-subtle px-1.5 py-2 transition-colors first:border-t-0 hover:bg-tint"
         >
           <AvatarBase src={row.avatarUrl} name={row.actorName} fallback={getInitials(row.actorName)} variant="sm" />
           <div className="min-w-0 flex-1">

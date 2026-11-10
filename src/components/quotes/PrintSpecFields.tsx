@@ -66,7 +66,7 @@ const OptionChip: React.FC<{
         "inline-flex h-7 items-center gap-1 whitespace-nowrap rounded-md border px-2.5 text-xs transition-colors",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
         "disabled:cursor-not-allowed disabled:opacity-60",
-        inert && "border-line-strong bg-muted/50 text-muted-foreground/60 disabled:opacity-100",
+        inert && "border-line-strong bg-tint text-muted-foreground/60 disabled:opacity-100",
         active
           ? "border-foreground bg-foreground font-semibold text-background"
           : inert

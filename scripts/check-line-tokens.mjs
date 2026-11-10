@@ -23,6 +23,12 @@ import path from "node:path";
 const ROOT = path.resolve("src");
 const OLD = /(?<![\w-])(?:border|divide|ring|outline)(?:-[trblxyse])?-border(?![\w-])(?:\/\d+)?/g;
 
+// Коментарі не перевіряємо: у них старі написання згадуються як історія.
+// Вирізаємо зі збереженням переносів, щоб номери рядків лишались правдивими.
+function stripComments(src) {
+  return src.replace(/\/\*[\s\S]*?\*\/|(?<![:\w"'`])\/\/[^\n]*/g, (m) => m.replace(/[^\n]/g, " "));
+}
+
 function walk(dir, out) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name);
@@ -34,7 +40,7 @@ function walk(dir, out) {
 
 const hits = [];
 for (const file of walk(ROOT, [])) {
-  const lines = fs.readFileSync(file, "utf8").split("\n");
+  const lines = stripComments(fs.readFileSync(file, "utf8")).split("\n");
   lines.forEach((line, i) => {
     for (const m of line.matchAll(OLD)) hits.push(`${path.relative(".", file)}:${i + 1}  ${m[0]}`);
   });

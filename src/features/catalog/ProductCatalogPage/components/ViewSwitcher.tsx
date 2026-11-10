@@ -22,7 +22,7 @@ export function ViewSwitcher({ view, onViewChange, className }: ViewSwitcherProp
       type="single"
       value={view}
       onValueChange={(value) => value && onViewChange(value as ViewMode)}
-      className={cn("border rounded-lg bg-muted/20", className)}
+      className={cn("border rounded-lg bg-tint-subtle", className)}
     >
       <ToggleGroupItem
         value="grid"

@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 export const QUICK_SERVICES = ["Розробка дизайну", "Адаптація макета", "Фотозйомка", "Доставка"] as const;
 
 const chipClass =
-  "inline-flex h-7 items-center gap-1 rounded-full border border-line-strong px-2.5 text-xs text-foreground transition-colors hover:bg-muted/60 disabled:pointer-events-none disabled:opacity-50";
+  "inline-flex h-7 items-center gap-1 rounded-full border border-line-strong px-2.5 text-xs text-foreground transition-colors hover:bg-tint disabled:pointer-events-none disabled:opacity-50";
 
 export function ManualOrderQuickServices({
   onAdd,
@@ -41,7 +41,7 @@ export function ManualOrderEmptyStart({
   disabled?: boolean;
 }) {
   const cardClass =
-    "flex flex-col items-start gap-2 rounded-xl border border-line bg-card p-4 text-left transition-colors hover:border-line-strong hover:bg-muted/40 disabled:pointer-events-none disabled:opacity-50";
+    "flex flex-col items-start gap-2 rounded-xl border border-line bg-card p-4 text-left transition-colors hover:border-line-strong hover:bg-tint disabled:pointer-events-none disabled:opacity-50";
   return (
     <div className="flex flex-1 flex-col justify-center gap-3 py-6">
       <p className="text-center text-sm font-medium">Що замовляють?</p>

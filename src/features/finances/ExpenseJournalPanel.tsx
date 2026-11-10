@@ -318,7 +318,7 @@ function JournalEntryRow({
   }
 
   return (
-    <div className="group flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-muted/40">
+    <div className="group flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-tint">
       {hideDate ? null : (
         <span className="w-12 shrink-0 text-xs font-medium tabular-nums text-muted-foreground">
           {formatDayShort(entry.entryDate)}
@@ -436,7 +436,7 @@ export function ExpenseJournalPanel({
   const groupByDate = !isEvent && dateGroups.some((g) => g.items.length > 1 || g.label);
 
   return (
-    <div className="border-t border-line-subtle bg-muted/20 px-3 py-2.5">
+    <div className="border-t border-line-subtle bg-tint-subtle px-3 py-2.5">
       <div className="mb-1.5 flex items-center justify-between">
         <span className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
           {isEvent ? "Позиції" : `Журнал · ${monthText}`}

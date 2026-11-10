@@ -65,7 +65,7 @@ export function QuotePartyCard({
       <button
         type="button"
         onClick={onOpenParty}
-        className="flex w-full items-center gap-2 px-2.5 py-2 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
+        className="flex w-full items-center gap-2 px-2.5 py-2 text-left transition-colors hover:bg-tint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
       >
         {/* 36 px — це рівно висота двох рядків поруч: назва (13.5/16) плюс рядок
             менеджера (11/15) із проміжком. На 28 аватар «висів» проти них, і блок
@@ -119,7 +119,7 @@ export function QuotePartyCard({
                 type="button"
                 onClick={onOpenDeadlines}
                 aria-label={item.title}
-                className="grid justify-items-center gap-0.5 bg-card px-1 py-1 text-center transition-colors hover:bg-muted/50"
+                className="grid justify-items-center gap-0.5 bg-card px-1 py-1 text-center transition-colors hover:bg-tint"
               >
                 <span className="text-3xs font-semibold uppercase tracking-caps-tight text-muted-foreground">
                   {item.label}

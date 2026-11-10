@@ -229,8 +229,8 @@ export function ContentHeader({
                     type="button"
                     onClick={() => openEditPositionModal(pos.id, pos.label)}
                     className={cn(
-                      "inline-flex items-center gap-2 rounded-full border border-line-strong bg-muted/40 px-3 py-1 text-xs font-medium text-foreground transition",
-                      "hover:border-line-strong hover:bg-muted/60",
+                      "inline-flex items-center gap-2 rounded-full border border-line-strong bg-tint px-3 py-1 text-xs font-medium text-foreground transition",
+                      "hover:border-line-strong hover:bg-muted",
                       positionModalId === pos.id && positionModalOpen && "ring-1 ring-primary/30"
                     )}
                   >
@@ -240,7 +240,7 @@ export function ContentHeader({
                 <button
                   type="button"
                   onClick={openAddPositionModal}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-line-strong bg-muted/20 px-3 py-1 text-xs font-medium text-muted-foreground transition hover:bg-muted/40"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-line-strong bg-tint-subtle px-3 py-1 text-xs font-medium text-muted-foreground transition hover:bg-tint"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   Додати місце

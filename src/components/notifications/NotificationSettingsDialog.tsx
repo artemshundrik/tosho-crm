@@ -249,7 +249,7 @@ export function NotificationSettingsDialog({ open, onOpenChange }: { open: boole
                 "inline-flex shrink-0 rounded-full border px-2.5 py-1 text-2xs font-semibold md:hidden",
                 pushStatusTone === "active" && "border-primary/25 bg-primary/10 text-primary",
                 pushStatusTone === "muted" && "border-warning-soft-border bg-warning-soft text-warning-foreground",
-                pushStatusTone === "inactive" && "border-line bg-muted/60 text-muted-foreground"
+                pushStatusTone === "inactive" && "border-line bg-tint text-muted-foreground"
               )}>
                 {pushStatusLabel}
               </span>
@@ -260,7 +260,7 @@ export function NotificationSettingsDialog({ open, onOpenChange }: { open: boole
                   "inline-flex rounded-full border px-2.5 py-1 text-2xs font-semibold",
                   pushStatusTone === "active" && "border-primary/25 bg-primary/10 text-primary",
                   pushStatusTone === "muted" && "border-warning-soft-border bg-warning-soft text-warning-foreground",
-                  pushStatusTone === "inactive" && "border-line bg-muted/60 text-muted-foreground"
+                  pushStatusTone === "inactive" && "border-line bg-tint text-muted-foreground"
                 )}>
                   {pushStatusLabel}
                 </span>
@@ -360,7 +360,7 @@ export function NotificationSettingsDialog({ open, onOpenChange }: { open: boole
                 "inline-flex shrink-0 rounded-full border px-2.5 py-1 text-2xs font-semibold md:hidden",
                 soundStatusTone === "active" && "border-primary/25 bg-primary/10 text-primary",
                 soundStatusTone === "muted" && "border-warning-soft-border bg-warning-soft text-warning-foreground",
-                soundStatusTone === "inactive" && "border-line bg-muted/60 text-muted-foreground"
+                soundStatusTone === "inactive" && "border-line bg-tint text-muted-foreground"
               )}>
                 {soundStatusLabel}
               </span>
@@ -370,7 +370,7 @@ export function NotificationSettingsDialog({ open, onOpenChange }: { open: boole
                 "hidden rounded-full border px-2.5 py-1 text-2xs font-semibold md:inline-flex",
                 soundStatusTone === "active" && "border-primary/25 bg-primary/10 text-primary",
                 soundStatusTone === "muted" && "border-warning-soft-border bg-warning-soft text-warning-foreground",
-                soundStatusTone === "inactive" && "border-line bg-muted/60 text-muted-foreground"
+                soundStatusTone === "inactive" && "border-line bg-tint text-muted-foreground"
               )}>
                 {soundStatusLabel}
               </span>

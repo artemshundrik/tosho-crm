@@ -49,7 +49,7 @@ function MarkSentBody({ ask, flow }: { ask: MarkSentAsk; flow: OrderSendToCustom
         {ask.items.map(({ document, dispatch }) => (
           <label
             key={document}
-            className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 transition-colors hover:bg-muted/40"
+            className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 transition-colors hover:bg-tint"
           >
             <Checkbox checked={picked.has(document)} onCheckedChange={(value) => toggle(document, value === true)} />
             <span className="flex-1 text-sm font-medium">{capitalize(DISPATCH_DOCUMENT_TITLES[document])}</span>

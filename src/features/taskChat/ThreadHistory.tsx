@@ -35,7 +35,7 @@ export function ThreadHistory({ events }: { events: ThreadEntry[] }) {
         aria-expanded={open}
         className={cn(
           "flex w-full items-center gap-2 rounded-lg border border-dashed border-line-strong px-2.5 py-1.5",
-          "text-2xs text-muted-foreground transition-colors hover:bg-muted/40",
+          "text-2xs text-muted-foreground transition-colors hover:bg-tint",
           open && "border-solid text-foreground/80"
         )}
       >
@@ -57,7 +57,7 @@ export function ThreadHistory({ events }: { events: ThreadEntry[] }) {
                   type="button"
                   onClick={() => toggleDay(digest.key)}
                   aria-expanded={expanded}
-                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-muted/40"
+                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-tint"
                 >
                   <span className="w-12 shrink-0 whitespace-nowrap text-2xs font-semibold tabular-nums text-foreground/80">
                     {digest.label}

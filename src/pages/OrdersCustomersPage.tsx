@@ -2344,8 +2344,8 @@ function CustomersPage({ teamId }: { teamId: string }) {
                             onClick={cycleLtvSort}
                             className={cn(
                               "ml-auto inline-flex items-center gap-1 rounded px-1.5 py-0.5 -mr-1.5 font-medium transition-colors",
-                              "hover:bg-muted/60 cursor-pointer",
-                              ltvSortDirection !== "default" ? "text-foreground bg-muted/40" : "text-muted-foreground hover:text-foreground"
+                              "hover:bg-tint cursor-pointer",
+                              ltvSortDirection !== "default" ? "text-foreground bg-tint" : "text-muted-foreground hover:text-foreground"
                             )}
                             title={
                               ltvSortDirection === "desc"
@@ -2381,7 +2381,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                             key={row.id}
                             className={cn(
                               "group cursor-pointer border-b border-line last:border-0 transition-colors",
-                              "hover:bg-muted/30"
+                              "hover:bg-tint-subtle"
                             )}
                             onClick={() => openEdit(row)}
                           >
@@ -2619,7 +2619,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                       {filteredLeads.map((lead) => (
                         <TableRow
                           key={lead.id}
-                          className="group hover:bg-muted/30 cursor-pointer border-b border-line last:border-0 transition-colors"
+                          className="group hover:bg-tint cursor-pointer border-b border-line last:border-0 transition-colors"
                           onClick={() => openEditLead(lead)}
                         >
                           <TableCell className="pl-6">
@@ -2742,7 +2742,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
               Вкажіть тільки назву папки клієнта{attachDropboxTarget?.clientName ? ` для ${attachDropboxTarget.clientName}` : ""}. Шлях `Tosho Team Folder/Замовники/` підставиться автоматично.
             </div>
             <div className="grid gap-2">
-              <div className="flex h-10 items-center rounded-md border border-line bg-muted/30 px-3 text-sm text-muted-foreground">
+              <div className="flex h-10 items-center rounded-md border border-line bg-tint-subtle px-3 text-sm text-muted-foreground">
                 Tosho Team Folder/Замовники/
               </div>
               <Input

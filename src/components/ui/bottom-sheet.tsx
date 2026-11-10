@@ -89,7 +89,7 @@ export function BottomSheet({
           // порожньому кутку й не читався як кнопка.
           className={cn(
             "absolute right-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full",
-            "bg-muted/70 text-muted-foreground transition-colors",
+            "bg-tint text-muted-foreground transition-colors",
             "hover:bg-muted hover:text-foreground",
             "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
           )}

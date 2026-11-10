@@ -105,7 +105,7 @@ export function SplitBar({
               type="button"
               onClick={() => onPartClick(part.key)}
               title="Перейти до секції"
-              className="-mx-1 inline-flex cursor-pointer items-center gap-1.5 rounded-md px-1 py-0.5 text-xs hover:bg-muted/50"
+              className="-mx-1 inline-flex cursor-pointer items-center gap-1.5 rounded-md px-1 py-0.5 text-xs hover:bg-tint"
             >
               {legendItem(part)}
             </button>

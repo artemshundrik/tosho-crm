@@ -73,7 +73,7 @@ function toggle<T>(set: Set<T>, value: T): Set<T> {
  *  нейтральний навмисно, бо тони зон у ряду ставали веселкою; який це фільтр —
  *  у чіпі написано словом. ZONE_TONE на картках живе своїм життям. */
 const SELECTED_FILTER_CHIP =
-  "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border border-line-strong bg-muted/70 pl-2.5 pr-2 text-2xs font-medium text-foreground transition-opacity hover:opacity-80";
+  "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border border-line-strong bg-tint pl-2.5 pr-2 text-2xs font-medium text-foreground transition-opacity hover:opacity-80";
 
 /** Рядок у панелі: галочка, іконка, назва, кількість. */
 function FilterRow({
@@ -102,7 +102,7 @@ function FilterRow({
         "flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-md transition-colors",
         // Вибране темнішає, а не синіє — тим самим правилом, що й тригери
         // тулбара: у ряду не має бути двох різних мов «увімкнено».
-        selected ? "bg-muted/70 font-medium text-foreground" : "text-foreground hover:bg-muted/60",
+        selected ? "bg-muted font-medium text-foreground" : "text-foreground hover:bg-tint",
         disabled && "cursor-default opacity-40 hover:bg-transparent"
       )}
     >

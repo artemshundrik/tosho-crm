@@ -619,7 +619,7 @@ export function QuoteItemCommandField({
                 aria-selected={active === index}
                 className={cn(
                   "group cursor-pointer rounded-lg px-2 py-1.5 text-sm",
-                  active === index ? "bg-muted" : "hover:bg-muted/50"
+                  active === index ? "bg-muted" : "hover:bg-tint"
                 )}
                 onMouseEnter={() => setActive(index)}
                 onMouseDown={(event) => event.preventDefault()}
@@ -793,7 +793,7 @@ export function QuoteItemCommandField({
                 aria-selected={active === index}
                 className={cn(
                   "flex cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 text-sm",
-                  active === index ? "bg-muted" : "hover:bg-muted/50"
+                  active === index ? "bg-muted" : "hover:bg-tint"
                 )}
                 onMouseEnter={() => setActive(index)}
                 onMouseDown={(event) => event.preventDefault()}
@@ -840,7 +840,7 @@ export function QuoteItemCommandField({
                 ? "-mx-1.5 flex cursor-pointer items-center gap-3 bg-popover px-3.5 py-2 text-sm"
                 : "sticky -bottom-1.5 z-10 -mx-1.5 -mb-1.5 flex cursor-pointer items-center gap-3 bg-popover px-3.5 py-2 text-sm",
               addRowIndex > 0 && "mt-1 border-t border-line-subtle pt-2",
-              active === addRowIndex ? "bg-muted" : "hover:bg-muted/50"
+              active === addRowIndex ? "bg-muted" : "hover:bg-tint"
             )}
             onMouseEnter={() => setActive(addRowIndex)}
             onMouseDown={(event) => event.preventDefault()}
@@ -863,7 +863,7 @@ export function QuoteItemCommandField({
               aria-selected={active === serviceRowIndex}
               className={cn(
                 "sticky -bottom-1.5 z-10 -mx-1.5 -mb-1.5 flex cursor-pointer items-center gap-3 bg-popover px-3.5 py-2 text-sm",
-                active === serviceRowIndex ? "bg-muted" : "hover:bg-muted/50"
+                active === serviceRowIndex ? "bg-muted" : "hover:bg-tint"
               )}
               onMouseEnter={() => setActive(serviceRowIndex)}
               onMouseDown={(event) => event.preventDefault()}
@@ -919,7 +919,7 @@ function SuggestionPhoto({ url, name }: { url: string | null; name: string }) {
   const [failedUrl, setFailedUrl] = React.useState<string | null>(null);
   if (!url || failedUrl === url) {
     return (
-      <span className={cn(base, "grid place-items-center bg-muted/40")} aria-hidden>
+      <span className={cn(base, "grid place-items-center bg-tint")} aria-hidden>
         <ImageOff className="h-3.5 w-3.5 text-muted-foreground/50" />
       </span>
     );

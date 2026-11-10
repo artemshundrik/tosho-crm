@@ -231,7 +231,7 @@ export function FinanceCalendar({ teamId, userId }: FinanceCalendarProps) {
       />
 
       {buckets.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-line bg-muted/10 p-8 text-center">
+        <div className="rounded-xl border border-dashed border-line bg-tint-subtle p-8 text-center">
           <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-background">
             <CalendarClock className="h-5 w-5 text-muted-foreground" />
           </div>
@@ -271,7 +271,7 @@ export function FinanceCalendar({ teamId, userId }: FinanceCalendarProps) {
                       {item.kind === "subscription" ? (
                         <SubscriptionLogo logoUrl={item.logoUrl} name={item.title} size={32} />
                       ) : (
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-line bg-muted/30">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-line bg-tint-subtle">
                           <Icon className="h-4 w-4 text-muted-foreground" />
                         </div>
                       )}

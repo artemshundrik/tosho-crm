@@ -474,7 +474,7 @@ export default function DocumentsPage() {
             onClick={() => setFlag(active ? null : tile.flag)}
             className={cn(
               "flex min-w-0 flex-col gap-2 rounded-xl border bg-card p-3 text-left transition-colors md:p-4",
-              active ? "border-primary ring-2 ring-primary/20" : "border-line-strong hover:bg-muted/30"
+              active ? "border-primary ring-2 ring-primary/20" : "border-line-strong hover:bg-tint"
             )}
           >
             <span className="truncate text-xs font-medium text-muted-foreground">

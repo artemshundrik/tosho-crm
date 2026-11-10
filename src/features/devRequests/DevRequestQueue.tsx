@@ -282,7 +282,7 @@ function BlockedRow({
     <button
       type="button"
       onClick={() => onSelect(request)}
-      className="flex w-full flex-col gap-1.5 rounded-xl border border-line bg-card px-3 py-2.5 text-left transition-colors hover:border-line-strong hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      className="flex w-full flex-col gap-1.5 rounded-xl border border-line bg-card px-3 py-2.5 text-left transition-colors hover:border-line-strong hover:bg-tint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     >
       <span className="flex items-start gap-2">
         {ThemeIcon ? (
@@ -337,7 +337,7 @@ function TodayRow({
   const progress = papercut ? checklistProgress(request.checklist) : null;
   const left = progress ? progress.total - progress.done : 0;
   return (
-    <div className="flex items-start gap-3 rounded-xl border border-line bg-card px-4 py-3 transition-colors hover:border-line-strong hover:bg-muted/30">
+    <div className="flex items-start gap-3 rounded-xl border border-line bg-card px-4 py-3 transition-colors hover:border-line-strong hover:bg-tint">
       <button
         type="button"
         onClick={() => onSelect(request)}
@@ -414,7 +414,7 @@ function Rows({
            * в рядку, тож вона тримає власний мінімум, а мітки й кнопка
            * переносяться під неї, коли місця бракує.
            */}
-          <div className="group flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 transition-colors hover:bg-muted/40">
+          <div className="group flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 transition-colors hover:bg-tint">
             <PriorityBars priority={request.priority} />
             <button
               type="button"
@@ -732,7 +732,7 @@ function PapercutCard({
                 onClick={() => toggle(item)}
                 disabled={!onChecklist || saving}
                 aria-pressed={item.state === "done"}
-                className="flex w-full items-start gap-2.5 px-3 py-2 text-left transition-colors hover:bg-muted/40 disabled:cursor-default disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                className="flex w-full items-start gap-2.5 px-3 py-2 text-left transition-colors hover:bg-tint disabled:cursor-default disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
               >
                 <span
                   className={cn(
@@ -776,7 +776,7 @@ function PapercutCard({
               <button
                 type="button"
                 onClick={() => onSelect(request)}
-                className="w-full px-3 py-2 text-left text-2xs text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                className="w-full px-3 py-2 text-left text-2xs text-muted-foreground transition-colors hover:bg-tint hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
               >
                 + додати дрібницю — у картці
               </button>

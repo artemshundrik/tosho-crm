@@ -92,7 +92,7 @@ export function ExpenseMonthAmount({
           type="button"
           title={`Виправити суму за ${monthText}`}
           className={cn(
-            "rounded-lg px-2 py-1 hover:bg-muted/50",
+            "rounded-lg px-2 py-1 hover:bg-tint",
             override !== null && "bg-info-soft/40"
           )}
         >

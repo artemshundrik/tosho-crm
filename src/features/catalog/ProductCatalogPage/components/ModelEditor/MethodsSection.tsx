@@ -100,13 +100,13 @@ export function MethodsSection({
       </div>
 
       {!draftKindId ? (
-        <div className="text-sm text-muted-foreground/60 py-8 border-2 border-dashed rounded-xl text-center bg-muted/10 flex flex-col items-center gap-3">
+        <div className="text-sm text-muted-foreground/60 py-8 border-2 border-dashed rounded-xl text-center bg-tint-subtle flex flex-col items-center gap-3">
           <AlertCircle className="h-8 w-8 text-muted-foreground/40" />
           <p>Спочатку оберіть Вид товару</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3">
-          <div className="rounded-lg border border-line bg-muted/10 p-3">
+          <div className="rounded-lg border border-line bg-tint-subtle p-3">
             <div className="space-y-2">
               <Label className="text-xs font-medium text-muted-foreground">
                 Знайти або додати метод
@@ -175,7 +175,7 @@ export function MethodsSection({
           </div>
 
           {availableMethods.length === 0 ? (
-            <div className="text-sm text-muted-foreground/60 py-8 border-2 border-dashed rounded-xl text-center bg-muted/10 flex flex-col items-center gap-3">
+            <div className="text-sm text-muted-foreground/60 py-8 border-2 border-dashed rounded-xl text-center bg-tint-subtle flex flex-col items-center gap-3">
               <AlertCircle className="h-8 w-8 text-muted-foreground/40" />
               <p>У виді "{draftKindName}" ще немає методів</p>
             </div>
@@ -192,7 +192,7 @@ export function MethodsSection({
                       "flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 transition-colors",
                       isSelected
                         ? "border-primary/50 bg-primary/10 text-primary"
-                        : "border-line bg-background/50 text-foreground hover:border-line-strong hover:bg-muted/20",
+                        : "border-line bg-background/50 text-foreground hover:border-line-strong hover:bg-tint",
                       exactHere?.id === method.id && !isSelected && "border-primary/40 bg-primary/5"
                     )}
                   >

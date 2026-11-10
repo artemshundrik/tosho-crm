@@ -412,7 +412,7 @@ export function DevRequestDetailsSheet({
               // рукою. Угорі їм не місце ще й тому, що там читають назву, а не
               // діють. Обробники ті самі, що й у меню картки, — сторінка передає
               // свої; другої логіки правки й видалення тут немає навмисно.
-              <SheetFooter className="justify-end gap-2 border-t bg-muted/20 px-5 py-3 sm:justify-end sm:space-x-0">
+              <SheetFooter className="justify-end gap-2 border-t bg-tint-subtle px-5 py-3 sm:justify-end sm:space-x-0">
                 {shown.status === "released" && onCopyCard ? (
                   <Button
                     variant="secondary"

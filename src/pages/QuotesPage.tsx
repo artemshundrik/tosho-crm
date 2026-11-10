@@ -951,7 +951,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
   const statusPillClasses = (value: string | null | undefined) => {
     const normalized = normalizeStatus(value);
-    return statusClasses[normalized] ?? "bg-muted/40 text-muted-foreground border-line";
+    return statusClasses[normalized] ?? "bg-tint text-muted-foreground border-line";
   };
 
   const customerLabel = useMemo(() => {
@@ -4914,7 +4914,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   <TableRow
                     key={set.id}
                     className={cn(
-                      "cursor-pointer hover:bg-muted/10 transition-colors border-b border-line-subtle",
+                      "cursor-pointer hover:bg-tint-subtle transition-colors border-b border-line-subtle",
                       (set.kind ?? "set") === "kp"
                         ? "data-[state=selected]:bg-primary/5"
                         : "data-[state=selected]:bg-success-soft"
@@ -5109,7 +5109,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                           </Badge>
                           {!canOpen ? (
                             <div
-                              className="inline-flex h-5 w-5 items-center justify-center rounded-md border border-line bg-muted/20 text-muted-foreground"
+                              className="inline-flex h-5 w-5 items-center justify-center rounded-md border border-line bg-tint-subtle text-muted-foreground"
                               title="Лише свої"
                               aria-label="Лише свої"
                             >
@@ -5295,7 +5295,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                         key={row.id}
                         className={cn(
                           "group transition-colors border-b border-line-subtle",
-                          canOpen ? "hover:bg-muted/10 cursor-pointer" : "cursor-not-allowed opacity-70",
+                          canOpen ? "hover:bg-tint-subtle cursor-pointer" : "cursor-not-allowed opacity-70",
                           isSelected && "bg-primary/5",
                           quotePeek.peekId === row.id && "bg-muted"
                         )}
@@ -5344,7 +5344,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                             </HoverCopyText>
                             {!canOpen ? (
                               <div
-                                className="inline-flex h-5 w-5 items-center justify-center rounded-md border border-line bg-muted/20 text-muted-foreground"
+                                className="inline-flex h-5 w-5 items-center justify-center rounded-md border border-line bg-tint-subtle text-muted-foreground"
                                 title="Лише свої"
                                 aria-label="Лише свої"
                               >
@@ -5657,7 +5657,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                           renderItem={(row, index) => renderQuoteKanbanCard(row, column.id, index)}
                           emptyState={
                             <div className="kanban-empty-state rounded-md border border-dashed border-line text-muted-foreground/70 text-2xs py-6 px-3 text-center">
-                              <div className="mx-auto mb-2 flex h-7 w-7 items-center justify-center rounded-full border border-line bg-muted/20">
+                              <div className="mx-auto mb-2 flex h-7 w-7 items-center justify-center rounded-full border border-line bg-tint-subtle">
                                 {(() => {
                                   const Icon = statusIcons[column.id] ?? Clock;
                                   return (
@@ -5748,7 +5748,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           onOpenAutoFocus={(event) => event.preventDefault()}
           className="w-[min(1080px,calc(100vw-32px))] max-w-[1080px] max-h-[90vh] gap-0 overflow-hidden p-0 sm:p-0"
         >
-          <DialogHeader className="shrink-0 space-y-2 border-b border-line-subtle bg-muted/10 px-6 py-5 pr-14">
+          <DialogHeader className="shrink-0 space-y-2 border-b border-line-subtle bg-tint-subtle px-6 py-5 pr-14">
             <DialogTitle className="flex flex-wrap items-center gap-2 text-lg">
               {quoteSetDetailsTarget?.name ?? "Деталі набору"}
               {quoteSetDetailsTarget ? <QuoteKindBadge kind={quoteSetDetailsTarget.kind} /> : null}
@@ -5785,7 +5785,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
 
           <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <div className="rounded-xl border border-line bg-muted/20 px-4 py-3">
+              <div className="rounded-xl border border-line bg-tint-subtle px-4 py-3">
                 <div className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
                   Позиції
                 </div>
@@ -5795,7 +5795,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     : quoteSetDetailsItems.length}
                 </div>
               </div>
-              <div className="rounded-xl border border-line bg-muted/20 px-4 py-3">
+              <div className="rounded-xl border border-line bg-tint-subtle px-4 py-3">
                 <div className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
                   Середня сума
                 </div>
@@ -5822,7 +5822,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             </div>
 
             <div className="grid gap-4 lg:grid-cols-2">
-              <section className="space-y-4 rounded-xl border border-line bg-muted/10 p-4 sm:p-5">
+              <section className="space-y-4 rounded-xl border border-line bg-tint-subtle p-4 sm:p-5">
                 <div className="flex items-center gap-2">
                   <Pencil className="h-4 w-4 text-muted-foreground" />
                   <h3 className="text-sm font-semibold">Керування</h3>
@@ -5895,7 +5895,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     </Button>
                   </div>
                   {selectedQuoteCandidate ? (
-                    <div className="rounded-lg border border-line bg-muted/20 px-3 py-2.5">
+                    <div className="rounded-lg border border-line bg-tint-subtle px-3 py-2.5">
                       <div className="text-2xs uppercase tracking-wide text-muted-foreground">
                         Попередній перегляд
                       </div>
@@ -5987,7 +5987,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                   </div>
                 ) : null}
                 {selectedRows.length > 0 ? (
-                  <div className="space-y-2 rounded-lg border border-line bg-muted/20 p-3">
+                  <div className="space-y-2 rounded-lg border border-line bg-tint-subtle p-3">
                     <div className="text-xs text-muted-foreground">
                       Вибрано в таблиці:{" "}
                       <span className="font-medium text-foreground">{selectedRows.length}</span>
@@ -6006,7 +6006,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                     </Button>
                   </div>
                 ) : (
-                  <div className="rounded-lg border border-dashed border-line bg-muted/10 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
+                  <div className="rounded-lg border border-dashed border-line bg-tint-subtle px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
                     Щоб додати кілька прорахунків, закрийте модалку і виділіть їх у списку.
                   </div>
                 )}
@@ -6014,7 +6014,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             </div>
 
             <div className="overflow-hidden rounded-xl border border-line">
-              <div className="flex items-center justify-between gap-2 border-b border-line-subtle bg-muted/20 px-4 py-3">
+              <div className="flex items-center justify-between gap-2 border-b border-line-subtle bg-tint-subtle px-4 py-3">
                 <div className="flex items-center gap-2 text-sm font-semibold">
                   <Layers className="h-4 w-4 text-muted-foreground" />
                   Склад {quoteSetDetailsTarget?.kind === "kp" ? "КП" : "набору"}
@@ -6143,7 +6143,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center justify-between gap-3 border-t border-line-subtle bg-muted/10 px-6 py-4">
+          <div className="flex shrink-0 items-center justify-between gap-3 border-t border-line-subtle bg-tint-subtle px-6 py-4">
             <Button
               variant="ghost"
               className="text-destructive hover:bg-destructive/10 hover:text-destructive"
@@ -6171,7 +6171,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           dismissible
           className="w-[min(1080px,calc(100vw-32px))] max-w-[1080px] max-h-[90vh] gap-0 overflow-hidden p-0 sm:p-0"
         >
-          <DialogHeader className="shrink-0 border-b border-line-subtle bg-muted/10 px-6 py-5 pr-14">
+          <DialogHeader className="shrink-0 border-b border-line-subtle bg-tint-subtle px-6 py-5 pr-14">
             <DialogTitle className="flex items-center gap-2">
               Комерційний прев'ю
               {quoteSetDetailsTarget ? <QuoteKindBadge kind={quoteSetDetailsTarget.kind} label={quoteSetDetailsTarget.name} /> : null}
@@ -6188,16 +6188,16 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
           </DialogHeader>
           <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
             {quoteSetCommercialLoading ? (
-              <div className="rounded-lg border border-line bg-muted/20 px-4 py-10 text-center text-sm text-muted-foreground">
+              <div className="rounded-lg border border-line bg-tint-subtle px-4 py-10 text-center text-sm text-muted-foreground">
                 Генерація прев'ю...
               </div>
             ) : !quoteSetCommercialDoc ? (
-              <div className="rounded-lg border border-line bg-muted/20 px-4 py-10 text-center text-sm text-muted-foreground">
+              <div className="rounded-lg border border-line bg-tint-subtle px-4 py-10 text-center text-sm text-muted-foreground">
                 Немає даних для відображення.
               </div>
             ) : (
               <>
-                <div className="rounded-lg border border-line bg-muted/20 px-4 py-3 grid gap-2 sm:grid-cols-2">
+                <div className="rounded-lg border border-line bg-tint-subtle px-4 py-3 grid gap-2 sm:grid-cols-2">
                   <div className="text-sm">
                     <span className="text-muted-foreground">Замовник:</span>{" "}
                     <span className="font-medium">{quoteSetCommercialDoc.customerName}</span>
@@ -6220,7 +6220,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                       </div>
                     ) : null}
                     {section.visualizations.length > 0 ? (
-                      <div className="rounded-xl border border-line bg-muted/10 px-4 py-3">
+                      <div className="rounded-xl border border-line bg-tint-subtle px-4 py-3">
                         <div className="mb-2 text-xs text-muted-foreground">
                           Візуалізації ({section.visualizations.length})
                         </div>
@@ -6234,14 +6234,14 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                               // У модалці немає kanban-скрол-контейнера, тож "visible"-ліниве
                               // завантаження не спрацьовує — вантажимо одразу.
                               loadStrategy="eager"
-                              className="h-24 w-40 rounded-md border border-line bg-muted/20"
+                              className="h-24 w-40 rounded-md border border-line bg-tint-subtle"
                             />
                           ))}
                         </div>
                       </div>
                     ) : null}
                     {section.items.length === 0 ? (
-                      <div className="rounded-xl border border-line bg-muted/20 px-4 py-6 text-center text-sm text-muted-foreground">
+                      <div className="rounded-xl border border-line bg-tint-subtle px-4 py-6 text-center text-sm text-muted-foreground">
                         У цьому прорахунку немає товарних позицій.
                       </div>
                     ) : (
@@ -6258,7 +6258,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
                               imageUrl={item.imageUrl}
                               alt={item.name}
                               loadStrategy="eager"
-                              className="h-16 w-16 shrink-0 rounded-lg border border-line bg-muted/20"
+                              className="h-16 w-16 shrink-0 rounded-lg border border-line bg-tint-subtle"
                             />
                           ) : (
                             // Плитка з ініціалами, а не порожній квадрат: те саме
@@ -6308,7 +6308,7 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
               </>
             )}
           </div>
-          <DialogFooter className="px-5 py-4 border-t border-line-subtle bg-muted/5">
+          <DialogFooter className="px-5 py-4 border-t border-line-subtle bg-tint-subtle">
             <Button variant="outline" onClick={() => setQuoteSetPreviewOpen(false)}>
               Закрити
             </Button>
@@ -6576,16 +6576,16 @@ export function QuotesPage({ teamId }: QuotesPageProps) {
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         {/* Підтвердження, а не форма: тут нема введеного, яке можна втратити. */}
         <DialogContent dismissible className="sm:max-w-[420px] p-0 overflow-hidden">
-          <DialogHeader className="p-4 border-b border-line-subtle bg-muted/10">
+          <DialogHeader className="p-4 border-b border-line-subtle bg-tint-subtle">
             <DialogTitle className="text-lg">Видалити прорахунок?</DialogTitle>
             <DialogDescription>Це видалить прорахунок і пов’язані дані. Дію не можна скасувати.</DialogDescription>
           </DialogHeader>
           <div className="p-4 space-y-3">
-            <div className="rounded-lg border border-line bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+            <div className="rounded-lg border border-line bg-tint-subtle px-3 py-2 text-xs text-muted-foreground">
               Це видалить прорахунок і пов'язані дані. Дію не можна скасувати.
             </div>
           </div>
-          <DialogFooter className="px-4 py-3 border-t border-line-subtle bg-muted/5">
+          <DialogFooter className="px-4 py-3 border-t border-line-subtle bg-tint-subtle">
             <Button variant="outline" size="sm" onClick={() => setDeleteDialogOpen(false)} disabled={!!rowDeleteBusy}>
               Скасувати
             </Button>

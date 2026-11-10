@@ -444,7 +444,7 @@ export function PrintSpecPanel({
           )}
         >
           <DialogHeader className="flex-row items-center gap-4 border-b border-line-subtle py-4 pl-6 pr-14 sm:pr-6">
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-muted/70 text-foreground/75">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-tint text-foreground/75">
               <PrintModelArt presetKey={preset.key} className="h-6 w-6" />
             </span>
             <div className="min-w-0 flex-1">
@@ -545,7 +545,7 @@ export function PrintSpecPanel({
             </div>
           ) : null}
           {sourceNote ? (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line-subtle bg-muted/40 px-6 py-2 text-xs text-foreground">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line-subtle bg-tint px-6 py-2 text-xs text-foreground">
               <span>
                 Взято з {sourceNote.from.quoteNumber} від {formatDayMonth(sourceNote.from.quoteDate)} — перевірте
               </span>
@@ -562,7 +562,7 @@ export function PrintSpecPanel({
             </div>
           ) : null}
 
-          <div className="min-h-0 flex-1 overflow-y-auto bg-muted/25 p-4">
+          <div className="min-h-0 flex-1 overflow-y-auto bg-tint-subtle p-4">
             <PrintSpecFields
               key={fieldsKey}
               ref={fieldsRef}
@@ -579,7 +579,7 @@ export function PrintSpecPanel({
             />
           </div>
 
-          <DialogFooter className="border-t border-line-subtle bg-muted/25 px-6 py-3.5 sm:items-center sm:justify-between">
+          <DialogFooter className="border-t border-line-subtle bg-tint-subtle px-6 py-3.5 sm:items-center sm:justify-between">
             <span className="hidden text-xs text-muted-foreground sm:block">
               Збережене видно в картці прорахунку, у списку та в дизайн-задачі.
             </span>
@@ -883,7 +883,7 @@ function RoundSwitcher({
   onPick: (label: string) => void;
 }) {
   return (
-    <div role="group" aria-label="Версії параметрів" className="mt-2.5 inline-flex flex-wrap gap-1 rounded-lg bg-muted/60 p-0.5">
+    <div role="group" aria-label="Версії параметрів" className="mt-2.5 inline-flex flex-wrap gap-1 rounded-lg bg-tint p-0.5">
       {rounds.map((round, index) => (
         <button
           key={round.label}

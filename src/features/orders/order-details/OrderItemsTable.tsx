@@ -71,7 +71,7 @@ export function OrderItemsTable({
                     <img
                       src={item.thumbUrl || item.imageUrl || ""}
                       alt={item.name}
-                      className="h-12 w-12 shrink-0 rounded-lg border border-line bg-muted/20 object-cover"
+                      className="h-12 w-12 shrink-0 rounded-lg border border-line bg-tint-subtle object-cover"
                       loading="lazy"
                     />
                   ) : null}

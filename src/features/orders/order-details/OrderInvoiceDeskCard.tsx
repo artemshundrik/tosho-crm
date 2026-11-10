@@ -267,7 +267,7 @@ export function OrderInvoiceDeskCard({
               </div>
             );
           })}
-          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 bg-muted/30 px-3 py-2.5 text-sm">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 bg-tint-subtle px-3 py-2.5 text-sm">
             {namesChanged || pricesChanged ? (
               <Button
                 type="button"

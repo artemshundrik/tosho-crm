@@ -87,7 +87,7 @@ export function NotificationChannelMatrix({
 
   return (
     <div className={cn("overflow-hidden rounded-lg border border-line", className)}>
-      <div className="flex items-center justify-end gap-6 border-b border-line-subtle bg-muted/30 px-3 py-2 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
+      <div className="flex items-center justify-end gap-6 border-b border-line-subtle bg-tint-subtle px-3 py-2 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
         <span className="w-12 text-center">Push</span>
         <span className="w-16 text-center">Telegram</span>
       </div>

@@ -47,6 +47,14 @@ export default {
             DEFAULT: "hsl(var(--destructive))",
             foreground: "hsl(var(--destructive-foreground))",
           },
+          // Дві підкладки поверх картки (картка 271, пункт 12): bg-tint-subtle —
+          // ледь помітна площина (секція, рядок, порожній стан), bg-tint —
+          // звичайна (чип, сегмент, наведення). Суцільна — bg-muted. Сила обох —
+          // змінні в src/index.css; bg-muted/NN більше не пишемо (check:token-alpha).
+          tint: {
+            subtle: "hsl(var(--muted) / var(--tint-subtle-alpha))",
+            DEFAULT: "hsl(var(--muted) / var(--tint-alpha))",
+          },
           muted: {
             DEFAULT: "hsl(var(--muted))",
             foreground: "hsl(var(--muted-foreground))",

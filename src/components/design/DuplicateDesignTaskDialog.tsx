@@ -217,7 +217,7 @@ export function DuplicateDesignTaskDialog({
                           checked={fileIds.includes(file.id)}
                           onCheckedChange={(value) => toggleFile(file.id, value === true)}
                         />
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded border bg-muted/40">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded border bg-tint">
                           {showImage ? (
                             <img src={previewUrl ?? ""} alt="" className="h-full w-full object-cover" />
                           ) : (
@@ -230,7 +230,7 @@ export function DuplicateDesignTaskDialog({
                             <img
                               src={previewUrl ?? ""}
                               alt=""
-                              className="h-28 w-full rounded bg-muted/40 object-contain"
+                              className="h-28 w-full rounded bg-tint object-contain"
                             />
                             <span className="mt-1 block truncate text-xs text-muted-foreground">{file.name}</span>
                           </span>
@@ -256,7 +256,7 @@ export function DuplicateDesignTaskDialog({
                   disabled={!source.hasBrief}
                   onClick={() => setBriefMode("edit")}
                   className={`px-3 py-1.5 text-xs transition-colors disabled:opacity-50 ${
-                    briefMode === "edit" ? "bg-muted" : "bg-transparent hover:bg-muted/60"
+                    briefMode === "edit" ? "bg-muted" : "bg-transparent hover:bg-tint"
                   }`}
                 >
                   Редагувати старий
@@ -265,7 +265,7 @@ export function DuplicateDesignTaskDialog({
                   type="button"
                   onClick={() => setBriefMode("new")}
                   className={`border-l px-3 py-1.5 text-xs transition-colors ${
-                    briefMode === "new" ? "bg-muted" : "bg-transparent hover:bg-muted/60"
+                    briefMode === "new" ? "bg-muted" : "bg-transparent hover:bg-tint"
                   }`}
                 >
                   Написати новий
@@ -341,7 +341,7 @@ export function DuplicateDesignTaskDialog({
               </label>
             ) : null}
 
-            <div className="mt-3 rounded-md bg-muted/60 px-3 py-2.5">
+            <div className="mt-3 rounded-md bg-tint px-3 py-2.5">
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <RefreshCw className="h-3.5 w-3.5" />
                 Скинеться автоматично

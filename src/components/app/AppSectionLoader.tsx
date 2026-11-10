@@ -22,7 +22,7 @@ export function AppSectionLoader({
   return (
     <div
       className={cn(
-        "flex items-center justify-center rounded-xl border border-line bg-muted/5 text-muted-foreground",
+        "flex items-center justify-center rounded-xl border border-line bg-tint-subtle text-muted-foreground",
         "gap-2 px-4 py-4 text-sm",
         className
       )}

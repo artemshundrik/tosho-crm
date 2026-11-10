@@ -5806,7 +5806,7 @@ export default function DesignPage() {
                   {createFiles.map((file, index) => (
                     <div
                       key={`${file.name}-${index}`}
-                      className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/20 border border-line text-sm"
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-tint-subtle border border-line text-sm"
                     >
                       <Paperclip className="h-3 w-3" />
                       <span className="text-xs">{file.name}</span>

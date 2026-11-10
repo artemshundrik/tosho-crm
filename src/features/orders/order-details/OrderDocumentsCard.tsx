@@ -442,7 +442,7 @@ function DocumentRow({
         : null);
 
   return (
-    <div className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/20">
+    <div className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-tint">
       <StatusIcon className={cn("mt-0.5 h-4 w-4 shrink-0", statusIconTone)} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
@@ -486,7 +486,7 @@ function DocumentRow({
             <Button
               size="sm"
               variant="ghost"
-              className="gap-1 px-2 text-xs text-foreground hover:bg-muted/60"
+              className="gap-1 px-2 text-xs text-foreground hover:bg-tint"
               onClick={() => openDocument(document.kind)}
             >
               <ExternalLink className="h-3.5 w-3.5" />
@@ -498,7 +498,7 @@ function DocumentRow({
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="w-7 shrink-0 p-0 text-muted-foreground hover:bg-muted/60"
+                    className="w-7 shrink-0 p-0 text-muted-foreground hover:bg-tint"
                     aria-label={`Більше дій: ${document.title}`}
                   >
                     <MoreHorizontal className="h-4 w-4" />
@@ -614,7 +614,7 @@ export function OrderDocumentsCard({
           </div>
         ) : null}
         {/* Написати замовнику треба й на готівці — тут єдине місце на телефоні, де це можна. */}
-        <div className="flex flex-wrap items-center gap-2 rounded-b-xl border-t border-line-subtle bg-muted/20 px-4 py-2.5">
+        <div className="flex flex-wrap items-center gap-2 rounded-b-xl border-t border-line-subtle bg-tint-subtle px-4 py-2.5">
           <span className="flex w-full items-baseline gap-2 sm:w-auto sm:flex-1">
             <span className="text-sm font-semibold text-foreground">
               {cashless ? "Надіслати замовнику" : "Написати замовнику"}

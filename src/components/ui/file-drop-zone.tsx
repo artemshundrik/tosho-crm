@@ -160,7 +160,7 @@ export function FileDropZone({
         )}
       >
         {tags.map((tag) => (
-          <span key={tag} className="rounded-full border border-line bg-muted/40 px-2 py-0.5">
+          <span key={tag} className="rounded-full border border-line bg-tint px-2 py-0.5">
             {tag}
           </span>
         ))}
@@ -178,7 +178,7 @@ export function FileDropZone({
         "cursor-pointer rounded-xl border border-dashed transition-colors",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
         plate ? "flex flex-col items-center gap-2 px-4 py-6 text-center" : "flex items-center gap-3 px-3 py-2.5 text-left",
-        over ? "border-foreground/50 bg-foreground/[0.06]" : "border-line-strong hover:border-foreground/40 hover:bg-muted/50",
+        over ? "border-foreground/50 bg-foreground/[0.06]" : "border-line-strong hover:border-foreground/40 hover:bg-tint",
         inert && "pointer-events-none opacity-50",
         className
       )}

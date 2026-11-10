@@ -109,7 +109,7 @@ export function OverviewPeople({
           <Link
             key={member.userId}
             to={`/my-turn?who=${encodeURIComponent(member.userId)}`}
-            className="flex min-w-0 items-center gap-2.5 border-t border-line-subtle px-3 py-2 transition-colors first:border-t-0 hover:bg-muted/40 sm:px-5"
+            className="flex min-w-0 items-center gap-2.5 border-t border-line-subtle px-3 py-2 transition-colors first:border-t-0 hover:bg-tint sm:px-5"
           >
             <AvatarBase
               src={member.avatarDisplayUrl}

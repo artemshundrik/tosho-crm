@@ -42,7 +42,7 @@ const Bar = ({ className }: { className: string }) => <span className={`block h-
 const Scene = ({ children }: { children: React.ReactNode }) => (
   <div
     aria-hidden="true"
-    className="pointer-events-none flex h-28 items-center justify-center rounded-lg bg-muted/40 px-3 select-none"
+    className="pointer-events-none flex h-28 items-center justify-center rounded-lg bg-tint px-3 select-none"
   >
     {children}
   </div>
@@ -144,7 +144,7 @@ export function SiteListingGuide() {
                 <StepCaption index={STEPS.length} title="Хорошоп">
                   імпорт прихованими
                 </StepCaption>
-                <div className="flex min-h-28 flex-col justify-center gap-2 rounded-lg bg-muted/40 px-3 py-3">
+                <div className="flex min-h-28 flex-col justify-center gap-2 rounded-lg bg-tint px-3 py-3">
                   <SiteListingHoroshopSteps />
                   <HoroshopGuideLink className="ml-5" />
                 </div>

@@ -63,7 +63,7 @@ export function QuoteDealTypePicker({
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-1",
             "disabled:cursor-not-allowed disabled:opacity-60",
             rule
-              ? "border-foreground/30 bg-muted text-foreground hover:bg-muted/80"
+              ? "border-foreground/30 bg-muted text-foreground hover:bg-muted"
               : "border-line bg-background/55 text-muted-foreground hover:border-line-strong hover:bg-background/70"
           )}
         >

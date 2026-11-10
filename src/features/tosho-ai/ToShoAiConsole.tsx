@@ -757,7 +757,7 @@ function ThreadCard({
         "group w-full rounded-xl border px-4 py-4 text-left transition-colors",
         active
           ? "border-foreground/20 bg-foreground/5 text-foreground"
-          : "border-line-strong bg-card/60 text-foreground hover:bg-muted/35"
+          : "border-line-strong bg-card/60 text-foreground hover:bg-tint"
       )}
     >
       <div className="flex items-start justify-between gap-3">
@@ -903,7 +903,7 @@ function AnalyticsResultTable({ analytics }: { analytics: AnalyticsPayload }) {
                     ) : (
                       <div
                         className={cn(
-                          "mt-0.5 flex shrink-0 items-center justify-center border border-line bg-muted/35 text-muted-foreground",
+                          "mt-0.5 flex shrink-0 items-center justify-center border border-line bg-tint text-muted-foreground",
                           isQuoteDraft ? "h-16 w-16 rounded-xl sm:h-[72px] sm:w-[72px]" : "h-[38px] w-[38px] rounded-full"
                         )}
                       >
@@ -982,12 +982,12 @@ function AnalyticsResultTable({ analytics }: { analytics: AnalyticsPayload }) {
                           <summary
                             className={cn(
                               summaryClassName,
-                              "cursor-pointer list-none hover:bg-muted/20 [&::-webkit-details-marker]:hidden"
+                              "cursor-pointer list-none hover:bg-tint [&::-webkit-details-marker]:hidden"
                             )}
                           >
                             {typeSummary}
                           </summary>
-                          <div className="divide-y divide-line-subtle border-t border-line-subtle bg-muted/10">
+                          <div className="divide-y divide-line-subtle border-t border-line-subtle bg-tint-subtle">
                             {detailRows.map((detail) => {
                               const detailBadges = detail.badges ?? [];
                               const detailContent = (
@@ -1021,7 +1021,7 @@ function AnalyticsResultTable({ analytics }: { analytics: AnalyticsPayload }) {
                                 </>
                               );
                               const itemClassName =
-                                "flex min-w-0 items-start gap-2 px-3 py-2.5 text-left transition-colors hover:bg-muted/25";
+                                "flex min-w-0 items-start gap-2 px-3 py-2.5 text-left transition-colors hover:bg-tint";
                               return detail.href ? (
                                 <a
                                   key={detail.id}
@@ -1241,7 +1241,7 @@ function MessageCard({
                     href={attachment.url ?? undefined}
                     target="_blank"
                     rel="noreferrer"
-                    className="rounded-xl border border-line-strong bg-background/70 px-3 py-3 transition-colors hover:bg-muted/25"
+                    className="rounded-xl border border-line-strong bg-background/70 px-3 py-3 transition-colors hover:bg-tint"
                   >
                     <div className="flex items-start gap-3">
                       {isPreviewableAttachment(attachment) ? (
@@ -1252,7 +1252,7 @@ function MessageCard({
                           loading="lazy"
                         />
                       ) : (
-                        <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-line bg-muted/30 text-muted-foreground">
+                        <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-line bg-tint-subtle text-muted-foreground">
                           {attachment.mimeType?.startsWith("image/") ? (
                             <ImageIcon className="h-5 w-5" />
                           ) : (
@@ -1315,7 +1315,7 @@ function MessageCard({
                     event.stopPropagation();
                     onSelectAction(action.text);
                   }}
-                  className="inline-flex min-h-8 items-center rounded-full border border-line-strong bg-background/65 px-3 py-1.5 text-left text-xs font-semibold text-foreground/85 transition-colors hover:bg-muted/45"
+                  className="inline-flex min-h-8 items-center rounded-full border border-line-strong bg-background/65 px-3 py-1.5 text-left text-xs font-semibold text-foreground/85 transition-colors hover:bg-tint"
                 >
                   {action.label}
                 </button>
@@ -2373,7 +2373,7 @@ export function ToShoAiConsole({
                         className="h-7 w-7 rounded-full border border-line object-cover"
                       />
                     ) : (
-                      <div className="flex h-7 w-7 items-center justify-center rounded-full border border-line bg-muted/30 text-muted-foreground">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full border border-line bg-tint-subtle text-muted-foreground">
                         <FileText className="h-3.5 w-3.5" />
                       </div>
                     )}
@@ -2628,7 +2628,7 @@ function MentionSuggestionPanel({
                 key={`${suggestion.kind}:${suggestion.id}`}
                 type="button"
                 onClick={() => onSelect(suggestion)}
-                className="flex w-full min-w-0 items-center gap-2 rounded-xl px-2 py-2 text-left transition-colors hover:bg-muted/35"
+                className="flex w-full min-w-0 items-center gap-2 rounded-xl px-2 py-2 text-left transition-colors hover:bg-tint"
               >
                 {isPerson ? (
                   <PlayerAvatar

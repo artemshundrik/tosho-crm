@@ -212,7 +212,7 @@ function DigestBody({
         ))}
       </div>
 
-      <div className="flex items-center justify-between gap-3 border-t border-line-subtle bg-muted/40 px-6 py-4">
+      <div className="flex items-center justify-between gap-3 border-t border-line-subtle bg-tint px-6 py-4">
         <button
           type="button"
           onClick={() => {

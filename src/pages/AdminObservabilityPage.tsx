@@ -970,7 +970,7 @@ export default function AdminObservabilityPage() {
         ) : !latest ? (
           <section className="rounded-xl border border-line bg-card/95 p-8">
             <div className="mx-auto max-w-2xl text-center">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-xl border border-line bg-muted/40">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-xl border border-line bg-tint">
                 <Activity className="h-6 w-6 text-primary" />
               </div>
               <div className="mt-4 text-lg font-semibold text-foreground">Поки немає жодного snapshot.</div>
@@ -994,7 +994,7 @@ export default function AdminObservabilityPage() {
               </section>
             ) : null}
             <div className="rounded-xl border border-line bg-card/95 p-3">
-              <TabsList className="inline-flex h-auto w-fit flex-wrap items-center gap-1 border border-line bg-muted/30 p-1">
+              <TabsList className="inline-flex h-auto w-fit flex-wrap items-center gap-1 border border-line bg-tint-subtle p-1">
                 <TabsTrigger
                   value="overview"
                   className="border border-transparent px-4 py-2 text-sm font-semibold text-muted-foreground transition-colors data-[state=active]:border-line-strong data-[state=active]:bg-background data-[state=active]:text-foreground"

@@ -52,16 +52,16 @@ const buttonVariants = cva(
         // ✅ Surface (hero/secondary): medium by default (як у Linear)
         secondary: [
           "!font-medium",
-          "bg-muted/40 text-foreground border border-line-strong",
-          "hover:bg-muted/80",
+          "bg-tint text-foreground border border-line-strong",
+          "hover:bg-muted",
           "active:bg-muted active:scale-[0.972]",
         ].join(" "),
 
         outline: [
           "!font-medium",
           "border border-line-strong bg-transparent text-foreground",
-          "hover:bg-muted/60",
-          "active:bg-muted/80 active:scale-[0.972]",
+          "hover:bg-tint",
+          "active:bg-muted active:scale-[0.972]",
         ].join(" "),
 
         // ✅ Danger: soft, low-emphasis destructive tone
@@ -93,16 +93,16 @@ const buttonVariants = cva(
         // Прозорим варіантам disabled-плашка з бази недоречна: кнопка, якої «не
         // видно» до ховера, у disabled матеріалізувалась би в сірий прямокутник.
         // Текст сіріє тим самим токеном, тло лишається прозорим.
-        ghost: "!font-medium bg-transparent text-foreground hover:bg-muted/60 hover:text-foreground active:bg-muted/80 active:scale-[0.972] disabled:bg-transparent disabled:border-transparent",
+        ghost: "!font-medium bg-transparent text-foreground hover:bg-tint hover:text-foreground active:bg-muted active:scale-[0.972] disabled:bg-transparent disabled:border-transparent",
         link: "!font-medium bg-transparent text-primary underline-offset-4 hover:underline disabled:bg-transparent disabled:border-transparent",
 
         // ✅ Menu trigger / list item
-        menu: "!font-medium bg-transparent text-foreground hover:bg-muted/60 flex w-full justify-start rounded-lg disabled:bg-transparent disabled:border-transparent",
+        menu: "!font-medium bg-transparent text-foreground hover:bg-tint flex w-full justify-start rounded-lg disabled:bg-transparent disabled:border-transparent",
 
         // ✅ Muted text action
         textMuted: [
           "!font-medium bg-transparent text-muted-foreground",
-          "rounded-lg hover:text-foreground hover:bg-muted/50",
+          "rounded-lg hover:text-foreground hover:bg-tint",
           "disabled:bg-transparent disabled:border-transparent",
         ].join(" "),
 
@@ -128,8 +128,8 @@ const buttonVariants = cva(
         chip: [
           "!font-semibold rounded-full border border-line-strong",
           "h-7 px-3",
-          "bg-muted/40 text-muted-foreground",
-          "hover:text-foreground hover:bg-muted/60",
+          "bg-tint text-muted-foreground",
+          "hover:text-foreground hover:bg-muted",
           "aria-[pressed=true]:border-foreground/20 aria-[pressed=true]:bg-foreground aria-[pressed=true]:text-background",
         ].join(" "),
 
@@ -137,7 +137,7 @@ const buttonVariants = cva(
         card: [
           "!font-medium w-full justify-start text-left",
           "rounded-xl border border-line-strong bg-card/60",
-          "hover:bg-muted/40",
+          "hover:bg-tint",
           "data-[state=active]:border-foreground/30 data-[state=active]:bg-foreground/5 data-[state=active]:ring-1 data-[state=active]:ring-foreground/10",
           "data-[status=unavailable]:border-dashed data-[status=unavailable]:border-danger-soft-border data-[status=unavailable]:bg-danger-soft data-[status=unavailable]:opacity-80",
         ].join(" "),
@@ -147,7 +147,7 @@ const buttonVariants = cva(
           "!font-medium",
           "bg-transparent",
           "text-muted-foreground hover:text-foreground",
-          "hover:bg-muted/40",
+          "hover:bg-tint",
           "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
           "disabled:bg-transparent disabled:border-transparent",
         ].join(" "),
@@ -172,7 +172,7 @@ const buttonVariants = cva(
         // ✅ Pill toggle (attendance / binary switch)
         pill: [
           "!font-semibold rounded-full",
-          "bg-muted/40 text-foreground hover:bg-muted/60",
+          "bg-tint text-foreground hover:bg-muted",
           "aria-[pressed=true]:bg-foreground aria-[pressed=true]:text-background aria-[pressed=true]:hover:bg-foreground/90",
           "border border-transparent",
         ].join(" "),

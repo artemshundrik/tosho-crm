@@ -467,7 +467,7 @@ function StackGroup({
         onClick={toggle}
         aria-expanded={open}
         className={cn(
-          "flex w-full cursor-pointer items-center gap-2.5 px-4 pb-2 pt-3.5 text-left transition-colors hover:bg-muted/40 sm:px-5",
+          "flex w-full cursor-pointer items-center gap-2.5 px-4 pb-2 pt-3.5 text-left transition-colors hover:bg-tint sm:px-5",
           !first && "border-t border-line-subtle"
         )}
       >
@@ -493,7 +493,7 @@ function StackGroup({
               <button
                 type="button"
                 onClick={() => setExpanded(true)}
-                className="flex w-full cursor-pointer items-center gap-2 border-t border-line-subtle px-4 py-2.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/40 sm:px-5"
+                className="flex w-full cursor-pointer items-center gap-2 border-t border-line-subtle px-4 py-2.5 text-left text-xs text-muted-foreground transition-colors hover:bg-tint sm:px-5"
               >
                 <span className="min-w-0 flex-1 truncate">
                   {fresh
@@ -650,7 +650,7 @@ function StackRow({ item }: { item: StackItem }) {
         target="_blank"
         rel="noreferrer"
         title="Відкрити на npmjs.com"
-        className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-line-strong text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+        className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-line-strong text-muted-foreground transition-colors hover:bg-tint hover:text-foreground"
       >
         <ExternalLink className="h-3.5 w-3.5" />
       </a>
@@ -802,7 +802,7 @@ function StackRowPopover({ item }: { item: StackItem }) {
               href={`https://www.npmjs.com/package/${item.name}`}
               target="_blank"
               rel="noreferrer"
-              className="-mx-1.5 flex items-center gap-2 rounded-md px-1.5 py-1 text-xs transition-colors hover:bg-muted/60"
+              className="-mx-1.5 flex items-center gap-2 rounded-md px-1.5 py-1 text-xs transition-colors hover:bg-tint"
             >
               <Package className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               <span>Сторінка пакета</span>
@@ -814,7 +814,7 @@ function StackRowPopover({ item }: { item: StackItem }) {
               href={item.homepage}
               target="_blank"
               rel="noreferrer"
-              className="-mx-1.5 flex items-center gap-2 rounded-md px-1.5 py-1 text-xs transition-colors hover:bg-muted/60"
+              className="-mx-1.5 flex items-center gap-2 rounded-md px-1.5 py-1 text-xs transition-colors hover:bg-tint"
             >
               <BookOpen className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               <span>Документація</span>

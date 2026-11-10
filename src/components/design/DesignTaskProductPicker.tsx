@@ -260,7 +260,7 @@ export function DesignTaskProductPicker({ teamId, value, onChange }: DesignTaskP
   ];
 
   return (
-    <div className="rounded-xl border border-line bg-muted/20 p-3 space-y-3">
+    <div className="rounded-xl border border-line bg-tint-subtle p-3 space-y-3">
       <div className="flex items-center justify-between">
         <Label className="text-sm font-medium">Товар</Label>
         {value?.catalogTypeId ? (
@@ -363,7 +363,7 @@ export function DesignTaskProductPicker({ teamId, value, onChange }: DesignTaskP
                 href={link.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-md border border-line-strong px-2.5 py-1 text-xs text-foreground hover:bg-muted/40"
+                className="inline-flex items-center gap-1.5 rounded-md border border-line-strong px-2.5 py-1 text-xs text-foreground hover:bg-tint"
               >
                 <ExternalLink className="h-3.5 w-3.5" />
                 {link.label}

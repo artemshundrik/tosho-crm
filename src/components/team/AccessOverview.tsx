@@ -315,7 +315,7 @@ export function AccessOverview({
                         assetVariant="xs"
                         size={24}
                         shape="circle"
-                        className="border-line bg-muted/50"
+                        className="border-line bg-tint"
                         fallbackClassName="text-3xs font-bold"
                       />
                     </Link>
@@ -370,7 +370,7 @@ export function AccessOverview({
                     assetVariant="xs"
                     size={22}
                     shape="circle"
-                    className="border-line bg-muted/50"
+                    className="border-line bg-tint"
                     fallbackClassName="text-3xs font-bold"
                   />
                 ) : null}

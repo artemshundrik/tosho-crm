@@ -394,7 +394,7 @@ function FilterChip({
           ? "border-primary bg-primary/10 text-primary"
           : tone === "warning"
             ? "tone-warning-subtle tone-text-warning border-transparent hover:brightness-[0.97]"
-            : "border-line-strong bg-muted/[0.04] text-muted-foreground hover:bg-muted/[0.08] hover:text-foreground",
+            : "border-line-strong bg-tint-subtle text-muted-foreground hover:bg-tint hover:text-foreground",
       )}
     >
       {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
@@ -1758,7 +1758,7 @@ export function TeamMembersPage() {
                             assetVariant="md"
                             size={44}
                             shape="circle"
-                            className="border-line bg-muted/50"
+                            className="border-line bg-tint"
                             fallbackClassName="text-xs font-bold"
                             availability={availability}
                             presence={presence?.online ? "online" : "offline"}
@@ -1894,7 +1894,7 @@ export function TeamMembersPage() {
                       {employmentSummary.secondary ? <div>Стаж: {employmentSummary.secondary}</div> : null}
                       {employmentDays !== null && employmentDays >= 0 ? <div>У компанії: {employmentDays} днів</div> : null}
                       {probation ? (
-                        <div className="rounded-lg border border-line bg-muted/30 px-2.5 py-2 text-foreground">
+                        <div className="rounded-lg border border-line bg-tint-subtle px-2.5 py-2 text-foreground">
                           <div className="flex items-center justify-between gap-2">
                             <span
                               className={cn(
@@ -1967,7 +1967,7 @@ export function TeamMembersPage() {
                       return (
                         <TableRow
                           key={m.user_id}
-                          className="cursor-pointer transition-colors hover:bg-muted/40"
+                          className="cursor-pointer transition-colors hover:bg-tint"
                           onClick={() => navigate(`/team/${m.user_id}`)}
                         >
                           <TableCell className="pl-6">
@@ -1979,7 +1979,7 @@ export function TeamMembersPage() {
                                 assetVariant="xs"
                                 size={34}
                                 shape="circle"
-                                className="border-line bg-muted/50"
+                                className="border-line bg-tint"
                                 fallbackClassName="text-3xs font-bold"
                                 availability={rowAvailability}
                                 presence={rowPresence?.online ? "online" : "offline"}
@@ -2172,7 +2172,7 @@ export function TeamMembersPage() {
                     const used = !!inv.accepted_at;
 
                     return (
-                      <TableRow key={inv.id} className="hover:bg-muted/40 transition-colors">
+                      <TableRow key={inv.id} className="hover:bg-tint transition-colors">
                         <TableCell className="pl-6">
                           <div className="flex items-center gap-3">
                             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted border border-line">
@@ -2327,7 +2327,7 @@ export function TeamMembersPage() {
             const peekMember = members.find((m) => m.user_id === pulsePeekUserId) ?? null;
             return (
               <>
-                <div className="shrink-0 border-b border-line-subtle bg-muted/10 px-6 py-5">
+                <div className="shrink-0 border-b border-line-subtle bg-tint-subtle px-6 py-5">
                   <SheetHeader>
                     <SheetTitle className="flex items-center gap-3 text-left">
                       <AvatarBase
@@ -2337,7 +2337,7 @@ export function TeamMembersPage() {
                         assetVariant="xs"
                         size={40}
                         shape="circle"
-                        className="border-line bg-muted/50"
+                        className="border-line bg-tint"
                         fallbackClassName="text-2xs font-bold"
                         presence={peekPerson.online ? "online" : "offline"}
                       />
@@ -2382,7 +2382,7 @@ export function TeamMembersPage() {
         }}
       >
         <DialogContent className="sm:max-w-[520px] p-0 gap-0 overflow-hidden border border-line bg-card text-foreground">
-          <div className="p-6 border-b border-line-subtle bg-muted/10">
+          <div className="p-6 border-b border-line-subtle bg-tint-subtle">
             <DialogHeader>
               <DialogTitle className="text-xl font-semibold text-foreground">Запросити в workspace</DialogTitle>
               <DialogDescription className="mt-1.5 text-muted-foreground">
@@ -2484,7 +2484,7 @@ export function TeamMembersPage() {
                     <Input
                       value={inviteResult.actionLink ?? ""}
                       readOnly
-                      className="font-mono text-sm bg-muted/50 border-dashed text-foreground"
+                      className="font-mono text-sm bg-tint border-dashed text-foreground"
                     />
                     <Button
                       size="icon"

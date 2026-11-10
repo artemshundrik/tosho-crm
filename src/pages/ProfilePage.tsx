@@ -1286,13 +1286,13 @@ export function ProfilePage() {
                   ? "tone-accent"
                   : accessRole === "admin"
                   ? "border-primary/20 bg-primary/10 text-foreground"
-                  : "border-line bg-background/80 text-muted-foreground"
+                  : "border-border bg-background/80 text-muted-foreground"
               )}
             >
               {accessRole === "owner" ? "Super Admin" : accessRole === "admin" ? "Admin" : "Member"}
             </span>
             {jobRole ? (
-              <span className="inline-flex items-center rounded-full border border-line bg-background/80 px-3 py-1 text-xs font-medium text-muted-foreground">
+              <span className="inline-flex items-center rounded-full border border-border bg-background/80 px-3 py-1 text-xs font-medium text-muted-foreground">
                 {jobRole}
               </span>
             ) : null}
@@ -1346,7 +1346,7 @@ export function ProfilePage() {
       </div>
 
       {startDate ? (
-        <div className="mt-6 border-t border-line-subtle pt-6">
+        <div className="mt-6 border-t border-border/40 pt-6">
           <div className="relative mx-1 h-1.5 rounded-full bg-muted/60">
             <div
               className={cn(
@@ -1506,9 +1506,9 @@ export function ProfilePage() {
               <CardContent className="space-y-4">
                 {todayLoading ? (
                   <div className="space-y-2" aria-hidden>
-                    <div className="h-9 animate-pulse rounded-lg bg-muted/40" />
-                    <div className="h-9 animate-pulse rounded-lg bg-muted/40" />
-                    <div className="h-9 animate-pulse rounded-lg bg-muted/40" />
+                    <div className="h-9 animate-pulse rounded-lg bg-tint" />
+                    <div className="h-9 animate-pulse rounded-lg bg-tint" />
+                    <div className="h-9 animate-pulse rounded-lg bg-tint" />
                   </div>
                 ) : (
                   <>
@@ -1615,7 +1615,7 @@ export function ProfilePage() {
                 </CardHeader>
                 <CardContent>
                   {absencesLoading || !myBalance ? (
-                    <div className="h-14 animate-pulse rounded-lg bg-muted/40" aria-hidden />
+                    <div className="h-14 animate-pulse rounded-lg bg-tint" aria-hidden />
                   ) : (
                     <AbsenceBalanceMeters balance={myBalance} entries={balanceEntries} year={year} />
                   )}
@@ -1638,7 +1638,7 @@ export function ProfilePage() {
                 </CardHeader>
                 <CardContent>
                   {absencesLoading ? (
-                    <div className="h-14 animate-pulse rounded-lg bg-muted/40" aria-hidden />
+                    <div className="h-14 animate-pulse rounded-lg bg-tint" aria-hidden />
                   ) : myAbsences.length === 0 ? (
                     <p className="text-sm text-muted-foreground">Цього року заявок ще не було.</p>
                   ) : (
@@ -1664,7 +1664,7 @@ export function ProfilePage() {
             </CardHeader>
             <CardContent>
               {absencesLoading || !myBalance ? (
-                <div className="h-14 animate-pulse rounded-lg bg-muted/40" aria-hidden />
+                <div className="h-14 animate-pulse rounded-lg bg-tint" aria-hidden />
               ) : (
                 <>
                   <AbsenceBalanceMeters balance={myBalance} entries={balanceEntries} year={year} />
@@ -1690,11 +1690,11 @@ export function ProfilePage() {
             <CardContent>
               {absencesLoading ? (
                 <div className="space-y-2" aria-hidden>
-                  <div className="h-10 animate-pulse rounded-lg bg-muted/40" />
-                  <div className="h-10 animate-pulse rounded-lg bg-muted/40" />
+                  <div className="h-10 animate-pulse rounded-lg bg-tint" />
+                  <div className="h-10 animate-pulse rounded-lg bg-tint" />
                 </div>
               ) : myAbsences.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-line bg-muted/10 p-6 text-center">
+                <div className="rounded-xl border border-dashed border-line bg-tint-subtle p-6 text-center">
                   <p className="text-sm font-medium text-foreground">Цього року заявок ще не було</p>
                   <p className="mt-1 text-xs text-muted-foreground">
                     Відпустка, відгул чи лікарняний — кнопка «Подати заявку» вгорі.
@@ -1741,7 +1741,7 @@ export function ProfilePage() {
                   <p className="text-xs text-muted-foreground">Змінити email можна лише через звернення до адміністратора.</p>
                 </div>
               </div>
-              <div className="-mx-5 -mb-5 mt-5 flex flex-col gap-3 rounded-b-inner border-t border-line-subtle bg-muted/20 px-5 py-3 sm:flex-row sm:items-center">
+              <div className="-mx-5 -mb-5 mt-5 flex flex-col gap-3 rounded-b-inner border-t border-line-subtle bg-tint-subtle px-5 py-3 sm:flex-row sm:items-center">
                 <p className="text-xs text-muted-foreground sm:mr-auto">Ці дані бачить уся команда.</p>
                 <Button onClick={updateProfile} disabled={updating} className="sm:min-w-[180px]">
                   {updating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
@@ -1773,7 +1773,7 @@ export function ProfilePage() {
               <div className="mt-5 border-t border-line-subtle pt-5">
                 <div className="flex flex-col gap-3 rounded-lg border border-line bg-background px-4 py-3 md:flex-row md:items-center md:justify-between">
                   <div className="flex min-w-0 items-start gap-3">
-                    <div className="mt-0.5 rounded-full border border-line bg-muted/30 p-2 text-muted-foreground">
+                    <div className="mt-0.5 rounded-full border border-line bg-tint-subtle p-2 text-muted-foreground">
                       <MonitorSmartphone className="h-4 w-4" aria-hidden />
                     </div>
                     <div className="min-w-0">
@@ -1862,7 +1862,7 @@ export function ProfilePage() {
                   )}
                 </div>
                 {tgChatId == null && tgLinkHint ? (
-                  <div className="flex flex-col gap-2 rounded-lg border border-dashed border-line bg-muted/20 px-3 py-2.5 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
+                  <div className="flex flex-col gap-2 rounded-lg border border-dashed border-line bg-tint-subtle px-3 py-2.5 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
                     <span>Натиснув Start у боті?</span>
                     <Button size="sm" type="button" variant="ghost" onClick={handleTelegramRefresh} disabled={tgBusy}>
                       Я підключив — оновити статус

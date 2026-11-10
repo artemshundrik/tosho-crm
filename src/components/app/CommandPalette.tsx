@@ -1230,7 +1230,7 @@ export function CommandPalette({ open, onOpenChange, onAskAi }: CommandPalettePr
             "mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border",
             tone === "lead"
               ? "border-ai-accent/40 bg-ai-accent/10 text-ai-accent"
-              : "border-line bg-muted/35 text-muted-foreground"
+              : "border-line bg-tint text-muted-foreground"
           )}
         >
           <ToShoAiMark className="h-4 w-4" />
@@ -1265,7 +1265,7 @@ export function CommandPalette({ open, onOpenChange, onAskAi }: CommandPalettePr
             fallbackClassName="text-3xs font-semibold"
           />
         ) : (
-          <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line bg-muted/35 text-muted-foreground">
+          <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line bg-tint text-muted-foreground">
             <Icon className="h-4 w-4" />
           </span>
         )}
@@ -1487,7 +1487,7 @@ export function CommandPalette({ open, onOpenChange, onAskAi }: CommandPalettePr
                 disabled
                 className="opacity-100"
               >
-                <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line bg-muted/35 text-muted-foreground">
+                <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line bg-tint text-muted-foreground">
                   <Search className="h-4 w-4" />
                 </span>
                 <div className="min-w-0 flex-1">
@@ -1507,10 +1507,10 @@ export function CommandPalette({ open, onOpenChange, onAskAi }: CommandPalettePr
                 disabled
                 className="opacity-100"
               >
-                <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line bg-muted/20" />
+                <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line bg-tint-subtle" />
                 <div className="min-w-0 flex-1">
-                  <div className="h-4 w-44 animate-pulse rounded-full bg-muted/70" />
-                  <div className="mt-2 h-3 w-64 animate-pulse rounded-full bg-muted/50" />
+                  <div className="h-4 w-44 animate-pulse rounded-full bg-tint" />
+                  <div className="mt-2 h-3 w-64 animate-pulse rounded-full bg-tint" />
                 </div>
               </CommandItem>
               <CommandItem
@@ -1518,10 +1518,10 @@ export function CommandPalette({ open, onOpenChange, onAskAi }: CommandPalettePr
                 disabled
                 className="opacity-100"
               >
-                <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line bg-muted/20" />
+                <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line bg-tint-subtle" />
                 <div className="min-w-0 flex-1">
-                  <div className="h-4 w-36 animate-pulse rounded-full bg-muted/70" />
-                  <div className="mt-2 h-3 w-52 animate-pulse rounded-full bg-muted/50" />
+                  <div className="h-4 w-36 animate-pulse rounded-full bg-tint" />
+                  <div className="mt-2 h-3 w-52 animate-pulse rounded-full bg-tint" />
                 </div>
               </CommandItem>
             </CommandGroup>
@@ -1556,14 +1556,14 @@ export function CommandPalette({ open, onOpenChange, onAskAi }: CommandPalettePr
                 value={buildCommandSearchValue([r.label, r.description, r.kindLabel, r.to])}
                 onSelect={() => go(r.to)}
               >
-                  <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line bg-muted/35 text-muted-foreground">
+                  <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line bg-tint text-muted-foreground">
                     <History className="h-4 w-4" />
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="truncate">{r.label}</span>
                       {r.kindLabel ? (
-                        <span className="shrink-0 rounded-full border border-line bg-muted/35 px-2 py-0.5 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        <span className="shrink-0 rounded-full border border-line bg-tint px-2 py-0.5 text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
                           {r.kindLabel}
                         </span>
                       ) : null}
@@ -1589,7 +1589,7 @@ export function CommandPalette({ open, onOpenChange, onAskAi }: CommandPalettePr
                 value={buildCommandSearchValue([a.label, ...a.keywords, a.to])}
                 onSelect={() => go(a.to)}
               >
-                <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line bg-muted/35 text-muted-foreground">
+                <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line bg-tint text-muted-foreground">
                   <Icon className="h-4 w-4" />
                 </span>
                 <div className="min-w-0 flex-1">
@@ -1614,7 +1614,7 @@ export function CommandPalette({ open, onOpenChange, onAskAi }: CommandPalettePr
                 value={buildCommandSearchValue([r.label, ...r.keywords, r.to])}
                 onSelect={() => go(r.to)}
               >
-                <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line bg-muted/35 text-muted-foreground">
+                <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line bg-tint text-muted-foreground">
                   <Icon className="h-4 w-4" />
                 </span>
                 <div className="min-w-0 flex-1">

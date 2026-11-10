@@ -79,7 +79,7 @@ export function DevRequestList({
                   onSelect(request);
                 }
               }}
-              className="flex w-full cursor-pointer items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/30 focus-visible:bg-muted/30 focus-visible:outline-none"
+              className="flex w-full cursor-pointer items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-tint focus-visible:bg-tint focus-visible:outline-none"
             >
               <HoverCopyText
                 value={request.label}

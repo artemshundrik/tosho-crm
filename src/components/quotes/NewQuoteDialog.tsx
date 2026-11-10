@@ -229,7 +229,7 @@ const InfoPill: React.FC<{ icon: React.ReactNode; label: string; value: string }
   label,
   value,
 }) => (
-  <div className="rounded-xl border border-line bg-muted/20 px-3 py-2.5">
+  <div className="rounded-xl border border-line bg-tint-subtle px-3 py-2.5">
     <div className="flex items-center gap-2 text-2xs uppercase tracking-caps text-muted-foreground">
       {icon}
       <span>{label}</span>
@@ -1719,7 +1719,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
           <div className="min-w-0 overflow-x-hidden overflow-y-auto px-4 pb-4">
 
             {isEditMode ? (
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-line bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-line bg-tint-subtle px-3 py-2 text-xs text-muted-foreground">
                 <span className="min-w-0">
                   {quoteLabel ? <span className="font-medium text-foreground">{quoteLabel}</span> : null}
                   {customerLabel ? `${quoteLabel ? " · " : ""}${customerLabel}` : ""}
@@ -2418,7 +2418,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
             ))}
 
             {printApplications.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-line bg-muted/15 px-4 py-8 text-center text-sm text-muted-foreground">
+              <div className="rounded-xl border border-dashed border-line bg-tint-subtle px-4 py-8 text-center text-sm text-muted-foreground">
                 Для цього прорахунку друк не потрібен — дизайн-блок буде прихований. Файли замовника
                 додаються нижче, у розділі «Файли».
               </div>
@@ -2473,7 +2473,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                 {projectFiles.map((file, index) => (
                   <div
                     key={`${file.name}-${index}`}
-                    className="flex items-center gap-2 rounded-full border border-line bg-muted/20 px-3 py-1.5 text-sm"
+                    className="flex items-center gap-2 rounded-full border border-line bg-tint-subtle px-3 py-1.5 text-sm"
                   >
                     <Paperclip className="h-3 w-3" />
                     <span className="text-xs">{file.name}</span>
@@ -2650,7 +2650,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                       {files.map((file, index) => (
                         <div
                           key={index}
-                          className="flex items-center gap-2 rounded-full border border-line bg-muted/20 px-3 py-1.5 text-sm"
+                          className="flex items-center gap-2 rounded-full border border-line bg-tint-subtle px-3 py-1.5 text-sm"
                         >
                           <Paperclip className="h-3 w-3" />
                           <span className="text-xs">{file.name}</span>

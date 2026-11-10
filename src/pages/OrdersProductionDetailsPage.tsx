@@ -1677,7 +1677,7 @@ export default function OrdersProductionDetailsPage() {
               <div className="flex items-center justify-between gap-2">
                 <div className="text-sm font-medium">Номер і дата договору</div>
                 {!isCeo ? (
-                  <span className="rounded-full border border-line bg-muted/30 px-2 py-0.5 text-3xs font-medium text-muted-foreground">
+                  <span className="rounded-full border border-line bg-tint-subtle px-2 py-0.5 text-3xs font-medium text-muted-foreground">
                     Тільки CEO / власник
                   </span>
                 ) : null}

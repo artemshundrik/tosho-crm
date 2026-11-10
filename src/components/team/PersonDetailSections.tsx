@@ -172,7 +172,7 @@ export function PersonActivitySection({ userId }: { userId: string }) {
     });
 
   return (
-    <section className="rounded-lg border border-line bg-muted/20 p-4">
+    <section className="rounded-lg border border-line bg-tint-subtle p-4">
       <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
         <Activity className="h-4 w-4 text-muted-foreground" />
         Активність
@@ -224,8 +224,8 @@ export function PersonActivitySection({ userId }: { userId: string }) {
                       type="button"
                       onClick={() => toggle(group.key)}
                       className={cn(
-                        "flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-muted/50",
-                        isOpen && "bg-muted/40"
+                        "flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-muted",
+                        isOpen && "bg-tint"
                       )}
                     >
                       <span
@@ -242,7 +242,7 @@ export function PersonActivitySection({ userId }: { userId: string }) {
                       </span>
                       <span className="flex min-w-0 flex-1 items-center gap-2">
                         {group.number ? (
-                          <span className="shrink-0 rounded border border-line bg-muted/60 px-1.5 py-0.5 font-mono text-2xs tabular-nums text-muted-foreground">
+                          <span className="shrink-0 rounded border border-line bg-tint px-1.5 py-0.5 font-mono text-2xs tabular-nums text-muted-foreground">
                             {group.number}
                           </span>
                         ) : null}
@@ -265,7 +265,7 @@ export function PersonActivitySection({ userId }: { userId: string }) {
                   </HoverTip>
 
                   {isOpen ? (
-                    <div className="border-t border-line-subtle bg-muted/[0.04] px-3 py-1.5">
+                    <div className="border-t border-line-subtle bg-tint-subtle px-3 py-1.5">
                       {group.href && group.key !== UNGROUPED_KEY ? (
                         <Link
                           to={group.href}
@@ -431,7 +431,7 @@ export function PersonAccessHistorySection({
   }, [workspaceId, userId]);
 
   return (
-    <section className="rounded-lg border border-line bg-muted/20 p-4">
+    <section className="rounded-lg border border-line bg-tint-subtle p-4">
       <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
         <History className="h-4 w-4 text-muted-foreground" />
         Історія доступів
@@ -577,7 +577,7 @@ export function PersonTimeInCrm({ userId }: { userId: string }) {
   const month = sumMinutes(rows, dayOffset(30));
 
   return (
-    <div className="rounded-lg border border-line bg-muted/20 p-4">
+    <div className="rounded-lg border border-line bg-tint-subtle p-4">
       <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         <Clock className="h-3.5 w-3.5" />
         Час у CRM

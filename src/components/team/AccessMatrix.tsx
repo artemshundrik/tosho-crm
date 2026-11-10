@@ -368,7 +368,7 @@ export function AccessMatrix({
                           assetVariant="xs"
                           size={26}
                           shape="circle"
-                          className="border-line bg-muted/50"
+                          className="border-line bg-tint"
                           fallbackClassName="text-3xs font-bold"
                         />
                       </Link>
@@ -417,7 +417,7 @@ export function AccessMatrix({
                   ).length;
                   return (
                     <tr key={module.key} className="group">
-                      <td className="sticky left-0 z-20 border-b border-r border-line-subtle bg-card px-4 py-1.5 group-hover:bg-muted/60">
+                      <td className="sticky left-0 z-20 border-b border-r border-line-subtle bg-card px-4 py-1.5 group-hover:bg-tint">
                         <div className="flex items-center gap-2 whitespace-nowrap">
                           {sensitive ? <ShieldAlert className="h-3.5 w-3.5 text-warning-foreground" /> : null}
                           <span className="font-medium">{module.label}</span>
@@ -446,7 +446,7 @@ export function AccessMatrix({
                             return (
                               <td
                                 key={column.key}
-                                className="border-b border-line-subtle px-2 py-1.5 text-center group-hover:bg-muted/60"
+                                className="border-b border-line-subtle px-2 py-1.5 text-center group-hover:bg-tint"
                               >
                                 {editable ? (
                                   <HoverTip asChild label={`${title} · клік змінює стартовий набір посади`}>
@@ -481,7 +481,7 @@ export function AccessMatrix({
                             return (
                               <td
                                 key={person.userId}
-                                className="border-b border-line-subtle px-1 py-1.5 text-center group-hover:bg-muted/60"
+                                className="border-b border-line-subtle px-1 py-1.5 text-center group-hover:bg-tint"
                               >
                                 <Cell
                                   checked={lock.checked}

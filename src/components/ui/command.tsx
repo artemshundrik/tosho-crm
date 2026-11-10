@@ -59,7 +59,7 @@ const CommandDialog = ({ children, ...props }: CommandDialogProps) => {
         <DialogClose
           data-unsaved-ignore
           aria-label="Закрити пошук"
-          className="absolute right-3 z-20 hidden h-9 w-9 items-center justify-center rounded-full bg-muted/70 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground max-sm:inline-flex"
+          className="absolute right-3 z-20 hidden h-9 w-9 items-center justify-center rounded-full bg-tint text-muted-foreground transition-colors hover:bg-muted hover:text-foreground max-sm:inline-flex"
           style={{ top: "0.75rem" }}
         >
           <X className="h-4 w-4" />
@@ -196,7 +196,7 @@ const CommandItem = React.forwardRef<
     ref={ref}
     className={cn(
       "relative flex cursor-default select-none items-center gap-2.5 rounded-[var(--radius-lg)] px-2.5 py-1.5 text-md outline-none pointer-coarse:py-2.5",
-      "transition-colors hover:bg-muted/50",
+      "transition-colors hover:bg-tint",
       "aria-selected:bg-muted aria-selected:text-foreground",
       // На телефоні cmdk однаково позначає перший рядок обраним — це потрібно
       // стрілкам, яких там немає. Виглядає ж це як натиснута кнопка, якої ніхто

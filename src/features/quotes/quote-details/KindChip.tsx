@@ -223,7 +223,7 @@ function KindList({
                 role="option"
                 aria-selected={value?.kindId === kind.kindId}
                 onClick={() => onPick(kind)}
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted/60"
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-tint"
               >
                 <span className="min-w-0 flex-1 truncate">{kind.kindName}</span>
                 {value?.kindId === kind.kindId ? <Check className="h-3.5 w-3.5 shrink-0" /> : null}
@@ -236,7 +236,7 @@ function KindList({
         <button
           type="button"
           onClick={onClear}
-          className="mt-1 flex w-full items-center rounded-md border-t border-line-subtle px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted/60"
+          className="mt-1 flex w-full items-center rounded-md border-t border-line-subtle px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-tint"
         >
           Без виду — в каталог не записувати
         </button>

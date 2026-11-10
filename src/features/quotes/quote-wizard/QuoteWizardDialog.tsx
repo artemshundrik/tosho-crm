@@ -723,7 +723,7 @@ export function QuoteWizardDialog({
       >
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto md:flex-row md:overflow-hidden">
           {appendTo ? null : (
-          <aside className="flex shrink-0 flex-col gap-4 border-b border-line-subtle bg-muted/30 px-5 pb-5 pt-5 md:w-[272px] md:border-b-0 md:border-r md:pr-4">
+          <aside className="flex shrink-0 flex-col gap-4 border-b border-line-subtle bg-tint-subtle px-5 pb-5 pt-5 md:w-[272px] md:border-b-0 md:border-r md:pr-4">
             <DialogHeader className="text-left">
               <DialogTitle>Новий прорахунок</DialogTitle>
               <DialogDescription>Для кого й що рахуємо.</DialogDescription>
@@ -844,7 +844,7 @@ export function QuoteWizardDialog({
                   // Каркас на місці рейки: вікно не має міняти форму на очах.
                   <div className="-mx-1 flex gap-2 px-1 pb-1" aria-hidden>
                     {[0, 1, 2, 3, 4].map((slot) => (
-                      <div key={slot} className="h-[104px] w-[104px] shrink-0 animate-pulse rounded-xl bg-muted/60" />
+                      <div key={slot} className="h-[104px] w-[104px] shrink-0 animate-pulse rounded-xl bg-tint" />
                     ))}
                   </div>
                 )
@@ -878,7 +878,7 @@ export function QuoteWizardDialog({
                     і дія при самому файлі.
                   */}
                   {fileName && fileDrafts.length > 0 ? (
-                    <div className="flex items-center gap-3 rounded-xl border border-line bg-muted/25 p-3">
+                    <div className="flex items-center gap-3 rounded-xl border border-line bg-tint-subtle p-3">
                       <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-background text-muted-foreground ring-1 ring-line">
                         {isWordImportFile(fileName) ? (
                           <FileText className="h-4 w-4" />
@@ -921,7 +921,7 @@ export function QuoteWizardDialog({
                   */}
                   {warnings.length > 0 ? (
                     <div className="overflow-hidden rounded-xl border border-line">
-                      <div className="flex items-center gap-2.5 border-b border-line-subtle bg-muted/25 px-3 py-2">
+                      <div className="flex items-center gap-2.5 border-b border-line-subtle bg-tint-subtle px-3 py-2">
                         <Info className="h-4 w-4 shrink-0 text-muted-foreground" />
                         <span className="text-sm font-medium">
                           {skippedFileRows > 0

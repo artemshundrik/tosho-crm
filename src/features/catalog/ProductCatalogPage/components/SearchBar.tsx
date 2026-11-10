@@ -49,7 +49,7 @@ export function SearchBar({
   onCreateModel,
 }: SearchBarProps) {
   return (
-    <div className="border-b border-line-subtle bg-muted/20 p-4">
+    <div className="border-b border-line-subtle bg-tint-subtle p-4">
       <div className="flex items-center gap-3">
         {/* Search */}
         <div className="group relative flex-1">

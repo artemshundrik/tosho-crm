@@ -110,7 +110,7 @@ export function RequestsList({ requests, selectedId, userId, isOwnerOrCeo, manag
                 to={`${ROUTES.requests}/${request.id}`}
                 aria-current={request.id === selectedId ? "true" : undefined}
                 className={cn(
-                  "flex flex-col gap-1.5 border-t border-line-subtle px-4 py-3 text-md hover:bg-muted/50",
+                  "flex flex-col gap-1.5 border-t border-line-subtle px-4 py-3 text-md hover:bg-tint",
                   request.id === selectedId && "bg-primary/8 hover:bg-primary/8"
                 )}
               >

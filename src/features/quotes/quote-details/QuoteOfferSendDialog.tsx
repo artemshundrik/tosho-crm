@@ -112,7 +112,7 @@ export function QuoteOfferSendDialog(props: {
               /* 794 px — ширина сторінки A4 у документі; масштабуємо її під
                  колонку, щоб прев'ю лишалось тим самим документом, а не його
                  вузькою версією. */
-              <div className="min-h-[320px] flex-1 overflow-hidden rounded-xl border border-line bg-muted/20">
+              <div className="min-h-[320px] flex-1 overflow-hidden rounded-xl border border-line bg-tint-subtle">
                 <div className="h-full w-full origin-top-left scale-[0.72]" style={{ width: "139%", height: "139%" }}>
                   <iframe
                     title="Прев'ю пропозиції"

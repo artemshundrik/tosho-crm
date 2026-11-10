@@ -31,12 +31,12 @@ const Chip = React.forwardRef<HTMLButtonElement, ChipProps>(
         className={cn(
           // Base styles
           "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full",
-          "border border-line bg-muted/10 text-foreground",
+          "border border-line bg-tint-subtle text-foreground",
           "transition-all duration-base",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-1",
           "disabled:pointer-events-none disabled:opacity-50",
           // Hover state
-          "hover:bg-muted/20 hover:border-line-strong hover:cursor-pointer",
+          "hover:bg-tint hover:border-line-strong hover:cursor-pointer",
           // Активний стан — той самий нейтральний рецепт, що в тулбарних
           // фільтрах: увімкнене просто темнішає, а не синіє.
           active && TOOLBAR_CONTROL_ACTIVE,

@@ -90,7 +90,7 @@ export function KanbanOffBoardList({
                   className={cn(
                     "flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors",
                     entry.onOpen &&
-                      "cursor-pointer hover:bg-muted/30 focus-visible:bg-muted/30 focus-visible:outline-none"
+                      "cursor-pointer hover:bg-tint focus-visible:bg-tint focus-visible:outline-none"
                   )}
                 >
                   {entry.code ? (

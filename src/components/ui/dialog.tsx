@@ -215,10 +215,10 @@ const DialogContent = React.forwardRef<
             }
           }}
           className={cn(
-            "absolute right-4 top-4 rounded-[var(--radius-md)] p-1.5 text-muted-foreground opacity-60 transition-all hover:opacity-100 hover:bg-muted/50 hover:text-foreground",
+            "absolute right-4 top-4 rounded-[var(--radius-md)] p-1.5 text-muted-foreground opacity-60 transition-all hover:opacity-100 hover:bg-tint hover:text-foreground",
             // На телефоні — коло з підкладкою, як в аркушів: голий значок
             // у кутку не читався як кнопка й не мав тач-таргета.
-            "max-md:right-3 max-md:top-3 max-md:flex max-md:h-9 max-md:w-9 max-md:items-center max-md:justify-center max-md:rounded-full max-md:bg-muted/70 max-md:p-0 max-md:opacity-100",
+            "max-md:right-3 max-md:top-3 max-md:flex max-md:h-9 max-md:w-9 max-md:items-center max-md:justify-center max-md:rounded-full max-md:bg-muted max-md:p-0 max-md:opacity-100",
             "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
           )}
         >

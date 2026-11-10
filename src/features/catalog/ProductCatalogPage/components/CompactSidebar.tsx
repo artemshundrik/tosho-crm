@@ -210,7 +210,7 @@ export function CompactSidebar({
                                 "group flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-all",
                                 isSelected
                                   ? "bg-primary/10 text-primary"
-                                  : "text-foreground hover:bg-muted/50"
+                                  : "text-foreground hover:bg-tint"
                               )}
                             >
                               <HoverTip asChild label={isExpanded ? "Згорнути" : "Розгорнути"}>
@@ -277,7 +277,7 @@ export function CompactSidebar({
                                         "group/kind w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-all",
                                         isKindSelected
                                           ? "bg-primary/10 text-primary font-medium"
-                                          : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                                          : "text-muted-foreground hover:text-foreground hover:bg-tint"
                                       )}
                                     >
                                       <button
@@ -339,7 +339,7 @@ export function CompactSidebar({
                                 type="button"
                                 onClick={() => onAddKind(type.id)}
                                 className={cn(
-                                  "ml-5 w-[calc(100%-1.25rem)] flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors",
+                                  "ml-5 w-[calc(100%-1.25rem)] flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-tint transition-colors",
                                   TREE_FOCUS
                                 )}
                               >

@@ -43,7 +43,7 @@ function weightClassName(weight: ChipWeight): string {
   if (weight === "quiet") {
     return cn(CHIP_SHAPE, "border-line bg-transparent text-muted-foreground/70");
   }
-  return cn(CHIP_SHAPE, "border-line bg-muted/20 text-muted-foreground");
+  return cn(CHIP_SHAPE, "border-line bg-tint-subtle text-muted-foreground");
 }
 
 /**

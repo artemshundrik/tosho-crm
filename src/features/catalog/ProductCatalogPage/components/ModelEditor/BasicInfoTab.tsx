@@ -460,7 +460,7 @@ export function BasicInfoTab({
           <button
             type="button"
             onClick={() => setDescriptionOpen((value) => !value)}
-            className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/20"
+            className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-tint"
           >
             <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
             <div className="min-w-0 flex-1">
@@ -595,7 +595,7 @@ export function BasicInfoTab({
 
         <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
           <div>
-            <div className="relative group overflow-hidden rounded-xl border border-line bg-muted/20">
+            <div className="relative group overflow-hidden rounded-xl border border-line bg-tint-subtle">
               {showActiveImagePreview ? (
                 <img
                   src={activeImageUrl}

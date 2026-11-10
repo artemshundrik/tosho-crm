@@ -88,8 +88,8 @@ export function OtherMethodsPanel({
 
   const rowClass = (highlighted: boolean) =>
     cn(
-      "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted/60",
-      highlighted && "bg-muted/60"
+      "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-tint",
+      highlighted && "bg-tint"
     );
   const railIndent = inRail ? <span aria-hidden className="h-3.5 w-3.5 shrink-0" /> : null;
 
@@ -102,7 +102,7 @@ export function OtherMethodsPanel({
               type="button"
               onClick={onBack}
               aria-label="Назад до методів виду"
-              className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+              className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-tint hover:text-foreground"
             >
               <ChevronLeft className="h-3.5 w-3.5" />
             </button>
@@ -227,7 +227,7 @@ export function OtherMethodsEntry({ onOpen }: { onOpen: () => void }) {
       <button
         type="button"
         onClick={onOpen}
-        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-tint hover:text-foreground"
       >
         <span className="min-w-0 flex-1 truncate">Інші методи…</span>
         <ChevronRight className="h-3.5 w-3.5 shrink-0" />

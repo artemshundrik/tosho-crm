@@ -37,7 +37,7 @@ function SimpleModelGridBase({
   if (!hasActiveSelection) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center py-16">
-        <div className="rounded-full bg-muted/30 p-6 mb-4">
+        <div className="rounded-full bg-tint-subtle p-6 mb-4">
           <PackageSearch className="h-12 w-12 text-muted-foreground/40" />
         </div>
         <p className="text-lg font-medium text-muted-foreground mb-2">Оберіть категорію або вид</p>
@@ -74,7 +74,7 @@ function SimpleModelGridBase({
   if (filteredModels.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center py-16">
-        <div className="rounded-full bg-muted/30 p-6 mb-4">
+        <div className="rounded-full bg-tint-subtle p-6 mb-4">
           <Search className="h-12 w-12 text-muted-foreground/40" />
         </div>
         <p className="text-lg font-medium text-muted-foreground mb-2">

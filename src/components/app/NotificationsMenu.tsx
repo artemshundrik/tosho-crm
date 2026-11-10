@@ -277,7 +277,7 @@ export function NotificationsMenu({
             </div>
           ) : rows.length === 0 ? (
             <div className="px-1 py-3">
-              <div className="rounded-xl border border-dashed border-line bg-muted/25 px-4 py-6 text-center">
+              <div className="rounded-xl border border-dashed border-line bg-tint-subtle px-4 py-6 text-center">
                 <span className="mx-auto mb-2.5 flex h-9 w-9 items-center justify-center rounded-xl bg-muted text-muted-foreground">
                   <CheckCheck className="h-4 w-4" />
                 </span>

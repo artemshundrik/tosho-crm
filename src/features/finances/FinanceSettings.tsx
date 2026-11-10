@@ -800,7 +800,7 @@ function CategoriesPanel({
         Статті витрат для класифікації: сталі, змінні, податки, виплати команді.
       </p>
 
-      <div className="flex flex-wrap items-end gap-2 rounded-xl border border-line bg-muted/10 p-3">
+      <div className="flex flex-wrap items-end gap-2 rounded-xl border border-line bg-tint-subtle p-3">
         <div className="grid min-w-[180px] flex-1 gap-1.5">
           <Label className="text-xs">Назва статті</Label>
           <Input controlSize="md"
@@ -953,7 +953,7 @@ function RequisitesPanel({ entities }: { entities: FinanceLegalEntity[] }) {
                       <button
                         type="button"
                         onClick={() => void copyField(c.label, c.value as string)}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-line-strong bg-muted/20 px-3 py-1 text-xs text-foreground transition-colors hover:bg-muted/40"
+                        className="inline-flex items-center gap-1.5 rounded-full border border-line-strong bg-tint-subtle px-3 py-1 text-xs text-foreground transition-colors hover:bg-tint"
                         aria-label={`Скопіювати ${c.label}`}
                       >
                         <span className="text-muted-foreground">{c.label}:</span>
@@ -976,7 +976,7 @@ function RequisitesPanel({ entities }: { entities: FinanceLegalEntity[] }) {
 
 function EmptyState({ icon: Icon, text }: { icon: typeof Banknote; text: string }) {
   return (
-    <div className="rounded-xl border border-dashed border-line bg-muted/10 p-8 text-center">
+    <div className="rounded-xl border border-dashed border-line bg-tint-subtle p-8 text-center">
       <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-background">
         <Icon className="h-5 w-5 text-muted-foreground" />
       </div>
@@ -1201,7 +1201,7 @@ function PricingRatesPanel() {
         </div>
 
         <div className="space-y-3">
-          <div className="rounded-xl border border-line bg-muted/20 p-4">
+          <div className="rounded-xl border border-line bg-tint-subtle p-4">
             <div className="text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
               Що це змінить
             </div>
@@ -1240,7 +1240,7 @@ function PricingRatesPanel() {
             ) : null}
           </div>
 
-          <div className="rounded-xl border border-line bg-muted/20 p-4">
+          <div className="rounded-xl border border-line bg-tint-subtle p-4">
             <div className="text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
               Ставка менеджера
             </div>

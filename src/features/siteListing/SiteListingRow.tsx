@@ -76,17 +76,17 @@ export function SiteListingRow({
   };
 
   return (
-    <div className="rounded-lg transition-colors hover:bg-muted/40">
+    <div className="rounded-lg transition-colors hover:bg-tint">
       <div className="flex flex-wrap items-center gap-3 px-2 py-2">
         {candidate.image_url ? (
           <KanbanImageZoomPreview
             imageUrl={candidate.image_url}
             alt={candidate.model_name}
-            className="h-10 w-10 rounded-md border-line bg-muted/50"
+            className="h-10 w-10 rounded-md border-line bg-tint"
             imageClassName="object-cover"
           />
         ) : (
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-line bg-muted/50">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-line bg-tint">
             <PoolPhoto url={null} className="h-4 w-4" />
           </span>
         )}
@@ -258,11 +258,11 @@ function DraftVariantTile({ title, variant }: { title: string; variant: DraftVar
         <KanbanImageZoomPreview
           imageUrl={photo}
           alt={`${title}, ${variant.color}`}
-          className="h-10 w-10 rounded-md border-line bg-muted/30"
+          className="h-10 w-10 rounded-md border-line bg-tint-subtle"
           imageClassName="object-cover"
         />
       ) : (
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-line bg-muted/30">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-line bg-tint-subtle">
           <Package className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
         </span>
       )}
@@ -280,7 +280,7 @@ function DraftVariantTile({ title, variant }: { title: string; variant: DraftVar
 /** Чернетка тими самими блоками, що й опис на сайті, але розміткою CRM. */
 function DraftView({ draft, category }: { draft: SiteListingDraft; category: string | null }) {
   return (
-    <div className="mx-2 mb-2 ml-15 space-y-2 rounded-lg border border-line bg-muted/20 p-3 text-xs">
+    <div className="mx-2 mb-2 ml-15 space-y-2 rounded-lg border border-line bg-tint-subtle p-3 text-xs">
       <div>
         <p className="text-sm font-semibold text-foreground">{draft.title}</p>
         <p className="text-muted-foreground">{category ?? "Розділ не визначено"}</p>

@@ -334,7 +334,7 @@ export function TaskThreadRail({
           <>
             <ThreadHistory events={events} />
             {messages.length === 0 ? (
-              <div className="mx-1 my-2 flex flex-col items-center gap-1 rounded-xl border border-dashed border-line bg-muted/40 px-3 py-3.5 text-center">
+              <div className="mx-1 my-2 flex flex-col items-center gap-1 rounded-xl border border-dashed border-line bg-tint px-3 py-3.5 text-center">
                 <span className="text-xs font-semibold">Розмови ще не було</span>
                 <span className="max-w-[30ch] text-2xs text-muted-foreground">
                   Напишіть перше — його побачить уся команда по цій справі.

@@ -110,7 +110,7 @@ type RowProps = {
 export function DocumentDayRow({ label, colSpan }: { label: string; colSpan: number }) {
   return (
     <TableRow className="hover:bg-transparent">
-      <TableCell colSpan={colSpan} className="h-8 bg-muted/30 py-0 text-xs font-medium text-muted-foreground">
+      <TableCell colSpan={colSpan} className="h-8 bg-tint-subtle py-0 text-xs font-medium text-muted-foreground">
         {label}
       </TableCell>
     </TableRow>

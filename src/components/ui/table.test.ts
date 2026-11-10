@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import { cn } from "@/lib/utils";
 
 // Фон варіанта `list` із самого Table — той, що перебивав напівпрозорістю.
-const VARIANT_LIST_THEAD_BG = "[&_thead]:bg-muted/45";
+const VARIANT_LIST_THEAD_BG = "[&_thead]:bg-tint";
 // Те, що додає проп stickyHeader.
 const STICKY_THEAD =
   "[&_thead]:sticky [&_thead]:top-[var(--page-chrome-offset,var(--app-header-height))] [&_thead]:z-10 [&_thead]:bg-card";
@@ -22,7 +22,7 @@ describe("stickyHeader", () => {
     // рядки, які під ним проїжджають.
     const merged = cn(VARIANT_LIST_THEAD_BG, STICKY_THEAD);
     expect(merged).toContain("[&_thead]:bg-card");
-    expect(merged).not.toContain("[&_thead]:bg-muted/45");
+    expect(merged).not.toContain("[&_thead]:bg-tint");
   });
 
   it("заголовок зупиняється під усією верхньою обв'язкою, а не під верхом вікна", () => {

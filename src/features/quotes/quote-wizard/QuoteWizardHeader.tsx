@@ -311,7 +311,7 @@ export function QuoteWizardHeader({
               patch({ managerId: member.id });
               setManagerPopoverOpen(false);
             }}
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted/60"
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-tint"
           >
             <AvatarBase src={member.avatarUrl} name={member.label} size={20} />
             <span className="truncate">{member.label}</span>

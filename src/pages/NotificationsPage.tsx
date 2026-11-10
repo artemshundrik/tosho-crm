@@ -416,8 +416,8 @@ function InboxRow({ thread, active, onSelect }: { thread: InboxThread; active: b
       aria-current={active || undefined}
       onClick={onSelect}
       className={cn(
-        "flex w-full min-w-0 items-start gap-2.5 border-l-2 border-transparent px-3 py-2 text-left transition-colors hover:bg-muted/50",
-        active && "border-l-foreground bg-muted/70 hover:bg-muted/70"
+        "flex w-full min-w-0 items-start gap-2.5 border-l-2 border-transparent px-3 py-2 text-left transition-colors hover:bg-tint",
+        active && "border-l-foreground bg-muted hover:bg-muted"
       )}
     >
       <Icon

@@ -997,7 +997,7 @@ export default function SampleStockPage() {
         }}
       >
         <SheetContent className="w-full gap-0 p-0 sm:max-w-[760px]">
-          <div className="shrink-0 border-b bg-muted/20 px-6 py-4">
+          <div className="shrink-0 border-b bg-tint-subtle px-6 py-4">
             <SheetHeader>
               <SheetTitle className="text-base font-medium">
                 {editingRow ? "Редагувати товар" : "Новий товар на склад"}
@@ -1131,7 +1131,7 @@ export default function SampleStockPage() {
                 />
               </div>
 
-              <label className="flex items-center gap-3 rounded-inner border border-line bg-muted/25 px-3 py-3 text-sm sm:col-span-2">
+              <label className="flex items-center gap-3 rounded-inner border border-line bg-tint-subtle px-3 py-3 text-sm sm:col-span-2">
                 <Checkbox
                   checked={form.isArchived}
                   onCheckedChange={(checked) => setForm((current) => ({ ...current, isArchived: checked === true }))}
@@ -1169,7 +1169,7 @@ export default function SampleStockPage() {
         }}
       >
         <SheetContent className="w-full gap-0 p-0 sm:max-w-[520px]">
-          <div className="border-b bg-muted/20 px-6 py-4">
+          <div className="border-b bg-tint-subtle px-6 py-4">
             <SheetHeader>
               <SheetTitle className="text-base font-medium">{MOVEMENT_LABELS[movement.type]}</SheetTitle>
               <SheetDescription>{movementTarget?.name ?? "Товар складу"}</SheetDescription>

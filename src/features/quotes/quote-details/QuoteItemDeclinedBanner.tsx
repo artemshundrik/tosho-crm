@@ -17,7 +17,7 @@ export function QuoteItemDeclinedBanner({
 }) {
   const stamp = formatQuoteItemChoiceStamp(at);
   return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b border-line-subtle bg-muted/40 px-4 py-1.5 text-xs">
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b border-line-subtle bg-tint px-4 py-1.5 text-xs">
       <span className="font-medium text-foreground">Клієнт не взяв</span>
       {stamp ? (
         <span className="text-muted-foreground">

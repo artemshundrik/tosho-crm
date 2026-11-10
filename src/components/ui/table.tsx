@@ -64,15 +64,15 @@ const Table = React.forwardRef<
   const variantClasses = {
     list: [
       headClasses,
-      "[&_tbody_tr]:border-line-subtle [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-muted/30",
+      "[&_tbody_tr]:border-line-subtle [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-tint",
     ].join(" "),
     analytics: [
       headClasses,
-      "[&_tbody_tr:hover]:bg-muted/30",
+      "[&_tbody_tr:hover]:bg-tint",
     ].join(" "),
     compact: [
       headClasses,
-      "[&_tbody_tr]:border-line-subtle [&_tbody_tr:hover]:bg-muted/30",
+      "[&_tbody_tr]:border-line-subtle [&_tbody_tr:hover]:bg-tint",
     ].join(" "),
   };
 
@@ -165,7 +165,7 @@ const TableRow = React.forwardRef<
   <tr
     ref={ref}
     className={cn(
-      "border-b border-line-subtle transition-colors hover:bg-muted/20 data-[state=selected]:bg-muted/60",
+      "border-b border-line-subtle transition-colors hover:bg-tint data-[state=selected]:bg-muted",
       className
     )}
     {...props}

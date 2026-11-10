@@ -60,7 +60,7 @@ export function SurfaceSkeleton({
         </div>
 
         <div className="border-y border-line-subtle">
-          <div className="grid h-11 grid-cols-[1.2fr_1.5fr_1fr_0.9fr_0.8fr] items-center gap-6 bg-muted/45 px-6">
+          <div className="grid h-11 grid-cols-[1.2fr_1.5fr_1fr_0.9fr_0.8fr] items-center gap-6 bg-tint px-6">
             <Skeleton className="h-3 w-16 rounded-full opacity-80" />
             <Skeleton className="h-3 w-20 rounded-full opacity-70" />
             <Skeleton className="h-3 w-14 rounded-full opacity-70" />

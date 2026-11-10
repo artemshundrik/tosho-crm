@@ -261,7 +261,7 @@ export function ManualOrderItemRow({
       {pending ? (
         <div className="h-3" />
       ) : (
-        <div className="mt-2 space-y-2 border-t border-line-subtle bg-muted/20 px-3 py-2">
+        <div className="mt-2 space-y-2 border-t border-line-subtle bg-tint-subtle px-3 py-2">
           <div className="flex flex-wrap items-center gap-1.5">
             {draft.catalog?.modelId ? (
               <CatalogPlaceChip label={catalogPlace(draft.catalog.kindName, draft.catalog.typeName)} />

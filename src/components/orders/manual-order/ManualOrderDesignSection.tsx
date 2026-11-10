@@ -180,7 +180,7 @@ export function ManualOrderDesignSection({
           </div>
 
           {product ? (
-            <div className="flex items-center gap-2 rounded-lg border border-line bg-muted/20 p-2">
+            <div className="flex items-center gap-2 rounded-lg border border-line bg-tint-subtle p-2">
               {product.imageUrl ? (
                 <img
                   src={product.imageUrl}
@@ -189,7 +189,7 @@ export function ManualOrderDesignSection({
                   loading="lazy"
                 />
               ) : (
-                <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-line bg-muted/30 text-muted-foreground">
+                <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-line bg-tint-subtle text-muted-foreground">
                   <Package className="h-4 w-4" />
                 </div>
               )}

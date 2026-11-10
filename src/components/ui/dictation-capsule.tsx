@@ -59,7 +59,7 @@ export function DictationButton({
       onClick={() => void dictation.start()}
       className={cn(
         "grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full text-muted-foreground",
-        "transition-colors hover:bg-muted/60 hover:text-foreground",
+        "transition-colors hover:bg-tint hover:text-foreground",
         className
       )}
     >
@@ -90,7 +90,7 @@ export function DictationCapsule({ dictation, className }: { dictation: Dictatio
             type="button"
             aria-label="Скасувати запис"
             onClick={() => dictation.cancel()}
-            className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-destructive"
+            className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-tint hover:text-destructive"
           >
             <X className="h-4 w-4" />
           </button>

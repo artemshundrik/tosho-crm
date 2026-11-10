@@ -318,7 +318,7 @@ export function DesignerEarningsWidget({
        скрінрідер оголошував це як одну кнопку, а Enter міг спрацювати двічі. */
     // Без плашки: сума за місяць — довідка, а не стан, що вимагає уваги.
     // Постійний фон у шапці лишений тільки таймеру, і лише коли він іде.
-    <div className="inline-flex h-(--control-h) items-center gap-1 rounded-lg pl-2 pr-1 transition-colors duration-base hover:bg-muted/40">
+    <div className="inline-flex h-(--control-h) items-center gap-1 rounded-lg pl-2 pr-1 transition-colors duration-base hover:bg-tint">
       <AppDropdown
         align="end"
         sideOffset={14}
@@ -449,7 +449,7 @@ export function DesignerEarningsWidget({
         <button
           type="button"
           onClick={toggleMask}
-          className="relative inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground after:absolute after:-inset-2 after:content-['']"
+          className="relative inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-tint hover:text-foreground after:absolute after:-inset-2 after:content-['']"
           aria-label={masked ? "Показати суми" : "Приховати суми"}
         >
           {masked ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}

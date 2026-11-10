@@ -224,14 +224,14 @@ export function DropboxHealthCard() {
           ) : null}
 
           {health.orphanFolders.length > 0 ? (
-            <div className="mt-3 rounded-xl border border-line bg-muted/30 p-4">
+            <div className="mt-3 rounded-xl border border-line bg-tint-subtle p-4">
               <div className="text-sm font-semibold text-foreground">Теки без картки в CRM</div>
               <p className="mt-1 text-sm text-muted-foreground">{health.orphanFolders.join(", ")}</p>
             </div>
           ) : null}
 
           {health.drifted.length > 0 ? (
-            <div className="mt-3 rounded-xl border border-line bg-muted/30 p-4">
+            <div className="mt-3 rounded-xl border border-line bg-tint-subtle p-4">
               <div className="text-sm font-semibold text-foreground">Назва в CRM не збігається з назвою теки</div>
               <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
                 {health.drifted.map((item) => (

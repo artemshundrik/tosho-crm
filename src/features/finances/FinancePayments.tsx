@@ -150,7 +150,7 @@ export function FinancePayments({ teamId, userId, canSeeSensitive }: FinancePaym
       {loading ? (
         <FinanceSkeleton variant="stats" />
       ) : visiblePayments.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-line bg-muted/10 p-8 text-center">
+        <div className="rounded-xl border border-dashed border-line bg-tint-subtle p-8 text-center">
           <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-background">
             <Wallet className="h-5 w-5 text-muted-foreground" />
           </div>
@@ -471,7 +471,7 @@ function OrderPicker({
                   setOpen(false);
                 }}
                 className={cn(
-                  "flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted/60",
+                  "flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-tint",
                   order.quoteId === value && "bg-muted"
                 )}
               >

@@ -85,7 +85,7 @@ export function CommandPalette({
       <CommandList>
         <CommandEmpty>
           <div className="flex flex-col items-center justify-center py-6 text-center">
-            <div className="rounded-full bg-muted/30 p-3 mb-3">
+            <div className="rounded-full bg-tint-subtle p-3 mb-3">
               <Search className="h-6 w-6 text-muted-foreground/40" />
             </div>
             <p className="text-sm font-medium text-muted-foreground">Нічого не знайдено</p>
@@ -208,7 +208,7 @@ export function CommandPalette({
                                 className="w-10 h-10 rounded-md object-cover border border-line"
                               />
                             ) : (
-                              <div className="w-10 h-10 rounded-md bg-muted/30 border border-dashed border-line flex items-center justify-center">
+                              <div className="w-10 h-10 rounded-md bg-tint-subtle border border-dashed border-line flex items-center justify-center">
                                 <ImageIcon className="h-5 w-5 text-muted-foreground/30" />
                               </div>
                             )}

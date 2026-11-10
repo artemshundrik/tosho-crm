@@ -45,7 +45,7 @@ export function ThreadEmojiPicker({ onPick, className, trigger, align = "start",
             type="button"
             aria-label="Емодзі"
             className={cn(
-              "grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground",
+              "grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-tint hover:text-foreground",
               open && "bg-foreground/10 text-foreground",
               className
             )}
@@ -65,7 +65,7 @@ export function ThreadEmojiPicker({ onPick, className, trigger, align = "start",
                 onPick(emoji);
                 setOpen(false);
               }}
-              className="grid h-7 place-items-center rounded-md text-[17px] leading-none transition-colors hover:bg-muted/70"
+              className="grid h-7 place-items-center rounded-md text-[17px] leading-none transition-colors hover:bg-tint"
             >
               {emoji}
             </button>

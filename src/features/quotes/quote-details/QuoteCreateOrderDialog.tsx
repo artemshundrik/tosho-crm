@@ -99,7 +99,7 @@ export function QuoteCreateOrderDialog({
           <div className="py-6 text-sm text-muted-foreground">Готуємо дані для замовлення...</div>
         ) : draft ? (
           <div className="space-y-4">
-            <div className="rounded-lg border border-line bg-muted/20 p-4">
+            <div className="rounded-lg border border-line bg-tint-subtle p-4">
               <div className="text-sm font-semibold text-foreground">{draft.quoteNumber}</div>
               <div className="mt-1 text-sm text-muted-foreground">{draft.readiness.customerName}</div>
             </div>
@@ -143,7 +143,7 @@ export function QuoteCreateOrderDialog({
                         onClick={() => setTarget(option.id)}
                         className={cn(
                           "flex w-full items-start gap-3 rounded-lg border px-3 py-2 text-left transition-colors",
-                          active ? "border-primary bg-primary/5" : "border-line-strong hover:bg-muted/40"
+                          active ? "border-primary bg-primary/5" : "border-line-strong hover:bg-tint"
                         )}
                       >
                         <span

@@ -40,7 +40,7 @@ export const CONTROL_BASE = cx(
   // Той самий рецепт уже застосований нижче для фільтрів — тримаємо однаково.
   "transition-[background-color,border-color,color,box-shadow] duration-base ease-out",
   "motion-reduce:transition-none",
-  "hover:bg-muted/60 hover:border-foreground/15",
+  "hover:bg-tint hover:border-foreground/15",
   // Фокус: тільки темніша рамка, без рінга (рінг давав «блюр»-глоу на темній) і
   // тільки focus-visible (клавіатура) — інакше обводка липла на селект-тригері
   // після вибору мишею. Текстові поля браузер і так підсвічує focus-visible при вводі.
@@ -166,11 +166,11 @@ export const SEARCH_INPUT = cx(TOOLBAR_CONTROL, "pl-9 pr-9");
 export const SEARCH_CLEAR_BTN_POS = cx("absolute right-2 top-1/2 -translate-y-1/2");
 
 export const SEGMENTED_GROUP = cx(
-  "inline-flex p-0.5 h-(--control-h) items-center rounded-lg border border-line bg-muted/40"
+  "inline-flex p-0.5 h-(--control-h) items-center rounded-lg border border-line bg-tint"
 );
 
 export const SEGMENTED_GROUP_SM = cx(
-  "inline-flex p-0.5 h-(--control-h-sm) items-center rounded-lg border border-line bg-muted/40"
+  "inline-flex p-0.5 h-(--control-h-sm) items-center rounded-lg border border-line bg-tint"
 );
 
 /**

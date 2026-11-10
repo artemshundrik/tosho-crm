@@ -88,7 +88,7 @@ function CardBody({ quoteId, preview }: { quoteId: string; preview: QuoteKanbanP
                 {qty ? <div className="text-2xs tabular-nums text-muted-foreground">{qty}</div> : null}
               </div>
               {line?.declined ? (
-                <span className="shrink-0 rounded-full border border-line bg-muted/30 px-1.5 py-0.5 text-3xs font-semibold">
+                <span className="shrink-0 rounded-full border border-line bg-tint-subtle px-1.5 py-0.5 text-3xs font-semibold">
                   відмовився
                 </span>
               ) : line?.amount ? (

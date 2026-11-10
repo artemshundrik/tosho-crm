@@ -183,7 +183,7 @@ export default function InvitePage() {
             протерміноване. Попросіть адміністратора надіслати нове.
           </p>
 
-          <div className="mt-6 bg-muted/50 rounded-inner p-4 border border-line text-sm text-muted-foreground">
+          <div className="mt-6 bg-tint rounded-inner p-4 border border-line text-sm text-muted-foreground">
             Запрошення нікуди не зникло — воно прив’яжеться до акаунту одразу після входу.
           </div>
 
@@ -250,7 +250,7 @@ export default function InvitePage() {
             ) : null}
 
             {inviteAccepted ? (
-              <div className="mt-4 p-3 rounded-inner bg-muted/40 text-muted-foreground text-sm font-medium border border-line">
+              <div className="mt-4 p-3 rounded-inner bg-tint text-muted-foreground text-sm font-medium border border-line">
                 Інвайт уже використано.
               </div>
             ) : null}
@@ -261,7 +261,7 @@ export default function InvitePage() {
               </div>
             ) : null}
 
-            <div className="mt-6 bg-muted/30 border border-line rounded-inner p-4 text-left flex items-start gap-3">
+            <div className="mt-6 bg-tint-subtle border border-line rounded-inner p-4 text-left flex items-start gap-3">
               <div className="bg-background p-1.5 rounded-lg text-primary border border-line shrink-0">
                 <User className="w-5 h-5" />
               </div>
@@ -275,7 +275,7 @@ export default function InvitePage() {
 
             <div className="mt-4 text-left">
               {keepExistingPassword ? (
-                <div className="rounded-inner border border-line bg-muted/30 p-3 text-xs text-muted-foreground">
+                <div className="rounded-inner border border-line bg-tint-subtle p-3 text-xs text-muted-foreground">
                   Заходите зі своїм теперішнім паролем — новий не задаємо.{" "}
                   <button
                     type="button"

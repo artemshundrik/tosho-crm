@@ -248,7 +248,7 @@ function AbsencePlannerImpl({
               className={cn(
                 "px-0.5 py-1.5 text-center text-3xs uppercase tracking-wide text-muted-foreground",
                 // Фон свята інший, ніж у вихідного: сірий = просто вихідний.
-                day.rest && !day.holiday && "bg-muted/40 text-muted-foreground/70",
+                day.rest && !day.holiday && "bg-tint text-muted-foreground/70",
                 day.holiday && HOLIDAY_COLUMN_CLASS
               )}
               title={day.holiday ?? undefined}
@@ -328,7 +328,7 @@ function AbsencePlannerImpl({
               {dayMeta.map((day, index) => {
                 const cellClass = cn(
                   "h-full",
-                  day.rest && !day.holiday && "bg-muted/40",
+                  day.rest && !day.holiday && "bg-tint",
                   // Стовпчик свята фарбується НАСКРІЗЬ, а не лише в шапці:
                   // мітка вгорі губилась серед сірих вихідних.
                   day.holiday && HOLIDAY_COLUMN_CLASS,

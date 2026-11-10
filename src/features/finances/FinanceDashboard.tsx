@@ -298,7 +298,7 @@ function Row({
 
 function EmptyHint({ text }: { text: string }) {
   return (
-    <div className="rounded-xl border border-dashed border-line bg-muted/10 px-4 py-5 text-center text-sm text-muted-foreground">
+    <div className="rounded-xl border border-dashed border-line bg-tint-subtle px-4 py-5 text-center text-sm text-muted-foreground">
       {text}
     </div>
   );
