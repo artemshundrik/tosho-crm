@@ -1,12 +1,15 @@
 import { type SupabaseClient } from "@supabase/supabase-js";
 
 import { deliverNotifications } from "../_notificationDelivery";
+import { loadAbsenceResultWidget } from "./absenceResultWidget";
 import {
   ABSENCE_KIND_LABELS,
   formatAbsenceRange,
   isOwnerMembership,
   isSeoMembership,
+  resolveMemberDisplayName,
 } from "./absenceSubmit";
+import { shortPersonName } from "./orderApprovalWidget";
 
 /**
  * Рішення по заявці на відсутність — ОДНА правда для всіх входів.
@@ -56,6 +59,8 @@ export type AbsenceDecisionResult =
       absence: AbsenceRow;
       /** Готовий підпис «Відпустка · 12.08 — 20.08» для тексту відповіді. */
       summary: string;
+      /** Повне ім'я того, хто вирішив; порожньо, якщо профілю немає. */
+      deciderName: string;
     }
   | { ok: false; status: number; error: string };
 
@@ -155,25 +160,47 @@ export async function decideAbsenceRequest(params: {
   const kindLabel = ABSENCE_KIND_LABELS[absence.kind] ?? "Відсутність";
   const range = formatAbsenceRange(absence);
   const approved = decision === "approved";
+  const title = approved ? `${kindLabel} погоджена` : `${kindLabel} відхилена`;
+  const body = approved
+    ? `Ваша заявка на ${range} погоджена.`
+    : comment
+      ? `Заявку на ${range} відхилено: ${comment}`
+      : `Заявку на ${range} відхилено.`;
+  const deciderName = await resolveMemberDisplayName(adminClient, workspaceId, actorId).catch(() => "");
+  // У Telegram — картка по центру (макети 3/3б); не зібралась — текст як був.
+  const widget = await loadAbsenceResultWidget(adminClient, {
+    absence,
+    approved,
+    deciderShort: shortPersonName(deciderName === "Співробітник" ? "" : deciderName),
+    decidedAt: nowIso,
+    comment,
+    title,
+    body,
+  });
 
   await deliverNotifications(
     adminClient,
     [
       {
         user_id: absence.user_id,
-        title: approved ? `${kindLabel} погоджена` : `${kindLabel} відхилена`,
-        body: approved
-          ? `Ваша заявка на ${range} погоджена.`
-          : comment
-            ? `Заявку на ${range} відхилено: ${comment}`
-            : `Заявку на ${range} відхилено.`,
+        title,
+        body,
         // Одразу на вкладку, де людина бачить свої заявки, а не на «Люди».
         href: "/team?tab=requests",
         type: approved ? "success" : "warning",
+        telegramWidget: widget,
+        telegramOpenText: approved ? "Мої відсутності" : "Подати на інший день",
       },
     ],
     { category: "team_absences" }
   );
 
-  return { ok: true, status: decision, decidedAt: nowIso, absence, summary: `${kindLabel} · ${range}` };
+  return {
+    ok: true,
+    status: decision,
+    decidedAt: nowIso,
+    absence,
+    summary: `${kindLabel} · ${range}`,
+    deciderName: deciderName === "Співробітник" ? "" : deciderName,
+  };
 }

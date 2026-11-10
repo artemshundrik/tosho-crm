@@ -10,7 +10,6 @@ import {
   editTelegramMessageText,
   editTelegramRichMessage,
   editTelegramReplyMarkup,
-  escapeTelegramHtml,
   sendTelegramChatAction,
   sendTelegramMessage,
   type InlineKeyboard,
@@ -36,6 +35,8 @@ import {
   decisionKeyboard,
   declineConfirmKeyboard,
   parseAbsenceDecisionCallback,
+  ABSENCE_DECIDED_CALLBACK,
+  decidedAbsenceKeyboard,
 } from "./_lib/absenceDecisionButtons";
 import {
   visibleNotificationCategories,
@@ -46,7 +47,7 @@ import { canSeeAiCosts,
   canSeeReleases, canUseQuotes, resolveAccessLevel, type AccessLevel } from "./_lib/assistantAccess";
 import { collectDropboxHealth, formatDropboxHealthForTelegram } from "./_lib/dropboxHealth";
 import { buildAppUrl } from "./_lib/appUrl";
-import { parseOrderApprovalCallback } from "./_lib/orderApprovalWidget";
+import { parseOrderApprovalCallback, shortPersonName } from "./_lib/orderApprovalWidget";
 import { ORDER_APPROVAL_INFO_CALLBACK, decideOrderApprovalFromBot } from "./_lib/orderApprovalDecision";
 import { decideDesignStatusFromBot } from "./_lib/designTaskDecision";
 import {
@@ -758,6 +759,10 @@ async function handleCallback(adminClient: AdminClient, cb: NonNullable<Telegram
   // кнопку ми надсилаємо тому, хто може вирішувати, але натиснути її здатен
   // будь-хто, кому повідомлення переслали, тож довіряти самій кнопці не можна.
   if (data.startsWith("absd:")) {
+    if (data === ABSENCE_DECIDED_CALLBACK) {
+      await answerTelegramCallback(cb.id, "Рішення вже ухвалене");
+      return;
+    }
     if (!(await isActiveMember(adminClient, row.user_id))) {
       await answerTelegramCallback(cb.id, "Доступ призупинено");
       return;
@@ -930,11 +935,16 @@ async function handleAbsenceDecisionCallback(
 
   const approved = decision === "approved";
   await answerTelegramCallback(callbackId, approved ? "Погоджено" : "Відхилено");
-  await editTelegramReplyMarkup(chatId, messageId, [[{ text: "Відкрити в CRM", url: crmUrl }]]);
-  await sendTelegramMessage(
+  // Рішення видно на самій кнопці — окреме «✅ Погоджено: …» більше не шлемо.
+  await editTelegramReplyMarkup(
     chatId,
-    `${approved ? "✅ Погоджено" : "✖️ Відхилено"}: ${escapeTelegramHtml(result.summary)}`,
-    { parseMode: "HTML" }
+    messageId,
+    decidedAbsenceKeyboard({
+      approved,
+      deciderShort: shortPersonName(result.deciderName),
+      time: new Date(result.decidedAt).toLocaleTimeString("uk-UA", { timeZone: "Europe/Kyiv", hour: "2-digit", minute: "2-digit" }),
+      crmUrl,
+    })
   );
 }
 

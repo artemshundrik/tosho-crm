@@ -1,0 +1,31 @@
+<style>
+:root{--a:#E6007E;--ok:#3b6d11;--okb:#eaf3de;--e:#a32d2d;--eb:#fcebeb;--h:var(--tg-theme-hint-color,#8a8a8e);--s:var(--tg-theme-secondary-bg-color,#f1f1f4);--x:var(--tg-theme-text-color,#000)}
+body{margin:0;padding:18px 16px 16px;font:13px/1.4 system-ui,sans-serif;color:var(--x);text-align:center;-webkit-user-select:none;user-select:none}
+.ic{width:56px;height:56px;border-radius:50%;margin:0 auto 10px;display:grid;place-items:center;font-size:27px;transform:scale(.6);opacity:0;transition:transform .5s cubic-bezier(.2,1.4,.4,1),opacity .3s}
+.go .ic{transform:none;opacity:1}
+.ic.ok{background:var(--okb);color:var(--ok)}.ic.no{background:var(--eb);color:var(--e)}
+.av{width:64px;height:64px;font:600 20px system-ui,sans-serif;color:#fff;background:var(--a) center/cover}
+.fx{font-size:24px;letter-spacing:6px;height:30px}
+.h{font:600 15px system-ui,sans-serif}.h.ok{color:var(--ok)}.h.no{color:var(--e)}
+.n{font:600 40px/1 system-ui,sans-serif;color:var(--a);margin-top:2px}
+.b{font:600 19px system-ui,sans-serif;margin:4px 0 10px}
+.p{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
+.p span{padding:3px 9px;border-radius:9px;background:var(--s);font-size:12px;color:var(--h)}
+.q{margin-top:10px;padding:8px 10px;border-radius:10px;background:var(--s);font-size:12px;text-align:left}
+.f{margin-top:12px;font-size:12px;color:var(--h)}
+</style>
+<div class=fx id=X></div><div class=ic id=I></div><div class=n id=N></div><div class=h id=H></div><div class=b id=B></div><div class=p id=P></div><div class=q id=Q></div><div class=f id=F></div>
+<script>
+const W=window.TelegramWidget||{onEvent(){}},$=i=>document.getElementById(i);
+function init(){
+  const D=window.DN;if(!D)return;
+  const set=(i,v)=>{$(i).textContent=v||'';$(i).hidden=!v};
+  set('X',D.x);set('N',D.n);set('B',D.b);set('Q',D.q?'«'+D.q+'»':'');set('F',D.f);
+  set('H',D.h);$('H').className='h '+(D.k||'');
+  const I=$('I');I.className='ic '+(D.k||'');
+  if(D.a){I.classList.add('av');I.textContent=D.av?'':D.i;if(D.av)I.style.backgroundImage='var(--av)'}else I.textContent=D.i;
+  $('P').innerHTML=(D.p||[]).map(t=>'<span>'+String(t).replace(/[&<>"]/g,c=>'&#'+c.charCodeAt(0)+';')+'</span>').join('');$('P').hidden=!(D.p||[]).length;
+  requestAnimationFrame(()=>requestAnimationFrame(()=>document.body.classList.add('go')));
+}
+init();W.ready&&W.ready();
+</script>

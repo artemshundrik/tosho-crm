@@ -4,6 +4,7 @@ import { escapeTelegramHtml } from "../_telegram";
 
 import { ABSENCE_KIND_LABELS, formatAbsenceRange } from "./absenceSubmit";
 import { shiftDays, todayKeyInKiev } from "./digestDates";
+import { avatarStyle, loadMemberAvatar } from "./cardWidget";
 import { buildAbsenceWidget, type WidgetContent } from "./telegramWidgets";
 
 /**
@@ -65,7 +66,7 @@ export async function loadAbsenceRequestWidget(
     const windowEnd = shiftDays(windowStart, length - 1);
     const lastKey = absence.end_date > windowEnd ? absence.end_date : windowEnd;
 
-    const [overlapResult, holidayResult] = await Promise.all([
+    const [overlapResult, holidayResult, avatar] = await Promise.all([
       admin
         .schema("tosho")
         .from("team_absences")
@@ -85,6 +86,7 @@ export async function loadAbsenceRequestWidget(
         .eq("workspace_id", absence.workspace_id)
         .gte("day", windowStart)
         .lte("day", lastKey),
+      loadMemberAvatar(admin, absence.user_id),
     ]);
     if (overlapResult.error || holidayResult.error) return null;
 
@@ -123,7 +125,11 @@ export async function loadAbsenceRequestWidget(
     const range = formatAbsenceRange(absence);
     const todayIndex = dayIndex(windowStart, todayKeyInKiev(new Date()));
 
+    // 40 px у віджеті — беремо вдвічі, щоб на ретіні не мило.
+    const requesterAvatar = avatar ? await avatarStyle(avatar, 80, 34).catch(() => undefined) : undefined;
+
     return buildAbsenceWidget({
+      avatarStyle: requesterAvatar,
       title: `Заявка · ${kindLabel.toLowerCase()}`,
       urgent: params.urgent ?? "",
       name: params.requesterName,

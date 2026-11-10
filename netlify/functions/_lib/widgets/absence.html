@@ -55,7 +55,7 @@ function init(){
   try{D=JSON.parse(W.chatData)}catch(e){return}
   const me=D.p[0],n=me[0].split(' ');
   $('T').textContent=D.t;$('E').textContent=D.e||'';
-  $('V').textContent=n[0][0]+(n[1]||'')[0];$('N').textContent=D.n;$('R').textContent=D.r+(D.c?' · '+D.c:'');
+  const V=$('V');if(D.a){V.textContent='';V.style.background='var(--av) center/cover'}else V.textContent=n[0][0]+(n[1]||'')[0];$('N').textContent=D.n;$('R').textContent=D.r+(D.c?' · '+D.c:'');
   $('M').hidden=!D.m;$('M').textContent=D.m?'«'+D.m+'»':'';
   const k=new Set(D.p.slice(1).filter(p=>p[2]<=me[3]&&p[3]>=me[2]).map(p=>p[0])).size;
   $('S').className='st'+(k?' w':'');$('S').textContent=k?'У ці дні ще '+pl(k,'відсутня','відсутні','відсутні')+' '+k+' '+pl(k,'людина','людини','людей'):'У ці дні всі інші на місці';

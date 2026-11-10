@@ -89,3 +89,24 @@ export function decisionKeyboard(absenceId: string, crmUrl: string): InlineKeybo
     [{ text: "Перейти в CRM", url: crmUrl }],
   ];
 }
+
+/** Кнопка-підпис після рішення: натиск лише нагадує, що вже вирішено. */
+export const ABSENCE_DECIDED_CALLBACK = "absd:i";
+
+/**
+ * Після рішення на місці кнопок — хто й коли вирішив (макет 2):
+ * «✅ Погоджено · Артем Ш., 10:42». Окремого повідомлення більше немає.
+ */
+export function decidedAbsenceKeyboard(params: {
+  approved: boolean;
+  deciderShort: string;
+  time: string;
+  crmUrl: string;
+}): InlineKeyboard {
+  const verdict = params.approved ? "✅ Погоджено" : "✖️ Відхилено";
+  const who = [params.deciderShort, params.time].filter(Boolean).join(", ");
+  return [
+    [{ text: who ? `${verdict} · ${who}` : verdict, callback_data: ABSENCE_DECIDED_CALLBACK }],
+    [{ text: "Відкрити в CRM", url: params.crmUrl }],
+  ];
+}

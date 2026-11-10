@@ -3,6 +3,7 @@ import { assertCronAuthorized } from "./_cronAuth";
 import { deliverNotifications } from "./_notificationDelivery";
 import { absenceDecisionActions } from "./_lib/absenceDecisionButtons";
 import { loadAbsenceRequestWidget } from "./_lib/absenceWidget";
+import { loadCelebrationWidget } from "./_lib/teamCelebrationWidget";
 import { NOTIFY_FROM_HOUR, NOTIFY_UNTIL_HOUR, isQuietHour } from "./_lib/quietHours";
 
 type HttpEvent = {
@@ -81,6 +82,8 @@ type PendingNotificationRow = {
   telegramActions?: Array<{ text: string; callbackData: string }>;
   /** Календар «хто ще відсутній» під заявкою — див. _lib/absenceWidget. */
   telegramWidget?: { html: string; chatData: string; caption: string } | null;
+  /** «💬 Привітати» — у приватний чат іменинника, коли знаємо його нік. */
+  telegramLinks?: Array<{ text: string; href: string }>;
 };
 
 const TEAM_EVENTS_TIME_ZONE = "Europe/Kiev";
@@ -453,6 +456,10 @@ export const handler = async (event: HttpEvent) => {
     const { recipientIdsByWorkspace, approverIdsByWorkspace, ownerIdsByWorkspace, privilegedByKey, profileByUserKey } =
       resolveAudience(memberships, knownProfiles);
 
+    const jobRoleByKey = new Map(
+      memberships.map((row) => [`${row.workspace_id}:${row.user_id}`, row.job_role ?? null] as const)
+    );
+
     const existingKeys = new Set(
       existingNotifications
         .map((row) => {
@@ -498,13 +505,36 @@ export const handler = async (event: HttpEvent) => {
         if (!baseNotification) continue;
         emittedEvents += 1;
 
+        // Картка з аватаркою (REQ-356#p4) — одна на подію і лише коли є кому слати.
+        const fresh = workspaceRecipients.filter((id) => !existingKeys.has(`${id}::${baseNotification.href}`));
+        const celebration =
+          fresh.length > 0 && (eventKind === "birthday" || eventKind === "anniversary")
+            ? await loadCelebrationWidget(adminClient, {
+                kind: eventKind,
+                userId: profile.user_id,
+                name: getDisplayName(profile),
+                years: eventKind === "anniversary" ? getAnniversaryYearsToday(profile.start_date, todayKey) : null,
+                jobRole: jobRoleByKey.get(`${profile.workspace_id}:${profile.user_id}`) ?? null,
+                startDate: profile.start_date,
+                title: baseNotification.title,
+                body: baseNotification.body,
+              })
+            : null;
+
         for (const recipientId of workspaceRecipients) {
           const dedupeKey = `${recipientId}::${baseNotification.href}`;
           if (existingKeys.has(dedupeKey)) continue;
           existingKeys.add(dedupeKey);
+          const isSelf = recipientId === profile.user_id;
           pendingRows.push({
             user_id: recipientId,
             ...baseNotification,
+            telegramWidget: celebration?.widget ?? null,
+            // Собі не пишуть; без ніку в Telegram кнопці нікуди вести.
+            telegramLinks:
+              celebration?.chatUrl && !isSelf
+                ? [{ text: "💬 Привітати", href: celebration.chatUrl }]
+                : undefined,
           });
         }
       }

@@ -343,6 +343,8 @@ export type AbsenceWidgetData = {
   requester: { from: number; to: number };
   others: Array<{ name: string; kind: string; from: number; to: number; pending: boolean }>;
   caption: string;
+  /** `<style>` з --av заявника; не влізе в ліміт — лишаться ініціали. */
+  avatarStyle?: string;
 };
 
 /** Більше рядків календар не вміщує у висоту віджета. */
@@ -379,5 +381,11 @@ export function buildAbsenceWidget(data: AbsenceWidgetData): WidgetContent | nul
     chatData = chatDataFor();
   }
   if (bytes(chatData) > DATA_LIMIT || compressedSize(ABSENCE_WIDGET_HTML) > HTML_LIMIT) return null;
+  // Аватарка — у самому HTML: прапорець у даних, щоб шаблон знав, що малювати.
+  if (data.avatarStyle) {
+    const html = data.avatarStyle + ABSENCE_WIDGET_HTML;
+    const withFlag = chatData.replace(/^\{/, '{"a":1,');
+    if (compressedSize(html) <= HTML_LIMIT && bytes(withFlag) <= DATA_LIMIT) return { html, chatData: withFlag, caption: data.caption };
+  }
   return { html: ABSENCE_WIDGET_HTML, chatData, caption: data.caption };
 }

@@ -42,6 +42,8 @@ type NotificationInsertRow = {
    * Telegram фото не прийняв — іде звичайний текст із тими самими кнопками.
    */
   telegramPhoto?: { photo: Buffer; caption: string } | null;
+  /** Свій підпис кнопки, що веде за href («Мої відсутності»). Теж не колонка. */
+  telegramOpenText?: string;
 };
 
 /** Рядок для БД: без полів, яких немає в таблиці notifications. */
@@ -51,6 +53,7 @@ export function toDbRow(row: NotificationInsertRow) {
     telegramLinks: _telegramLinks,
     telegramWidget: _telegramWidget,
     telegramPhoto: _telegramPhoto,
+    telegramOpenText: _telegramOpenText,
     ...dbRow
   } = row;
   return dbRow;
@@ -77,7 +80,7 @@ export function buildNotificationKeyboard(
   );
   const linkRows = (row.telegramLinks ?? []).map((link) => [{ text: link.text, url: resolveUrl(link.href) }]);
   const openButton = {
-    text: actionButtons.length > 0 || linkRows.length > 0 ? "Перейти в CRM" : "Відкрити в CRM",
+    text: row.telegramOpenText || (actionButtons.length > 0 || linkRows.length > 0 ? "Перейти в CRM" : "Відкрити в CRM"),
     url,
   };
   return [...(actionButtons.length > 0 ? [actionButtons] : []), ...linkRows, [openButton]];
