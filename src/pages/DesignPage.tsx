@@ -5021,7 +5021,7 @@ export default function DesignPage() {
                 {DESIGN_COLUMNS.map((col) => {
                   const Icon = DESIGN_STATUS_ICON_BY_STATUS[col.id];
                   return (
-                    <section key={col.id} className="rounded-inner border border-line bg-card/60">
+                    <section key={col.id} className="rounded-inner border border-line bg-card-soft">
                       <div className="flex items-center justify-between gap-2 border-b border-line-subtle px-3 py-2.5">
                         <div className="flex min-w-0 items-center gap-2">
                           <Icon className={cn("h-3.5 w-3.5 shrink-0", DESIGN_STATUS_ICON_COLOR_BY_STATUS[col.id])} />
@@ -5033,7 +5033,7 @@ export default function DesignPage() {
                       </div>
                       <div className="space-y-2 p-2.5">
                         {Array.from({ length: 2 }).map((_, index) => (
-                          <div key={`${col.id}:mobile-skeleton:${index}`} className="rounded-md border border-line bg-card/82 p-3">
+                          <div key={`${col.id}:mobile-skeleton:${index}`} className="rounded-md border border-line bg-card-glass p-3">
                             <div className="flex items-center gap-3">
                               <Skeleton className="h-9 w-9 shrink-0 rounded-xl" />
                               <div className="min-w-0 flex-1 space-y-2">

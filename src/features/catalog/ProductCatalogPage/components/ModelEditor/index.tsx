@@ -170,7 +170,7 @@ export function ModelEditor({
             />
 
             <div className="space-y-4">
-              <section className="rounded-xl border border-line bg-card/70 p-4">
+              <section className="rounded-xl border border-line bg-card-soft p-4">
                 <MethodsSection
                   draftKindId={draftKindId}
                   draftKindName={draftKind?.name}
@@ -188,7 +188,7 @@ export function ModelEditor({
                 />
               </section>
 
-              <section className="rounded-xl border border-line bg-card/70 p-4">
+              <section className="rounded-xl border border-line bg-card-soft p-4">
                 <PricingSection
                   draftPriceMode={draftPriceMode}
                   draftFixedPrice={draftFixedPrice}
@@ -204,7 +204,7 @@ export function ModelEditor({
           </div>
         </div>
 
-        <DialogFooter className="shrink-0 border-t border-line-subtle bg-background/95 px-4 py-3 sm:justify-between">
+        <DialogFooter className="shrink-0 border-t border-line-subtle bg-background-glass px-4 py-3 sm:justify-between">
           {editingModelId ? (
             <Button
               variant="ghost"

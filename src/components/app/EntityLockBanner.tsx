@@ -117,7 +117,7 @@ export function EntityLockBanner({
       <div className={cn(SHELL, "tone-warning", className)}>
         <div className={ROW}>
           <span
-            className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-current/25 bg-background/40"
+            className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-current/25 bg-background-soft"
             aria-hidden
           >
             <TimerReset className="h-3.5 w-3.5" />

@@ -260,7 +260,7 @@ function SummaryBucket({
 
 function MetricCard({ icon: Icon, title, value, hint, badge }: MetricCardConfig) {
   return (
-    <section className="rounded-xl border border-line bg-card/95 p-5">
+    <section className="rounded-xl border border-line bg-card-glass p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-line bg-tint">
           <Icon className="h-5 w-5 text-foreground" />
@@ -284,7 +284,7 @@ function StatusOverviewCard({
   rows: Array<{ title: string; description: string; tone: ObservabilityTone }>;
 }) {
   return (
-    <section className="rounded-xl border border-line bg-card/95 p-5">
+    <section className="rounded-xl border border-line bg-card-glass p-5">
       <div className="text-sm font-semibold text-foreground">Стан системи зараз</div>
       <div className="mt-1 text-sm text-muted-foreground">Швидкий світлофор по тому, куди дивитися в першу чергу.</div>
       <div className="mt-5 space-y-3">
@@ -306,7 +306,7 @@ function StatusOverviewCard({
 
 function ExecutiveSummaryCard({ good, watch, bad }: { good: string[]; watch: string[]; bad: string[] }) {
   return (
-    <section className="rounded-xl border border-line bg-card/95 p-5">
+    <section className="rounded-xl border border-line bg-card-glass p-5">
       <div className="text-sm font-semibold text-foreground">Коротко по стану системи</div>
       <div className="mt-1 text-sm text-muted-foreground">Тут без графіків і цифр: що зараз добре, що варто перевірити, і що вже погано.</div>
       <div className="mt-5 grid gap-4 xl:grid-cols-3">
@@ -345,7 +345,7 @@ function TrendCard({
   const latestValue = latestPoint && typeof latestPoint[dataKey] === "number" ? (latestPoint[dataKey] as number) : undefined;
 
   return (
-    <section className="rounded-xl border border-line bg-card/95 p-5">
+    <section className="rounded-xl border border-line bg-card-glass p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-sm font-semibold text-foreground">{title}</div>
@@ -443,7 +443,7 @@ export function OverviewTabPanel({
       </section>
 
       {latestVsPreviousCards.length ? (
-        <section className="rounded-xl border border-line bg-card/95 p-5">
+        <section className="rounded-xl border border-line bg-card-glass p-5">
           <div className="text-sm font-semibold text-foreground">Сьогодні проти попереднього snapshot</div>
           <div className="mt-1 text-sm text-muted-foreground">
             Коротка динаміка без технічного шуму: що саме сьогодні стало інтенсивнішим або слабшим.
@@ -460,7 +460,7 @@ export function OverviewTabPanel({
         </section>
       ) : null}
 
-      <section className="rounded-xl border border-line bg-card/95 p-5">
+      <section className="rounded-xl border border-line bg-card-glass p-5">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div>
             <div className="text-sm font-semibold text-foreground">Операційна динаміка</div>
@@ -558,7 +558,7 @@ export function OverviewTabPanel({
         <StatusOverviewCard rows={systemStatusRows} />
       </section>
 
-      <section className="rounded-xl border border-line bg-card/95 p-5">
+      <section className="rounded-xl border border-line bg-card-glass p-5">
         <div className="text-sm font-semibold text-foreground">Що справді важливо щодня</div>
         <div className="mt-1 text-sm text-muted-foreground">Це скорочений список без зайвого шуму. Не все на цій сторінці варте однакової уваги.</div>
         <div className="mt-5 space-y-3">
@@ -599,7 +599,7 @@ export function AttachmentsTabPanel({
 }: AttachmentsTabPanelProps) {
   return (
     <TabsContent value="attachments" className="mt-6 space-y-6">
-      <section className="rounded-xl border border-line bg-card/95 p-5">
+      <section className="rounded-xl border border-line bg-card-glass p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <div className="text-sm font-semibold text-foreground">Orphan files review</div>
@@ -619,7 +619,7 @@ export function AttachmentsTabPanel({
       </section>
 
       {attachmentAuditLoading && !attachmentAuditLoaded ? (
-        <section className="rounded-xl border border-line bg-card/95">
+        <section className="rounded-xl border border-line bg-card-glass">
           <AppSectionLoader label="Завантаження orphan files audit..." className="border-none bg-transparent py-12" />
         </section>
       ) : attachmentAuditError ? (
@@ -652,7 +652,7 @@ export function AttachmentsTabPanel({
             />
           </section>
 
-          <section className="rounded-xl border border-line bg-card/95 p-5">
+          <section className="rounded-xl border border-line bg-card-glass p-5">
             <div className="text-sm font-semibold text-foreground">Як цим користуватись</div>
             <div className="mt-4 grid gap-3 xl:grid-cols-3">
               <div className="rounded-xl border border-success-soft-border bg-success-soft px-4 py-3 text-sm leading-6 text-success-foreground">
@@ -690,7 +690,7 @@ export function AttachmentsTabPanel({
               toneClass: "border-danger-soft-border bg-danger-soft text-danger-foreground",
             },
           ].map((section) => (
-            <section key={section.title} className="rounded-xl border border-line bg-card/95">
+            <section key={section.title} className="rounded-xl border border-line bg-card-glass">
               <div className="border-b border-line-subtle px-5 py-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
@@ -841,7 +841,7 @@ export function BackupsTabPanel({
 }: BackupsTabPanelProps) {
   return (
     <TabsContent value="backups" className="mt-6 space-y-6">
-      <section className="rounded-xl border border-line bg-card/95 p-5">
+      <section className="rounded-xl border border-line bg-card-glass p-5">
         <div className="text-sm font-semibold text-foreground">Backups monitor</div>
         <div className="mt-1 text-sm text-muted-foreground">
           Storage і database backup-и в одному місці: останній стан, Dropbox-шлях і недавні запуски без читання сирих логів.
@@ -850,7 +850,7 @@ export function BackupsTabPanel({
 
       <section className="grid gap-4 xl:grid-cols-2">
         {sections.map((section) => (
-          <section key={section.key} className="rounded-xl border border-line bg-card/95 p-5">
+          <section key={section.key} className="rounded-xl border border-line bg-card-glass p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="text-sm font-semibold text-foreground">{section.title}</div>
@@ -1016,10 +1016,10 @@ export function TelegramTabPanel() {
       {loading ? (
         <AppSectionLoader
           label="Завантаження статистики Telegram..."
-          className="rounded-xl border border-line bg-card/95 py-12"
+          className="rounded-xl border border-line bg-card-glass py-12"
         />
       ) : error ? (
-        <section className="rounded-xl border border-line bg-card/95 p-6 text-sm text-danger-foreground">
+        <section className="rounded-xl border border-line bg-card-glass p-6 text-sm text-danger-foreground">
           Не вдалося завантажити: {error}
         </section>
       ) : stats ? (
@@ -1051,7 +1051,7 @@ export function TelegramTabPanel() {
             />
           </div>
 
-          <section className="rounded-xl border border-line bg-card/95 p-5">
+          <section className="rounded-xl border border-line bg-card-glass p-5">
             <div className="text-sm font-semibold text-foreground">Воронка підключення</div>
             <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
               {[
@@ -1072,7 +1072,7 @@ export function TelegramTabPanel() {
           </section>
 
           {optOuts.length ? (
-            <section className="rounded-xl border border-line bg-card/95 p-5">
+            <section className="rounded-xl border border-line bg-card-glass p-5">
               <div className="text-sm font-semibold text-foreground">Вимкнули по категоріях</div>
               <div className="mt-3 flex flex-wrap gap-2">
                 {optOuts.map(([key, n]) => (
@@ -1084,7 +1084,7 @@ export function TelegramTabPanel() {
             </section>
           ) : null}
 
-          <section className="rounded-xl border border-line bg-card/95">
+          <section className="rounded-xl border border-line bg-card-glass">
             <div className="flex items-center justify-between gap-3 p-5 pb-3">
               <div className="text-sm font-semibold text-foreground">Співробітники</div>
               <div className="text-xs text-muted-foreground">{stats.members.length} осіб</div>
@@ -1298,10 +1298,10 @@ export function AiUsageTabPanel({ workspaceId }: { workspaceId: string | null })
       {loading ? (
         <AppSectionLoader
           label="Завантаження витрат на AI..."
-          className="rounded-xl border border-line bg-card/95 py-12"
+          className="rounded-xl border border-line bg-card-glass py-12"
         />
       ) : error ? (
-        <section className="rounded-xl border border-line bg-card/95 p-6 text-sm text-danger-foreground">
+        <section className="rounded-xl border border-line bg-card-glass p-6 text-sm text-danger-foreground">
           Не вдалося завантажити: {error}
         </section>
       ) : (
@@ -1329,12 +1329,12 @@ export function AiUsageTabPanel({ workspaceId }: { workspaceId: string | null })
           </div>
 
           {!hasData ? (
-            <section className="rounded-xl border border-dashed border-line bg-card/60 py-12 text-center text-sm text-muted-foreground">
+            <section className="rounded-xl border border-dashed border-line bg-card-soft py-12 text-center text-sm text-muted-foreground">
               Ще немає даних за цей період.
             </section>
           ) : (
             <>
-              <section className="rounded-xl border border-line bg-card/95 p-5">
+              <section className="rounded-xl border border-line bg-card-glass p-5">
                 <div className="text-sm font-semibold text-foreground">Динаміка витрат по днях</div>
                 <div className="mt-4 h-[240px]">
                   <ResponsiveContainer width="100%" height="100%">
@@ -1375,7 +1375,7 @@ export function AiUsageTabPanel({ workspaceId }: { workspaceId: string | null })
                 </div>
               </section>
 
-              <section className="rounded-xl border border-line bg-card/95 p-5">
+              <section className="rounded-xl border border-line bg-card-glass p-5">
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-sm font-semibold text-foreground">Хто скільки використовує</div>
                   <div className="text-xs text-muted-foreground">{summary?.byPerson.length ?? 0} осіб</div>
@@ -1591,29 +1591,29 @@ export function RuntimeErrorsTabPanel({ teamId }: { teamId: string | null }) {
       {loading ? (
         <AppSectionLoader label="Читаємо журнал помилок..." className="border-none bg-transparent py-12" />
       ) : loadError ? (
-        <div className="rounded-xl border border-line bg-card/95 p-4 text-sm text-destructive">{loadError}</div>
+        <div className="rounded-xl border border-line bg-card-glass p-4 text-sm text-destructive">{loadError}</div>
       ) : groups.length === 0 ? (
-        <div className="rounded-xl border border-line bg-card/95 p-6 text-center text-sm text-muted-foreground">
+        <div className="rounded-xl border border-line bg-card-glass p-6 text-center text-sm text-muted-foreground">
           За цей період падінь не було.
         </div>
       ) : (
         <>
           <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-xl border border-line bg-card/95 p-4">
+            <div className="rounded-xl border border-line bg-card-glass p-4">
               <div className="text-3xs font-semibold uppercase tracking-caps text-muted-foreground">Падінь усього</div>
               <div className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{rows.length}</div>
             </div>
-            <div className="rounded-xl border border-line bg-card/95 p-4">
+            <div className="rounded-xl border border-line bg-card-glass p-4">
               <div className="text-3xs font-semibold uppercase tracking-caps text-muted-foreground">Різних помилок</div>
               <div className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{groups.length}</div>
             </div>
-            <div className="rounded-xl border border-line bg-card/95 p-4">
+            <div className="rounded-xl border border-line bg-card-glass p-4">
               <div className="text-3xs font-semibold uppercase tracking-caps text-muted-foreground">Кого зачепило</div>
               <div className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{peopleAffected}</div>
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-xl border border-line bg-card/95">
+          <div className="overflow-hidden rounded-xl border border-line bg-card-glass">
             <div className="divide-y divide-line-subtle">
               {groups.map((group) => {
                 const expanded = openKey === group.key;

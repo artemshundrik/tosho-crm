@@ -935,7 +935,7 @@ export default function AdminObservabilityPage() {
             </div>
             <div className="flex flex-wrap items-center gap-3">
               {latest ? (
-                <div className="rounded-xl border border-line bg-background/80 px-4 py-3 text-sm text-muted-foreground backdrop-blur">
+                <div className="rounded-xl border border-line bg-background-glass px-4 py-3 text-sm text-muted-foreground backdrop-blur">
                   Останній snapshot:{" "}
                   <span className="font-semibold text-foreground">{formatDateTimeLabel(latest.captured_at)}</span>
                 </div>
@@ -949,7 +949,7 @@ export default function AdminObservabilityPage() {
         </section>
 
         {loading ? (
-          <section className="rounded-xl border border-line bg-card/95">
+          <section className="rounded-xl border border-line bg-card-glass">
             <AppSectionLoader label="Завантаження observability snapshots..." className="border-none bg-transparent py-12" />
           </section>
         ) : error && !latest ? (
@@ -968,7 +968,7 @@ export default function AdminObservabilityPage() {
             </div>
           </section>
         ) : !latest ? (
-          <section className="rounded-xl border border-line bg-card/95 p-8">
+          <section className="rounded-xl border border-line bg-card-glass p-8">
             <div className="mx-auto max-w-2xl text-center">
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-xl border border-line bg-tint">
                 <Activity className="h-6 w-6 text-primary" />
@@ -993,7 +993,7 @@ export default function AdminObservabilityPage() {
                 </div>
               </section>
             ) : null}
-            <div className="rounded-xl border border-line bg-card/95 p-3">
+            <div className="rounded-xl border border-line bg-card-glass p-3">
               <TabsList className="inline-flex h-auto w-fit flex-wrap items-center gap-1 border border-line bg-tint-subtle p-1">
                 <TabsTrigger
                   value="overview"
@@ -1036,7 +1036,7 @@ export default function AdminObservabilityPage() {
 
             <Suspense
               fallback={
-                <section className="mt-6 rounded-xl border border-line bg-card/95">
+                <section className="mt-6 rounded-xl border border-line bg-card-glass">
                   <AppSectionLoader label="Завантаження overview..." className="border-none bg-transparent py-12" />
                 </section>
               }
@@ -1190,7 +1190,7 @@ export default function AdminObservabilityPage() {
             <Suspense
               fallback={
                 activeTab === "backups" ? (
-                  <section className="mt-6 rounded-xl border border-line bg-card/95">
+                  <section className="mt-6 rounded-xl border border-line bg-card-glass">
                     <AppSectionLoader label="Завантаження backup monitor..." className="border-none bg-transparent py-12" />
                   </section>
                 ) : null
@@ -1206,7 +1206,7 @@ export default function AdminObservabilityPage() {
             <Suspense
               fallback={
                 activeTab === "attachments" ? (
-                  <section className="mt-6 rounded-xl border border-line bg-card/95">
+                  <section className="mt-6 rounded-xl border border-line bg-card-glass">
                     <AppSectionLoader label="Завантаження attachments review..." className="border-none bg-transparent py-12" />
                   </section>
                 ) : null
@@ -1237,7 +1237,7 @@ export default function AdminObservabilityPage() {
             <Suspense
               fallback={
                 activeTab === "telegram" ? (
-                  <section className="mt-6 rounded-xl border border-line bg-card/95">
+                  <section className="mt-6 rounded-xl border border-line bg-card-glass">
                     <AppSectionLoader label="Завантаження статистики Telegram..." className="border-none bg-transparent py-12" />
                   </section>
                 ) : null
@@ -1249,7 +1249,7 @@ export default function AdminObservabilityPage() {
             <Suspense
               fallback={
                 activeTab === "errors" ? (
-                  <section className="mt-6 rounded-xl border border-line bg-card/95">
+                  <section className="mt-6 rounded-xl border border-line bg-card-glass">
                     <AppSectionLoader label="Читаємо журнал помилок..." className="border-none bg-transparent py-12" />
                   </section>
                 ) : null
@@ -1267,7 +1267,7 @@ export default function AdminObservabilityPage() {
             <Suspense
               fallback={
                 activeTab === "ai-usage" ? (
-                  <section className="mt-6 rounded-xl border border-line bg-card/95">
+                  <section className="mt-6 rounded-xl border border-line bg-card-glass">
                     <AppSectionLoader label="Завантаження витрат на AI..." className="border-none bg-transparent py-12" />
                   </section>
                 ) : null

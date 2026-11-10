@@ -47,7 +47,7 @@ export function PricingSection({
           type="single"
           value={draftPriceMode}
           onValueChange={(v) => v && onPriceModeChange(v as PriceMode)}
-          className="rounded-lg border bg-background/70 p-1"
+          className="rounded-lg border bg-background-soft p-1"
         >
           <ToggleGroupItem value="fixed" size="sm" className="px-3 py-1.5 text-xs">
             Фіксована

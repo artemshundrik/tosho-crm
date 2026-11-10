@@ -18,7 +18,7 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      "fixed inset-0 z-50 bg-background/80 backdrop-blur-sm notranslate",
+      "fixed inset-0 z-50 bg-background-glass backdrop-blur-sm notranslate",
       // Підкладка приходить м'яко й трохи довше за вікно: спершу гасне тло,
       // на ньому вже проявляється модалка. Крива smooth, а не пружна: для
       // чистого фейду пружність не читається, лише вкорочує реальний час.

@@ -49,7 +49,7 @@ export function DeliveryPointsSection({
   defaultEdrpou,
 }: DeliveryPointsSectionProps) {
   return (
-    <section className="rounded-xl border border-line bg-card/40 p-4">
+    <section className="rounded-xl border border-line bg-card-soft p-4">
       <div className="mb-3 flex items-center justify-between gap-3 border-b border-line-subtle pb-2.5">
         <h4 className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
           Адреси доставки
@@ -65,7 +65,7 @@ export function DeliveryPointsSection({
           <button
             type="button"
             onClick={onAdd}
-            className="flex w-full cursor-pointer flex-col items-center gap-2 rounded-lg border border-dashed border-line bg-background/30 px-4 py-6 text-center transition-colors hover:border-line-strong hover:bg-background/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
+            className="flex w-full cursor-pointer flex-col items-center gap-2 rounded-lg border border-dashed border-line bg-background-faint px-4 py-6 text-center transition-colors hover:border-line-strong hover:bg-background-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
           >
             <MapPin className="h-5 w-5 text-muted-foreground/70" />
             <span className="text-sm text-muted-foreground">
@@ -76,7 +76,7 @@ export function DeliveryPointsSection({
           points.map((point, index) => {
             const TypeIcon = DELIVERY_POINT_TYPE_ICONS[point.type];
             return (
-              <div key={point.id} className="space-y-3 rounded-lg border border-line bg-background/40 p-3">
+              <div key={point.id} className="space-y-3 rounded-lg border border-line bg-background-soft p-3">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-muted-foreground">
                     <TypeIcon className="h-3.5 w-3.5 shrink-0" />

@@ -1047,7 +1047,7 @@ function PersonAccessSection({
                         : "text-muted-foreground",
                       interactive && "cursor-pointer",
                       interactive && !lock.checked && "hover:bg-tint hover:text-foreground",
-                      interactive && lock.checked && "hover:bg-card/80",
+                      interactive && lock.checked && "hover:bg-card-glass",
                       !interactive && "cursor-not-allowed"
                     )}
                   >

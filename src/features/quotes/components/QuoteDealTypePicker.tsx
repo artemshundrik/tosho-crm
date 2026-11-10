@@ -64,7 +64,7 @@ export function QuoteDealTypePicker({
             "disabled:cursor-not-allowed disabled:opacity-60",
             rule
               ? "border-foreground/30 bg-muted text-foreground hover:bg-muted"
-              : "border-line bg-background/55 text-muted-foreground hover:border-line-strong hover:bg-background/70"
+              : "border-line bg-background-soft text-muted-foreground hover:border-line-strong hover:bg-background-glass"
           )}
         >
           <Handshake className="h-4 w-4 shrink-0 opacity-70" />

@@ -453,7 +453,7 @@ export function ExpenseJournalPanel({
           // Одна дата = одна подія: заголовок із датою, кількістю позицій і підсумком.
           <div className="space-y-2">
             {dateGroups.map((group) => (
-              <div key={group.key} className="rounded-lg border border-line bg-background/60 p-1.5">
+              <div key={group.key} className="rounded-lg border border-line bg-background-soft p-1.5">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1.5 pb-1">
                   {group.label ? (
                     <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-foreground">

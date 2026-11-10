@@ -7,7 +7,7 @@ export const BRIEF_TEXTAREA_CLASS =
   "resize-none border-line-strong bg-tint-subtle px-4 py-4 text-sm leading-7 placeholder:text-muted-foreground/55";
 
 export const BRIEF_DIALOG_PREVIEW_CLASS =
-  "min-h-0 rounded-xl border border-line bg-background/70 p-3";
+  "min-h-0 rounded-xl border border-line bg-background-soft p-3";
 
 /** Стеля інлайнового поля ТЗ, далі — скрол усередині. */
 export const BRIEF_INLINE_TEXTAREA_MAX_HEIGHT = 320;

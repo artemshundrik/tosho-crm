@@ -142,7 +142,7 @@ export function MethodsSection({
                     type="button"
                     disabled={methodSaving}
                     onClick={() => onAddMethod(draftKindId, entry.name, entry.id)}
-                    className="flex w-full items-center justify-between gap-2 rounded-lg border border-line-strong bg-background/60 px-3 py-2 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 disabled:opacity-60"
+                    className="flex w-full items-center justify-between gap-2 rounded-lg border border-line-strong bg-background-soft px-3 py-2 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 disabled:opacity-60"
                   >
                     <span className="min-w-0 truncate text-sm font-medium">{entry.name}</span>
                     <span className="shrink-0 text-xs text-muted-foreground">
@@ -192,7 +192,7 @@ export function MethodsSection({
                       "flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 transition-colors",
                       isSelected
                         ? "border-primary/50 bg-primary/10 text-primary"
-                        : "border-line bg-background/50 text-foreground hover:border-line-strong hover:bg-tint",
+                        : "border-line bg-background-soft text-foreground hover:border-line-strong hover:bg-tint",
                       exactHere?.id === method.id && !isSelected && "border-primary/40 bg-primary/5"
                     )}
                   >

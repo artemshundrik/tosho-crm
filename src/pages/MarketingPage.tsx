@@ -1423,7 +1423,7 @@ export default function MarketingPage() {
                 </div>
                 {activeGroupItems.length > 1 ? (
                   <div
-                    className="flex shrink-0 items-center gap-2 overflow-x-auto border-t border-line-subtle bg-card/60 p-2.5 [scrollbar-width:thin]"
+                    className="flex shrink-0 items-center gap-2 overflow-x-auto border-t border-line-subtle bg-card-soft p-2.5 [scrollbar-width:thin]"
                     role="listbox"
                     aria-label="Візуали цього проєкту"
                   >

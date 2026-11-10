@@ -410,7 +410,7 @@ export function ContentHeader({
                       setMethodModalOpen(false);
                       setMethodModalValue("");
                     }}
-                    className="flex w-full items-center justify-between gap-2 rounded-lg border border-line-strong bg-background/60 px-3 py-2 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 disabled:opacity-60"
+                    className="flex w-full items-center justify-between gap-2 rounded-lg border border-line-strong bg-background-soft px-3 py-2 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 disabled:opacity-60"
                   >
                     <span className="min-w-0 truncate text-sm font-medium">{entry.name}</span>
                     <span className="shrink-0 text-xs text-muted-foreground">

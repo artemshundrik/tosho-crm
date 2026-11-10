@@ -335,7 +335,7 @@ export function AbsenceDialog({
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20",
                       active
                         ? cn("", toneBadgeClass[TEAM_ABSENCE_KIND_TONE[option.value]])
-                        : "text-muted-foreground hover:bg-background/60 hover:text-foreground"
+                        : "text-muted-foreground hover:bg-background-soft hover:text-foreground"
                     )}
                   >
                     <KindIcon className="h-3.5 w-3.5 shrink-0" aria-hidden />

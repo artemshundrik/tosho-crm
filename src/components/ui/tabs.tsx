@@ -35,7 +35,7 @@ const DEFAULT_LIST =
 const UNDERLINE_LIST = cn(TAB_BAR_ROW, "h-auto border-b border-line-subtle bg-transparent p-0")
 
 const DEFAULT_TRIGGER =
-  "inline-flex h-full items-center justify-center whitespace-nowrap rounded-md px-3 text-sm font-medium cursor-pointer transition-all duration-base ease-out focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[hsl(var(--soft-ring))] disabled:pointer-events-none disabled:opacity-50 hover:bg-background/50 hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:ring-1 data-[state=active]:ring-[hsl(var(--soft-ring))]"
+  "inline-flex h-full items-center justify-center whitespace-nowrap rounded-md px-3 text-sm font-medium cursor-pointer transition-all duration-base ease-out focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[hsl(var(--soft-ring))] disabled:pointer-events-none disabled:opacity-50 hover:bg-background-soft hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:ring-1 data-[state=active]:ring-[hsl(var(--soft-ring))]"
 
 const UNDERLINE_TRIGGER = cn(TAB_BAR_ITEM, "data-[state=active]:font-semibold data-[state=active]:text-foreground")
 

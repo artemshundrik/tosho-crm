@@ -43,7 +43,7 @@ export function QuoteOfferSendButton(props: {
   primary?: boolean;
 }) {
   // Половинки — ghost-кнопки; на чорному тлі їм треба світлий текст і світлий ховер.
-  const half = props.primary ? "text-background hover:bg-background/15 hover:text-background" : "";
+  const half = props.primary ? "text-background hover:bg-background-faint hover:text-background" : "";
   return (
     <div
       className={cn(
@@ -65,7 +65,7 @@ export function QuoteOfferSendButton(props: {
       </Button>
       {/* Риска з відступами зверху й знизу, а не від краю до краю: контрол
           низький, і лінія на всю висоту зливалася б із рамкою. */}
-      <span aria-hidden className={cn("my-1.5 w-px", props.primary ? "bg-background/25" : "bg-border")} />
+      <span aria-hidden className={cn("my-1.5 w-px", props.primary ? "bg-background-faint" : "bg-border")} />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button

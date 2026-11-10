@@ -2148,7 +2148,7 @@ function CustomersPage({ teamId }: { teamId: string }) {
                   {crossManagerMatches.map((match) => (
                     <div
                       key={`${match.entityType}-${match.id}`}
-                      className="min-w-[220px] rounded-lg border border-warning-soft-border bg-background/85 px-3 py-2"
+                      className="min-w-[220px] rounded-lg border border-warning-soft-border bg-background-glass px-3 py-2"
                     >
                       <div className="flex items-center gap-2">
                         <Badge

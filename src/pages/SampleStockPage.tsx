@@ -970,7 +970,7 @@ export default function SampleStockPage() {
         {error ? (
           <div className="rounded-inner border border-destructive/20 bg-destructive/5 p-6 text-sm text-destructive">{error}</div>
         ) : schemaMissing ? (
-          <div className="rounded-inner border border-dashed border-line bg-card/40 p-6 text-sm text-muted-foreground">
+          <div className="rounded-inner border border-dashed border-line bg-card-soft p-6 text-sm text-muted-foreground">
             Таблиця складу ще не створена в Supabase. Потрібно застосувати{" "}
             <span className="font-medium text-foreground">scripts/sample-stock-schema.sql</span>, а стартові дані лежать у{" "}
             <span className="font-medium text-foreground">scripts/sample-stock-seed-from-numbers.sql</span>.
@@ -1179,15 +1179,15 @@ export default function SampleStockPage() {
           <SheetBody className="space-y-5 px-6 py-6">
             {movementTarget ? (
               <div className="grid grid-cols-3 gap-3 text-sm">
-                <div className="rounded-inner border border-line bg-card/70 px-3 py-2">
+                <div className="rounded-inner border border-line bg-card-soft px-3 py-2">
                   <div className="text-xs text-muted-foreground">Залишок</div>
                   <div className="font-semibold tabular-nums">{formatQuantity(getQuantity(movementTarget))}</div>
                 </div>
-                <div className="rounded-inner border border-line bg-card/70 px-3 py-2">
+                <div className="rounded-inner border border-line bg-card-soft px-3 py-2">
                   <div className="text-xs text-muted-foreground">Резерв</div>
                   <div className="font-semibold tabular-nums">{formatQuantity(getReservedQuantity(movementTarget))}</div>
                 </div>
-                <div className="rounded-inner border border-line bg-card/70 px-3 py-2">
+                <div className="rounded-inner border border-line bg-card-soft px-3 py-2">
                   <div className="text-xs text-muted-foreground">Доступно</div>
                   <div className="font-semibold tabular-nums">{formatQuantity(getAvailableQuantity(movementTarget))}</div>
                 </div>

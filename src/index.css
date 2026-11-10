@@ -83,6 +83,11 @@
     /* Сила двох підкладок (colors.tint): так само по одній змінній. */
     --tint-subtle-alpha: 0.2;
     --tint-alpha: 0.5;
+    /* Сила напівпрозорих поверхонь (bg-background-faint/-soft/-glass,
+       bg-card-soft/-glass, bg-popover-glass). */
+    --surface-faint-alpha: 0.2;
+    --surface-soft-alpha: 0.6;
+    --surface-glass-alpha: 0.9;
     --input: 225 9% 87%;
     
     /* --- BRAND TOKENS (single knob) --- */
@@ -1345,7 +1350,7 @@
     background: hsl(var(--canvas-header-bg));
   }
   .quote-soft-card {
-    @apply border-line bg-card/80 shadow-sm;
+    @apply border-line bg-card-glass shadow-sm;
   }
   .quote-muted-card {
     @apply border border-line bg-tint-subtle shadow-sm;

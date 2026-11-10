@@ -87,7 +87,7 @@ function AssetTile({
           </div>
         )}
         {opening ? (
-          <div className="absolute inset-0 grid place-items-center bg-background/60">
+          <div className="absolute inset-0 grid place-items-center bg-background-soft">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
         ) : null}
@@ -227,7 +227,7 @@ function MaterialViewer({
                     variant="outline"
                     aria-label="Попередній файл"
                     onClick={() => step(-1)}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-background/90"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-background-glass"
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
@@ -237,7 +237,7 @@ function MaterialViewer({
                     variant="outline"
                     aria-label="Наступний файл"
                     onClick={() => step(1)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-background/90"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-background-glass"
                   >
                     <ChevronRight className="h-4 w-4" />
                   </Button>

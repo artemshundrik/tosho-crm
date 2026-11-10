@@ -105,7 +105,7 @@ export function IdleBlurOverlay() {
       <DialogContent
         hideClose
         isDirty={false}
-        overlayClassName="bg-background/70 backdrop-blur-3xl"
+        overlayClassName="bg-background-soft backdrop-blur-3xl"
         className="max-w-sm items-center gap-3 text-center sm:p-6"
         onEscapeKeyDown={(event) => event.preventDefault()}
         onOpenAutoFocus={(event) => {

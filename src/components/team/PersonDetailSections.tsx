@@ -207,7 +207,7 @@ export function PersonActivitySection({ userId }: { userId: string }) {
             ))}
           </div>
 
-          <div className="overflow-hidden rounded-lg border border-line bg-background/40">
+          <div className="overflow-hidden rounded-lg border border-line bg-background-soft">
             {groups.map((group) => {
               const isOpen = expanded.has(group.key);
               const heading = formatGroupHeading(group);

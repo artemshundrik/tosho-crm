@@ -301,7 +301,7 @@ const ChipPicker: React.FC<{
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-1",
             selected
               ? "border-primary/30 bg-primary/10 text-primary hover:bg-primary/15"
-              : "border-line bg-background/55 text-muted-foreground hover:border-line-strong hover:bg-background/70"
+              : "border-line bg-background-soft text-muted-foreground hover:border-line-strong hover:bg-background-glass"
           )}
         >
           <span className={cn("mr-2 shrink-0 [&>svg]:h-3.5 [&>svg]:w-3.5", selected ? "text-primary" : "text-muted-foreground")}>{icon}</span>
@@ -506,10 +506,10 @@ export function PrintProductConfigurator({
   const hasSelectedProduct = Boolean(selectedConfiguratorProduct && productKind);
 
   return (
-    <div className="space-y-6 rounded-xl border border-line bg-background/30 p-4 md:p-5">
+    <div className="space-y-6 rounded-xl border border-line bg-background-faint p-4 md:p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-center gap-2 text-base font-semibold text-foreground">
-          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-line bg-background/55 text-muted-foreground [&>svg]:h-4 [&>svg]:w-4">
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-line bg-background-soft text-muted-foreground [&>svg]:h-4 [&>svg]:w-4">
             <Printer />
           </span>
           <span>{selectionLabel || "Конфігурація виробу"}</span>
@@ -519,13 +519,13 @@ export function PrintProductConfigurator({
           {steps.map((step) => (
             <div
               key={step.label}
-              className="inline-flex items-center gap-2 rounded-full border border-line bg-background/40 px-3 py-1.5 text-xs text-muted-foreground"
+              className="inline-flex items-center gap-2 rounded-full border border-line bg-background-soft px-3 py-1.5 text-xs text-muted-foreground"
             >
               {step.done ? <CheckCircle2 className="h-3.5 w-3.5 text-foreground" /> : <CircleDashed className="h-3.5 w-3.5" />}
               <span className={step.done ? "text-foreground" : undefined}>{step.label}</span>
             </div>
           ))}
-          <div className="inline-flex items-center rounded-full border border-line bg-background/40 px-3 py-1.5 text-xs text-muted-foreground">
+          <div className="inline-flex items-center rounded-full border border-line bg-background-soft px-3 py-1.5 text-xs text-muted-foreground">
             {completedSteps}/{steps.length}
           </div>
           </div>

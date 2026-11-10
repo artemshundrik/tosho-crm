@@ -53,7 +53,7 @@ function toneOf(health: DropboxHealth): HealthTone {
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded-xl border border-line bg-background/60 p-4">
+    <div className="rounded-xl border border-line bg-background-soft p-4">
       <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{value}</div>
       {hint ? <div className="mt-1 text-xs text-muted-foreground">{hint}</div> : null}
@@ -103,7 +103,7 @@ export function DropboxHealthCard() {
   const markedPercent = health && health.approvedTotal > 0 ? Math.round((marked / health.approvedTotal) * 100) : 0;
 
   return (
-    <section className="mt-6 rounded-xl border border-line bg-card/95 p-6">
+    <section className="mt-6 rounded-xl border border-line bg-card-glass p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <FolderTree className="h-5 w-5 text-muted-foreground" />

@@ -43,7 +43,7 @@ const CommandDialog = ({ children, ...props }: CommandDialogProps) => {
         // Не маленький аркуш: клавіатура з'їдає пів екрана, і від списку лишалась
         // би смужка на три рядки. Поле лишається ВНИЗУ (flex-col-reverse) — під
         // великим пальцем, як просили склад із логістикою.
-        overlayClassName="max-sm:backdrop-blur-md max-sm:bg-background/60"
+        overlayClassName="max-sm:backdrop-blur-md max-sm:bg-background-soft"
         className="!top-4 !translate-y-0 sm:!top-8 w-[calc(100vw-2rem)] max-w-[980px] max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-4rem)] overflow-hidden border border-line-strong bg-card !gap-0 !p-0 sm:!gap-0 sm:!p-0 text-foreground max-sm:!left-0 max-sm:!top-auto max-sm:!bottom-0 max-sm:!translate-x-0 max-sm:!h-[92dvh] max-sm:!max-h-[92dvh] max-sm:!w-screen max-sm:!max-w-none max-sm:!rounded-b-none max-sm:!rounded-t-[28px] max-sm:!border-x-0 max-sm:!border-b-0"
       >
         <DialogTitle className="sr-only">Глобальний пошук</DialogTitle>

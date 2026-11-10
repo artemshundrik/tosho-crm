@@ -69,7 +69,7 @@ function renderInAppToastContent({
               <button
                 type="button"
                 onClick={onClose}
-                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line-strong bg-background/80 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line-strong bg-background-glass text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 aria-label="Закрити сповіщення"
               >
                 <CloseIcon className="h-4 w-4" />
@@ -443,7 +443,7 @@ export function NotificationSettingsDialog({ open, onOpenChange }: { open: boole
         </section>
       </div>
 
-      <div className="rounded-inner border border-line bg-background/68 p-3 sm:p-4">
+      <div className="rounded-inner border border-line bg-background-soft p-3 sm:p-4">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="text-sm font-semibold text-foreground sm:text-base">Тест in-app popup</div>
@@ -451,7 +451,7 @@ export function NotificationSettingsDialog({ open, onOpenChange }: { open: boole
               Перевіряє вигляд popup, різні іконки та звук. Можна натиснути кілька разів підряд, щоб побачити стек сповіщень.
             </div>
           </div>
-          <Badge variant="secondary" className="hidden w-fit bg-background/80 sm:inline-flex">Тільки для перевірки</Badge>
+          <Badge variant="secondary" className="hidden w-fit bg-background-glass sm:inline-flex">Тільки для перевірки</Badge>
         </div>
         <div className="mt-3 grid grid-cols-1 gap-2 sm:mt-4 sm:flex sm:flex-wrap">
           <Button type="button" variant="outline" className="w-full text-sm sm:w-auto" onClick={() => showInAppPreview("info")}>

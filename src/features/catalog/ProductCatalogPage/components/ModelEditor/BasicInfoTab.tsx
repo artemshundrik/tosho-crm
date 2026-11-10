@@ -326,7 +326,7 @@ export function BasicInfoTab({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-line bg-card/70 p-4">
+      <div className="rounded-xl border border-line bg-card-soft p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
           <div className="min-w-0 flex-1 space-y-2">
             <Label className="inline-flex items-center gap-2 text-sm font-semibold">
@@ -370,7 +370,7 @@ export function BasicInfoTab({
         ) : null}
       </div>
 
-      <div className="rounded-xl border border-line bg-card/70 p-4">
+      <div className="rounded-xl border border-line bg-card-soft p-4">
         <div className="mb-4">
           <Label className="text-sm font-semibold">Товар</Label>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -456,7 +456,7 @@ export function BasicInfoTab({
           ) : null}
         </div>
 
-        <div className="mt-4 overflow-hidden rounded-lg border border-line bg-background/40">
+        <div className="mt-4 overflow-hidden rounded-lg border border-line bg-background-soft">
           <button
             type="button"
             onClick={() => setDescriptionOpen((value) => !value)}
@@ -488,7 +488,7 @@ export function BasicInfoTab({
       </div>
 
       {/* Product links — flow into the quote product card buttons */}
-      <div className="space-y-4 rounded-xl border border-line bg-card/70 p-4">
+      <div className="space-y-4 rounded-xl border border-line bg-card-soft p-4">
         <div>
           <Label className="inline-flex items-center gap-2 text-sm font-semibold">
             <Link2 className="h-4 w-4 text-muted-foreground" />
@@ -554,7 +554,7 @@ export function BasicInfoTab({
         </div>
       </div>
 
-      <div className="space-y-4 rounded-xl border border-line bg-card/70 p-4">
+      <div className="space-y-4 rounded-xl border border-line bg-card-soft p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <Label className="text-sm font-semibold">Модифікації</Label>
@@ -581,7 +581,7 @@ export function BasicInfoTab({
                   "min-w-[132px] rounded-lg border px-3 py-2 text-left transition-colors",
                   selected
                     ? "border-primary/60 bg-primary/10 text-primary"
-                    : "border-line bg-background/50 text-muted-foreground hover:border-line-strong hover:text-foreground"
+                    : "border-line bg-background-soft text-muted-foreground hover:border-line-strong hover:text-foreground"
                 )}
               >
                 <span className="block text-sm font-semibold">Модифікація {index + 1}</span>
@@ -619,7 +619,7 @@ export function BasicInfoTab({
                 <button
                   type="button"
                   onClick={() => updateActiveVariantImageUrl("")}
-                  className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-background/90 text-muted-foreground opacity-0 backdrop-blur transition-opacity hover:text-destructive group-hover:opacity-100"
+                  className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-background-glass text-muted-foreground opacity-0 backdrop-blur transition-opacity hover:text-destructive group-hover:opacity-100"
                   aria-label="Прибрати фото модифікації"
                 >
                   <X className="h-3.5 w-3.5" />
@@ -693,7 +693,7 @@ export function BasicInfoTab({
                     placeholder="https://..."
                   />
                 ) : (
-                  <label className="flex h-9 cursor-pointer items-center justify-center rounded-md border border-dashed border-line bg-background/60 text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground">
+                  <label className="flex h-9 cursor-pointer items-center justify-center rounded-md border border-dashed border-line bg-background-soft text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground">
                     <Upload className="mr-2 h-4 w-4" />
                     Завантажити фото
                     <input type="file" accept="image/*" onChange={handleActiveVariantFileUpload} className="sr-only" />

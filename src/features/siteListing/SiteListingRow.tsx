@@ -251,7 +251,7 @@ function DraftVariantTile({ title, variant }: { title: string; variant: DraftVar
   const photo = variant.images[0] ?? null;
   return (
     <div
-      className="flex w-48 items-center gap-2 rounded-md border border-line bg-background/60 p-1.5"
+      className="flex w-48 items-center gap-2 rounded-md border border-line bg-background-soft p-1.5"
       title={`${variant.color} · ${variant.article}`}
     >
       {photo ? (

@@ -112,14 +112,14 @@ const buttonVariants = cva(
         // ✅ Text on primary surface (e.g., split primary buttons)
         onPrimary: [
           "!font-medium bg-transparent text-background",
-          "hover:bg-background/10",
+          "hover:bg-background-faint",
           "disabled:bg-transparent disabled:border-transparent",
         ].join(" "),
 
         // ✅ Segmented tabs (uses aria-pressed for active state)
         segmented: [
           "!font-medium border border-transparent bg-transparent text-muted-foreground",
-          "hover:bg-background/40 hover:text-foreground",
+          "hover:bg-background-soft hover:text-foreground",
           "aria-[pressed=true]:border-line-strong aria-[pressed=true]:bg-background aria-[pressed=true]:text-foreground",
           "disabled:bg-transparent disabled:border-transparent",
         ].join(" "),
@@ -136,7 +136,7 @@ const buttonVariants = cva(
         // ✅ Card-like action (list items, selection cards)
         card: [
           "!font-medium w-full justify-start text-left",
-          "rounded-xl border border-line-strong bg-card/60",
+          "rounded-xl border border-line-strong bg-card-soft",
           "hover:bg-tint",
           "data-[state=active]:border-foreground/30 data-[state=active]:bg-foreground/5 data-[state=active]:ring-1 data-[state=active]:ring-foreground/10",
           "data-[status=unavailable]:border-dashed data-[status=unavailable]:border-danger-soft-border data-[status=unavailable]:bg-danger-soft data-[status=unavailable]:opacity-80",

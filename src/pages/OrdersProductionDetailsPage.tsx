@@ -1419,7 +1419,7 @@ export default function OrdersProductionDetailsPage() {
             activeTab === "details" ? "pb-0" : "pb-10"
           )}
         >
-          <div className="sticky top-[var(--page-chrome-offset,var(--app-header-height))] z-30 mb-4 -mx-4 border-b border-line-subtle bg-background/95 px-4 backdrop-blur md:-mx-5 md:px-5 lg:-mx-6 lg:px-6 record-split:static record-split:mb-0 record-split:shrink-0 2xl:-mx-8 2xl:px-8">
+          <div className="sticky top-[var(--page-chrome-offset,var(--app-header-height))] z-30 mb-4 -mx-4 border-b border-line-subtle bg-background-glass px-4 backdrop-blur md:-mx-5 md:px-5 lg:-mx-6 lg:px-6 record-split:static record-split:mb-0 record-split:shrink-0 2xl:-mx-8 2xl:px-8">
             <TabBar value={activeTab}>
               {orderTabs.map((tab) => (
                 <TabBarItem

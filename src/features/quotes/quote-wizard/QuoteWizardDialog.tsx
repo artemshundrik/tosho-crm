@@ -767,7 +767,7 @@ export function QuoteWizardDialog({
                         "disabled:pointer-events-none disabled:opacity-50",
                         active
                           ? "border-foreground/35 bg-card text-foreground"
-                          : "border-line bg-card/40 text-muted-foreground hover:border-line-strong hover:text-foreground"
+                          : "border-line bg-card-soft text-muted-foreground hover:border-line-strong hover:text-foreground"
                       )}
                     >
                       <Icon className="h-6 w-6" strokeWidth={1.5} />

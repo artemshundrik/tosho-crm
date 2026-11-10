@@ -149,7 +149,7 @@ export function CompactSidebar({
             const GroupIcon = group.icon;
 
             return (
-              <div key={group.key} className="rounded-lg border border-line bg-background/70">
+              <div key={group.key} className="rounded-lg border border-line bg-background-soft">
                 <div className="flex items-center gap-2 px-2 py-1.5 border-b border-line-subtle">
                   <HoverTip asChild label={isGroupExpanded ? "Згорнути групу" : "Розгорнути групу"}>
                     <button

@@ -388,7 +388,7 @@ const analyticsCache = new Map<string, AnalyticsCacheEntry>();
 function DashboardSkeleton() {
   return (
     <div className="space-y-3 px-4 pt-4 pb-2 sm:px-5" aria-busy="true" aria-label="Завантажуємо аналітику">
-      <section className="overflow-hidden rounded-xl border border-line bg-background/70">
+      <section className="overflow-hidden rounded-xl border border-line bg-background-soft">
         <div className="flex flex-wrap items-center gap-2 px-4 pt-4">
           <Skeleton className="h-9 w-64 rounded-xl" />
           <Skeleton className="ml-auto h-9 w-[180px] rounded-lg" />
@@ -398,7 +398,7 @@ function DashboardSkeleton() {
         </div>
         <div className="mt-3 grid grid-cols-2 gap-px border-t border-line-subtle bg-border/50 sm:grid-cols-3 xl:grid-cols-5">
           {Array.from({ length: 5 }).map((_, index) => (
-            <div key={index} className="bg-background/70 p-3.5">
+            <div key={index} className="bg-background-soft p-3.5">
               <Skeleton className="h-3 w-24 rounded-full" />
               <div className="mt-2 flex items-end justify-between gap-2">
                 <div className="space-y-1.5">
@@ -413,7 +413,7 @@ function DashboardSkeleton() {
       </section>
 
       <div className="grid gap-3 lg:grid-cols-3">
-        <section className="rounded-xl border border-line bg-background/70 p-5 lg:col-span-2">
+        <section className="rounded-xl border border-line bg-background-soft p-5 lg:col-span-2">
           <Skeleton className="h-4 w-56 rounded-full" />
           <Skeleton className="mt-2 h-3 w-80 rounded-full opacity-70" />
           <div className="mt-4 space-y-3.5">
@@ -429,7 +429,7 @@ function DashboardSkeleton() {
             ))}
           </div>
         </section>
-        <section className="rounded-xl border border-line bg-background/70 p-5">
+        <section className="rounded-xl border border-line bg-background-soft p-5">
           <Skeleton className="h-4 w-36 rounded-full" />
           <div className="mt-4 space-y-3">
             {Array.from({ length: 4 }).map((_, index) => (
@@ -446,7 +446,7 @@ function DashboardSkeleton() {
         </section>
       </div>
 
-      <section className="rounded-xl border border-line bg-background/70 p-5">
+      <section className="rounded-xl border border-line bg-background-soft p-5">
         <div className="flex items-center gap-2">
           <Skeleton className="h-4 w-28 rounded-full" />
           <Skeleton className="ml-auto h-8 w-56 rounded-full" />
@@ -1010,7 +1010,7 @@ export function DesignersDashboard({
     /* Менеджер/інші без власного рядка: як і раніше, бачать лише баланс команди. */
     return (
       <div className="space-y-3 px-4 pt-4 pb-2 sm:px-5">
-        <section className="rounded-xl border border-line bg-background/70 p-5">
+        <section className="rounded-xl border border-line bg-background-soft p-5">
           <div className="flex items-center justify-between gap-2">
             <h3 className="inline-flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
               <Users className="h-4 w-4 text-primary" />
@@ -1064,7 +1064,7 @@ export function DesignersDashboard({
   return (
     <div className="space-y-3 px-4 pt-4 pb-2 sm:px-5">
       {/* ---------- єдина панель: скоуп-перемикач + місяць + контекст + KPI ---------- */}
-      <section className="overflow-hidden rounded-xl border border-line bg-background/70">
+      <section className="overflow-hidden rounded-xl border border-line bg-background-soft">
         {/* Ряд 1 — перемикач скоупу + місяць */}
         <div className="flex flex-wrap items-center gap-2 px-4 pt-4">
           <div className="inline-flex flex-wrap items-center gap-1 rounded-xl border border-line bg-tint p-1">
@@ -1124,7 +1124,7 @@ export function DesignersDashboard({
                 onClick={() => setRefreshNonce((value) => value + 1)}
                 disabled={refreshing}
                 className={cn(
-                  "inline-flex h-(--control-h) cursor-pointer items-center gap-1.5 rounded-lg border border-line-strong bg-background/60 px-2.5 text-2xs font-medium text-muted-foreground transition-colors",
+                  "inline-flex h-(--control-h) cursor-pointer items-center gap-1.5 rounded-lg border border-line-strong bg-background-soft px-2.5 text-2xs font-medium text-muted-foreground transition-colors",
                   "hover:text-foreground disabled:cursor-default disabled:opacity-60"
                 )}
                 aria-label="Перерахувати з бази"
@@ -1244,7 +1244,7 @@ export function DesignersDashboard({
         {/* Ряд 3 — KPI-комірки (завжди 5, дільники через 1px-гап) */}
         <div className="mt-3 grid grid-cols-2 gap-px border-t border-line-subtle bg-border/50 sm:grid-cols-3 xl:grid-cols-5">
           {kpis.map((kpi) => (
-            <div key={kpi.label} className="bg-background/70 p-3.5">
+            <div key={kpi.label} className="bg-background-soft p-3.5">
               <div className="flex items-center gap-1.5 text-2xs font-medium text-muted-foreground">
                 <kpi.icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
                 <span className="truncate">{kpi.label}</span>
@@ -1287,7 +1287,7 @@ export function DesignersDashboard({
 
       {/* ---------- типи + баланс/динаміка ---------- */}
       <div className="grid gap-3 lg:grid-cols-3">
-        <section className="rounded-xl border border-line bg-background/70 p-5 lg:col-span-2">
+        <section className="rounded-xl border border-line bg-background-soft p-5 lg:col-span-2">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <h3 className="inline-flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
               {typesMetric === "time" ? (
@@ -1822,7 +1822,7 @@ export function DesignersDashboard({
           )}
         </section>
 
-        <section className="rounded-xl border border-line bg-background/70 p-5">
+        <section className="rounded-xl border border-line bg-background-soft p-5">
           {scopedDesigner ? (
             <>
               <h3 className="inline-flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
@@ -1952,7 +1952,7 @@ export function DesignersDashboard({
 
       {/* ---------- таблиця: Місяць | По місяцях ---------- */}
       {visibleDesigners.length > 0 ? (
-        <section className="rounded-xl border border-line bg-background/70">
+        <section className="rounded-xl border border-line bg-background-soft">
           <div className="flex flex-wrap items-center gap-2 px-5 pt-4">
             <h3 className="inline-flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
               <Users className="h-4 w-4 text-primary" />
@@ -2481,7 +2481,7 @@ export function DesignersDashboard({
 
       {/* ---------- роботи ---------- */}
       {scopedDesigner ? (
-        <section className="rounded-xl border border-line bg-background/70 p-5">
+        <section className="rounded-xl border border-line bg-background-soft p-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="inline-flex items-center gap-2 text-sm font-semibold tracking-tight text-foreground">
               <FileText className="h-4 w-4 text-primary" />
@@ -2519,7 +2519,7 @@ export function DesignersDashboard({
                       "inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-2xs font-medium transition-colors",
                       active
                         ? "border-primary/40 bg-primary/10 text-primary"
-                        : "border-line-strong bg-background/60 text-muted-foreground hover:text-foreground"
+                        : "border-line-strong bg-background-soft text-muted-foreground hover:text-foreground"
                     )}
                   >
                     {option.key === "untimed" ? <TimerOff className="h-3 w-3" /> : null}
@@ -2543,7 +2543,7 @@ export function DesignersDashboard({
                   return (
                     <div
                       key={group.taskId}
-                      className="relative rounded-section border border-line bg-card/70 p-3.5 transition-colors hover:border-primary/30"
+                      className="relative rounded-section border border-line bg-card-soft p-3.5 transition-colors hover:border-primary/30"
                     >
                       <Link
                         to={`/design/${group.taskId}`}
@@ -2579,7 +2579,7 @@ export function DesignersDashboard({
                              а не аварія. Але позначка мусить бути, інакше така
                              картка виглядає як задача без роботи. */
                           <span
-                            className="inline-flex items-center gap-1 rounded-full border border-dashed border-line bg-background/40 px-2 py-0.5 text-3xs font-medium text-muted-foreground"
+                            className="inline-flex items-center gap-1 rounded-full border border-dashed border-line bg-background-soft px-2 py-0.5 text-3xs font-medium text-muted-foreground"
                             title="Таймер не вівся — ця задача не входить у середній час і структуру часу"
                           >
                             <TimerOff className="h-3 w-3" />

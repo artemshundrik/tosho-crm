@@ -33,7 +33,17 @@ export default {
           },
           input: "hsl(var(--input))",
           ring: "hsl(var(--ring))",
-          background: "hsl(var(--background))",
+          // Поверхня або суцільна, або один з іменованих рівнів (картка 271,
+          // пункт 13): -faint — ледь помітний відтінок, -soft — м'яка площина
+          // (поле чи врізка на картці), -glass — майже непрозора під розмиття
+          // (липка смуга, шторка). Сила — змінні --surface-*-alpha в
+          // src/index.css; bg-background/NN і bg-card/NN не пишемо.
+          background: {
+            DEFAULT: "hsl(var(--background))",
+            faint: "hsl(var(--background) / var(--surface-faint-alpha))",
+            soft: "hsl(var(--background) / var(--surface-soft-alpha))",
+            glass: "hsl(var(--background) / var(--surface-glass-alpha))",
+          },
           foreground: "hsl(var(--foreground))",
           primary: {
             DEFAULT: "hsl(var(--primary))",
@@ -65,10 +75,13 @@ export default {
           },
           popover: {
             DEFAULT: "hsl(var(--popover))",
+            glass: "hsl(var(--popover) / var(--surface-glass-alpha))",
             foreground: "hsl(var(--popover-foreground))",
           },
           card: {
             DEFAULT: "hsl(var(--card))",
+            soft: "hsl(var(--card) / var(--surface-soft-alpha))",
+            glass: "hsl(var(--card) / var(--surface-glass-alpha))",
             foreground: "hsl(var(--card-foreground))",
           },
           // Семантичні тони як повноцінні кольори. DEFAULT = насичений

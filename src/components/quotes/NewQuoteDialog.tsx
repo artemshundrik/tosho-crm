@@ -276,11 +276,11 @@ const RunsEditor: React.FC<{
           <div key={run.id} className="space-y-1.5">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <span>Тираж</span>
-              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-line bg-background/60 px-1.5 text-2xs font-medium text-foreground">
+              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-line bg-background-soft px-1.5 text-2xs font-medium text-foreground">
                 {index + 1}
               </span>
             </div>
-            <div className="flex h-9 items-center gap-1.5 rounded-full border border-line bg-background/55 px-2">
+            <div className="flex h-9 items-center gap-1.5 rounded-full border border-line bg-background-soft px-2">
               <NumberInput
                 min={1}
                 emptyValue={null}
@@ -343,7 +343,7 @@ const ChipDropdown: React.FC<{
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-1",
             active
               ? "border-primary/30 bg-primary/10 text-primary hover:bg-primary/15"
-              : "border-line bg-background/55 text-muted-foreground hover:border-line-strong hover:bg-background/70",
+              : "border-line bg-background-soft text-muted-foreground hover:border-line-strong hover:bg-background-glass",
             disabled && "pointer-events-none opacity-50"
           )}
         >
@@ -420,7 +420,7 @@ const MultiChipDropdown: React.FC<{
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-1",
             selectedOptions.length > 0
               ? "border-primary/30 bg-primary/10 text-primary hover:bg-primary/15"
-              : "border-line bg-background/55 text-muted-foreground hover:border-line-strong hover:bg-background/70",
+              : "border-line bg-background-soft text-muted-foreground hover:border-line-strong hover:bg-background-glass",
             disabled && "pointer-events-none opacity-50"
           )}
         >
@@ -2040,7 +2040,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
           <SectionHeader>Продукція</SectionHeader>
 
           <div className="space-y-4">
-            <div className="rounded-xl border border-line bg-background/30 p-4 md:p-5">
+            <div className="rounded-xl border border-line bg-background-faint p-4 md:p-5">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="space-y-2">
                   <div className="text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
@@ -2052,7 +2052,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                 {/* Ролі й `aria-checked` — те саме, що в білдері (REQ-175#p75): без них
                     читач екрана називає обидві кнопки однаково й не каже, що обрано. */}
                 <div
-                  className="inline-flex rounded-full border border-line bg-background/40 p-1"
+                  className="inline-flex rounded-full border border-line bg-background-soft p-1"
                   role="radiogroup"
                   aria-label="Тип виробу"
                 >
@@ -2084,7 +2084,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                           "inline-flex h-9 items-center gap-2 rounded-full px-4 text-sm font-medium transition-all",
                           active
                             ? "bg-primary/10 text-primary"
-                            : "text-muted-foreground hover:bg-background/70 hover:text-foreground",
+                            : "text-muted-foreground hover:bg-background-soft hover:text-foreground",
                           locked && "cursor-not-allowed opacity-50 hover:bg-transparent hover:text-muted-foreground"
                         )}
                       >
@@ -2122,7 +2122,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                       }}
                     />
 
-                    <div className="rounded-xl border border-line bg-background/35 p-4 md:p-5">
+                    <div className="rounded-xl border border-line bg-background-soft p-4 md:p-5">
                       <RunsEditor
                         runs={runs}
                         quantityUnit={quantityUnit}
@@ -2136,7 +2136,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                     </div>
                   </div>
                 ) : (
-                  <div className="mt-4 rounded-xl border border-line bg-background/35 p-4 md:p-5">
+                  <div className="mt-4 rounded-xl border border-line bg-background-soft p-4 md:p-5">
                     <div
                       className={cn(
                         "grid gap-3 md:grid-cols-3",
@@ -2210,7 +2210,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                             </div>
                           ) : null}
                           {kindId && onCreateCatalogModel ? (
-                            <div className="mt-2 rounded-xl border border-dashed border-line bg-background/35 p-3">
+                            <div className="mt-2 rounded-xl border border-dashed border-line bg-background-soft p-3">
                               <div className="grid gap-2">
                                 <Input
                                   value={quickModelName}
@@ -2310,7 +2310,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
         {!isEditMode && !isPrintPackageMode ? (
         <div className="mt-8 space-y-4">
           <SectionHeader>Нанесення</SectionHeader>
-          <div className="rounded-xl border border-line bg-background/30 p-4 md:p-5">
+          <div className="rounded-xl border border-line bg-background-faint p-4 md:p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="space-y-1">
                 <div className="text-lg font-semibold text-foreground">Нанесення</div>
@@ -2343,7 +2343,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
             {printApplications.map((app) => (
               <div
                 key={app.id}
-                className="rounded-xl border border-line bg-background/45 p-4"
+                className="rounded-xl border border-line bg-background-soft p-4"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -2431,7 +2431,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
         {/* Addendum / notes section */}
         <div className="mt-8 space-y-4">
           <SectionHeader>Доповнення</SectionHeader>
-          <div className="space-y-2 rounded-xl border border-line bg-background/35 p-4 md:p-5">
+          <div className="space-y-2 rounded-xl border border-line bg-background-soft p-4 md:p-5">
             <div className="flex items-start justify-between gap-2">
               <div className="text-sm text-muted-foreground">
                 Додаткова інформація до прорахунку: тези, нюанси, домовленості. Відобразиться в деталях прорахунку.
@@ -2455,7 +2455,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
             і разом із ним зникала. */}
         <div className="mt-8 space-y-4">
           <SectionHeader>Файли</SectionHeader>
-          <div className="space-y-3 rounded-xl border border-line bg-background/35 p-4 md:p-5">
+          <div className="space-y-3 rounded-xl border border-line bg-background-soft p-4 md:p-5">
             <div className="text-sm text-muted-foreground">
               Матеріали замовника для роботи над прорахунком: договір, розміри, листування.
               Дизайнер їх не бачить — для нього файли додають у блоці «Дизайн».
@@ -2496,7 +2496,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
         {!isEditMode && (isPrintPackageMode || printMode !== "no_print") ? (
         <div className="mt-8 space-y-4">
           <SectionHeader>Дизайн</SectionHeader>
-          <div className="rounded-xl border border-line bg-background/35 p-4 md:p-5">
+          <div className="rounded-xl border border-line bg-background-soft p-4 md:p-5">
             <div className="grid gap-5">
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 <div className="space-y-2">
@@ -2518,7 +2518,7 @@ export const NewQuoteDialog: React.FC<NewQuoteDialogProps> = ({
                       "inline-flex h-9 w-full items-center rounded-full border px-3.5 text-sm font-medium transition-all",
                       createDesignTask
                         ? "border-primary/30 bg-primary/10 text-primary hover:bg-primary/15"
-                        : "border-line bg-background/55 text-muted-foreground hover:border-line-strong hover:bg-background/70"
+                        : "border-line bg-background-soft text-muted-foreground hover:border-line-strong hover:bg-background-glass"
                     )}
                   >
                     <Palette className={cn("mr-2 h-3.5 w-3.5", createDesignTask ? "text-primary" : "text-muted-foreground")} />

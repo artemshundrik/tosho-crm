@@ -58,7 +58,7 @@ export function BottomSheet({
         // Та сама підкладка, що в палітри ToSho AI: розмиття замість щільного
         // затемнення — застосунок позаду видно, і аркуш читається як тимчасове
         // вікно, а не як новий екран.
-        overlayClassName="bg-background/60 backdrop-blur-md"
+        overlayClassName="bg-background-soft backdrop-blur-md"
         className={cn(
           // 28px і рамка лише згори — рівно як у палітри ToSho AI, з якої цей
           // вигляд і взято. Тіні немає: див. `sheetVariants`, варіант bottom.

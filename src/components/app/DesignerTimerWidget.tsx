@@ -714,7 +714,7 @@ export function DesignerFloatingTimerWidget({
             type="button"
             size="iconSm"
             variant="ghost"
-            className="shrink-0 text-background/70 hover:bg-background/10 hover:text-background"
+            className="shrink-0 text-background/70 hover:bg-background-faint hover:text-background"
             onClick={onClose}
             aria-label="Закрити віджет"
           >
@@ -723,7 +723,7 @@ export function DesignerFloatingTimerWidget({
         </HoverTip>
       </div>
       <div className="px-3.5 pb-3.5 pt-2.5">
-        <div className="rounded-xl border border-background/15 bg-background/[0.055] px-5 py-4">
+        <div className="rounded-xl border border-background/15 bg-background-faint px-5 py-4">
           <div className="grid grid-cols-[minmax(0,1fr)_136px] items-center gap-5">
             <div className="min-w-0">
               <div className="text-xs font-semibold uppercase tracking-normal text-background/60">
@@ -754,7 +754,7 @@ export function DesignerFloatingTimerWidget({
                   "h-11 w-full justify-center px-3 text-[15px] font-semibold transition-all [&_svg]:size-4",
                   startableTask && !currentRunning
                     ? "border-transparent bg-success-foreground text-white hover:border-transparent hover:bg-success-foreground/90 hover:text-white disabled:border-transparent disabled:bg-success-foreground disabled:text-white"
-                    : "border-background/20 bg-background/[0.08] text-background/40 hover:bg-background/[0.08] hover:text-background/40 disabled:border-background/20 disabled:bg-background/[0.08] disabled:text-background/40"
+                    : "border-background/20 bg-background-faint text-background/40 hover:bg-background-faint hover:text-background/40 disabled:border-background/20 disabled:bg-background-faint disabled:text-background/40"
                 )}
                 disabled={!startableTask || currentRunning || startBusy}
                 onClick={() => {
@@ -779,7 +779,7 @@ export function DesignerFloatingTimerWidget({
                   "h-11 w-full justify-center px-3 text-[15px] font-semibold transition-all [&_svg]:size-4",
                   currentRunning
                     ? "border-transparent bg-warning-foreground text-background hover:border-transparent hover:bg-warning-foreground/80 hover:text-background disabled:border-transparent disabled:bg-warning-foreground disabled:text-background"
-                    : "border-background/20 bg-background/[0.08] text-background/50 hover:bg-background/[0.08] hover:text-background/50 disabled:border-background/20 disabled:bg-background/[0.08] disabled:text-background/50"
+                    : "border-background/20 bg-background-faint text-background/50 hover:bg-background-faint hover:text-background/50 disabled:border-background/20 disabled:bg-background-faint disabled:text-background/50"
                 )}
                 disabled={!currentRunning || !currentTask || controller.busyTaskId === currentTask.taskId}
                 onClick={() => {
@@ -809,7 +809,7 @@ export function DesignerFloatingTimerWidget({
               </span>
               <Link
                 to={`/design/${currentTask.taskId}`}
-                className="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-background hover:bg-background/10"
+                className="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-background hover:bg-background-faint"
               >
                 <ExternalLink className="h-3.5 w-3.5" />
                 Задача

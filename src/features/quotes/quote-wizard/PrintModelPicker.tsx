@@ -114,7 +114,7 @@ export function PrintModelPicker({ suggestions, onPick, addedModelIds, disabled 
                   // Монохром: вибране позначає контур і тон підкладки, не колір.
                   added
                     ? "border-foreground/60 bg-muted text-foreground"
-                    : "border-line bg-background/60 text-muted-foreground hover:border-line-strong hover:bg-tint"
+                    : "border-line bg-background-soft text-muted-foreground hover:border-line-strong hover:bg-tint"
                 )}
               >
                 <PrintModelArt

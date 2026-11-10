@@ -1158,7 +1158,7 @@ export default function ContractorsPage() {
             {error ? (
               <div className="p-6 text-sm text-destructive">{error}</div>
             ) : schemaMissing ? (
-              <div className="rounded-inner border border-dashed border-line bg-card/40 p-6 text-sm text-muted-foreground">
+              <div className="rounded-inner border border-dashed border-line bg-card-soft p-6 text-sm text-muted-foreground">
                 Таблиця підрядників ще не створена в Supabase. Потрібно застосувати
                 {" "}
                 <span className="font-medium text-foreground">scripts/contractors-schema.sql</span>
@@ -1168,7 +1168,7 @@ export default function ContractorsPage() {
                 <span className="font-medium text-foreground">scripts/contractors-seed-from-xlsx.sql</span>.
               </div>
             ) : filteredRows.length === 0 ? (
-              <div className="rounded-inner border border-dashed border-line bg-card/40 p-6 text-sm text-muted-foreground">
+              <div className="rounded-inner border border-dashed border-line bg-card-soft p-6 text-sm text-muted-foreground">
                 {rows.length === 0
                   ? "Підрядників ще немає. Додайте першого або залийте seed у Supabase."
                   : "За цими фільтрами нічого не знайдено."}
@@ -1190,7 +1190,7 @@ export default function ContractorsPage() {
             {error ? (
               <div className="p-6 text-sm text-destructive">{error}</div>
             ) : schemaMissing ? (
-              <div className="rounded-inner border border-dashed border-line bg-card/40 p-6 text-sm text-muted-foreground">
+              <div className="rounded-inner border border-dashed border-line bg-card-soft p-6 text-sm text-muted-foreground">
                 Таблиця підрядників ще не створена в Supabase. Потрібно застосувати
                 {" "}
                 <span className="font-medium text-foreground">scripts/contractors-schema.sql</span>
@@ -1200,7 +1200,7 @@ export default function ContractorsPage() {
                 <span className="font-medium text-foreground">scripts/contractors-seed-from-xlsx.sql</span>.
               </div>
             ) : filteredRows.length === 0 ? (
-              <div className="rounded-inner border border-dashed border-line bg-card/40 p-6 text-sm text-muted-foreground">
+              <div className="rounded-inner border border-dashed border-line bg-card-soft p-6 text-sm text-muted-foreground">
                 За цими фільтрами нічого не знайдено.
               </div>
             ) : (
@@ -1432,7 +1432,7 @@ export default function ContractorsPage() {
                         "disabled:cursor-not-allowed disabled:opacity-50",
                         active
                           ? "bg-background text-foreground"
-                          : "text-muted-foreground hover:bg-background/60 hover:text-foreground"
+                          : "text-muted-foreground hover:bg-background-soft hover:text-foreground"
                       )}
                     >
                       {option !== "none" ? <RefreshCw className="h-3.5 w-3.5 shrink-0" aria-hidden /> : null}

@@ -108,7 +108,7 @@ export function MobileStatusChips({
               <span
                 className={cn(
                   "min-w-5 rounded-full px-1.5 text-2xs font-semibold leading-5 tabular-nums",
-                  isActive ? "bg-background/20 text-background" : "bg-muted text-muted-foreground"
+                  isActive ? "bg-background-faint text-background" : "bg-muted text-muted-foreground"
                 )}
               >
                 {chip.count}

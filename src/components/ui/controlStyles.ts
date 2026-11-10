@@ -185,7 +185,7 @@ export const SEGMENTED_GROUP_SM = cx(
 const SEGMENTED_TRIGGER_BASE = cx(
   "flex-1 inline-flex items-center justify-center font-medium",
   "transition-all duration-base ease-out motion-reduce:transition-none",
-  "text-muted-foreground hover:text-foreground hover:bg-background/50",
+  "text-muted-foreground hover:text-foreground hover:bg-background-soft",
   "data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:ring-1 data-[state=active]:ring-[hsl(var(--soft-ring))]",
   "data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:ring-1 data-[state=on]:ring-[hsl(var(--soft-ring))]"
 );

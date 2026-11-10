@@ -4032,7 +4032,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
             губилась серед них. Тепер активна тримається вагою тексту і тонкою
             рискою знизу — рядок вкладок перестав сперечатися зі смугою дій.
           */}
-          <div className="sticky top-[var(--page-chrome-offset,var(--app-header-height))] z-30 mb-4 -mx-4 border-b border-line-subtle bg-background/95 px-4 backdrop-blur md:-mx-5 md:px-5 lg:-mx-6 lg:px-6 record-split:static record-split:mb-0 record-split:shrink-0 2xl:-mx-8 2xl:px-8">
+          <div className="sticky top-[var(--page-chrome-offset,var(--app-header-height))] z-30 mb-4 -mx-4 border-b border-line-subtle bg-background-glass px-4 backdrop-blur md:-mx-5 md:px-5 lg:-mx-6 lg:px-6 record-split:static record-split:mb-0 record-split:shrink-0 2xl:-mx-8 2xl:px-8">
             <TabBar value={activeQuoteTab}>
               {quotePageTabs.map((tab) => {
                 return (
@@ -4138,7 +4138,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                           {quoteRequirements.map((requirement) => (
                             <li
                               key={`requirement-${requirement}`}
-                              className="inline-flex items-center gap-1.5 rounded-full border border-current/25 bg-background/45 px-2.5 py-0.5 text-2xs font-medium"
+                              className="inline-flex items-center gap-1.5 rounded-full border border-current/25 bg-background-soft px-2.5 py-0.5 text-2xs font-medium"
                             >
                               <span className="h-1.5 w-1.5 rounded-full bg-warning-solid" aria-hidden />
                               {requirement}
@@ -4808,7 +4808,7 @@ export function QuoteDetailsPage({ teamId, quoteId }: QuoteDetailsPageProps) {
                 <>
                   <div className="space-y-4">
                     {runSections.map((section) => (
-                      <div key={section.key} className="rounded-xl border border-line bg-background/40 p-3">
+                      <div key={section.key} className="rounded-xl border border-line bg-background-soft p-3">
                         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                           <div className="flex min-w-0 items-center gap-3">
                             {section.imageUrl ? (

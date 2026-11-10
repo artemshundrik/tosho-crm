@@ -287,7 +287,7 @@ function ThreadDrawer({
           // закриття 160. `visibility` переходить лише на закритті — щоб
           // підкладка зникала ПІСЛЯ згасання, а не обривала його; на відкритті
           // вона мусить стати видимою одразу.
-          "fixed inset-0 z-50 bg-background/80 backdrop-blur-sm transition-[opacity] duration-slow ease-out motion-reduce:transition-none!",
+          "fixed inset-0 z-50 bg-background-glass backdrop-blur-sm transition-[opacity] duration-slow ease-out motion-reduce:transition-none!",
           "data-[state=closed]:pointer-events-none data-[state=closed]:invisible data-[state=closed]:opacity-0 data-[state=closed]:transition-[opacity,visibility] data-[state=closed]:duration-base"
         )}
       />

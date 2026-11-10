@@ -1371,7 +1371,7 @@ export function CommandPalette({ open, onOpenChange, onAskAi }: CommandPalettePr
           розходяться кільця (.tosho-listen-orb в index.css), під ним той самий
           еквалайзер, що в диктовці чату. */}
       {isListening ? (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-card/95 px-6 text-center backdrop-blur-sm">
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-card-glass px-6 text-center backdrop-blur-sm">
           <span className="tosho-listen-orb flex h-24 w-24 items-center justify-center rounded-full bg-ai-accent/10 text-ai-accent ring-1 ring-ai-accent/20">
             <ToShoAiMark className="h-9 w-9" />
           </span>

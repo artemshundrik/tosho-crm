@@ -504,7 +504,7 @@ export default function NovaPoshtaSettingsPage() {
             </Section>
 
             {/* sticky: на довгій сторінці кнопка не має тікати за нижній край. */}
-            <div className="sticky bottom-0 flex items-center justify-between gap-3 rounded-b-[inherit] border-t border-line-subtle bg-card/95 px-5 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/80">
+            <div className="sticky bottom-0 flex items-center justify-between gap-3 rounded-b-[inherit] border-t border-line-subtle bg-card-glass px-5 py-3 backdrop-blur supports-[backdrop-filter]:bg-card-glass">
               <span className="text-xs text-muted-foreground">
                 {isDirty ? "Є незбережені зміни" : "Усе збережено"}
               </span>

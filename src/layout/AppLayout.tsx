@@ -452,7 +452,7 @@ function renderInAppToastContent({
               <button
                 type="button"
                 onClick={onClose}
-                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line-strong bg-background/80 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line-strong bg-background-glass text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 aria-label="Закрити сповіщення"
               >
                 <CloseIcon className="h-4 w-4" />
@@ -1751,7 +1751,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       className="h-[92dvh] max-h-[92dvh] bg-[linear-gradient(180deg,hsl(var(--page-underlay-bg)),hsl(var(--card)))]"
       contentClassName="min-h-0 flex-1 overflow-hidden overscroll-none p-0"
       header={
-        <div className="border-b border-line-subtle bg-background/82 px-4 pb-3 backdrop-blur-xl">
+        <div className="border-b border-line-subtle bg-background-glass px-4 pb-3 backdrop-blur-xl">
           <ToShoAiWordmark />
         </div>
       }
@@ -1775,7 +1775,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         className="z-overlay inset-y-0 left-auto right-0 h-[100dvh] max-h-[100dvh] w-full overflow-hidden overscroll-none border-l border-line-subtle bg-[linear-gradient(180deg,hsl(var(--page-underlay-bg)),hsl(var(--card)))] p-0 sm:w-full sm:max-w-[620px]"
       >
         <div className="flex h-full min-h-0 w-full min-w-0 max-w-full flex-col overflow-hidden">
-          <div className="shrink-0 border-b border-line-subtle bg-background/82 px-4 py-4 backdrop-blur-xl md:px-5">
+          <div className="shrink-0 border-b border-line-subtle bg-background-glass px-4 py-4 backdrop-blur-xl md:px-5">
             <SheetHeader>
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -1846,7 +1846,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                 size="iconSm"
                 className={cn(
                   "text-muted-foreground hover:text-foreground transition-all duration-slow ease-[cubic-bezier(0.2,0.8,0.2,1)] translate-y-[2px]",
-                  sidebarCollapsed ? "bg-background/35" : ""
+                  sidebarCollapsed ? "bg-background-soft" : ""
                 )}
                 onClick={() => setSidebarCollapsed((prev) => !prev)}
                 aria-label={sidebarCollapsed ? "Розгорнути сайдбар" : "Згорнути сайдбар"}
@@ -2072,7 +2072,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                     )}
                   >
                     <div className="flex h-full min-w-0 flex-col overflow-hidden">
-                      <div className="shrink-0 border-b border-line-subtle bg-background/55">
+                      <div className="shrink-0 border-b border-line-subtle bg-background-soft">
                         <SheetHeader className="px-4 pb-2 pt-4">
                           <div className="flex items-center justify-between gap-3">
                             <SheetTitle className="flex items-center">
@@ -2108,7 +2108,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
                               value=""
                               placeholder="Пошук…"
                               className={cn(
-                                "border border-input bg-background/75 pl-10 pr-16",
+                                "border border-input bg-background-glass pl-10 pr-16",
                                 "cursor-pointer",
                                 "focus-visible:ring-2 focus-visible:ring-foreground/20"
                               )}

@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 // відштовхується липка шапка відомості виплат.
 export function FinanceStickyBar({ children }: { children: React.ReactNode }) {
   return (
-    <div className="sticky top-[var(--app-header-height)] z-20 -mx-4 -mt-4 flex h-(--finance-bar-height) items-center gap-1.5 border-b border-line-subtle bg-background/95 px-4 backdrop-blur-md lg:-top-6 lg:-mx-6 lg:-mt-6 lg:px-6">
+    <div className="sticky top-[var(--app-header-height)] z-20 -mx-4 -mt-4 flex h-(--finance-bar-height) items-center gap-1.5 border-b border-line-subtle bg-background-glass px-4 backdrop-blur-md lg:-top-6 lg:-mx-6 lg:-mt-6 lg:px-6">
       {children}
     </div>
   );

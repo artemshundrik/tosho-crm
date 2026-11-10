@@ -320,7 +320,7 @@ function PlaceholderSection({ section }: { section: FinanceSection }) {
       </div>
       <div className="text-base font-semibold text-foreground">{section.label}</div>
       <div className="mx-auto mt-1.5 max-w-xl text-sm text-muted-foreground">{section.description}</div>
-      <div className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-line bg-background/80 px-3 py-1 text-xs text-muted-foreground">
+      <div className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-line bg-background-glass px-3 py-1 text-xs text-muted-foreground">
         Розділ у розробці
       </div>
     </div>

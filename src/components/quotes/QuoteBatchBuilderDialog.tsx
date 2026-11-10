@@ -495,7 +495,7 @@ const ChipDropdown: React.FC<{
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-1",
             active
               ? "border-primary/30 bg-primary/10 text-primary hover:bg-primary/15"
-              : "border-line bg-background/55 text-muted-foreground hover:border-line-strong hover:bg-background/70",
+              : "border-line bg-background-soft text-muted-foreground hover:border-line-strong hover:bg-background-glass",
             disabled && "pointer-events-none opacity-50"
           )}
         >
@@ -566,7 +566,7 @@ const ChipDropdown: React.FC<{
 
 const SectionTitle: React.FC<{ icon: React.ReactNode; children: React.ReactNode }> = ({ icon, children }) => (
   <div className="flex items-center gap-2 text-base font-semibold text-foreground">
-    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-line bg-background/55 text-muted-foreground [&>svg]:h-4 [&>svg]:w-4">
+    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-line bg-background-soft text-muted-foreground [&>svg]:h-4 [&>svg]:w-4">
       {icon}
     </span>
     <span>{children}</span>
@@ -590,7 +590,7 @@ const DesignTaskTypeChip: React.FC<{
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-1",
             value
               ? "border-primary/30 bg-primary/10 text-primary hover:bg-primary/15"
-              : "border-line bg-background/55 text-muted-foreground hover:border-line-strong hover:bg-background/70"
+              : "border-line bg-background-soft text-muted-foreground hover:border-line-strong hover:bg-background-glass"
           )}
         >
           <SelectedIcon className={cn("mr-2 h-3.5 w-3.5 shrink-0", value ? "text-primary" : "text-muted-foreground")} />
@@ -651,7 +651,7 @@ const TeamMemberChipDropdown: React.FC<{
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-1",
             selected
               ? "border-primary/30 bg-primary/10 text-primary hover:bg-primary/15"
-              : "border-line bg-background/55 text-muted-foreground hover:border-line-strong hover:bg-background/70"
+              : "border-line bg-background-soft text-muted-foreground hover:border-line-strong hover:bg-background-glass"
           )}
         >
           {selected ? (
@@ -750,7 +750,7 @@ const TeamMemberMultiChipDropdown: React.FC<{
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-1",
             selected.length > 0
               ? "border-primary/30 bg-primary/10 text-primary hover:bg-primary/15"
-              : "border-line bg-background/55 text-muted-foreground hover:border-line-strong hover:bg-background/70"
+              : "border-line bg-background-soft text-muted-foreground hover:border-line-strong hover:bg-background-glass"
           )}
         >
           {selected[0] ? (
@@ -2028,7 +2028,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                         "group relative w-full overflow-hidden rounded-xl border p-3 text-left transition-all",
                         selected
                           ? "border-primary/45 bg-primary/10 ring-1 ring-primary/15"
-                          : "border-line bg-background/85 hover:border-line-strong hover:bg-background"
+                          : "border-line bg-background-glass hover:border-line-strong hover:bg-background"
                       )}
                     >
                       <div className="flex gap-3">
@@ -2069,10 +2069,10 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                             </Badge>
                           </div>
                           <div className="mt-2 flex flex-wrap gap-1.5">
-                            <span className="rounded-full border border-line bg-background/70 px-2 py-0.5 text-2xs text-muted-foreground">
+                            <span className="rounded-full border border-line bg-background-soft px-2 py-0.5 text-2xs text-muted-foreground">
                               {runs.length > 0 ? runs.map((run) => run.quantity).join(" / ") : "Без тиражів"}
                             </span>
-                            <span className="rounded-full border border-line bg-background/70 px-2 py-0.5 text-2xs text-muted-foreground">
+                            <span className="rounded-full border border-line bg-background-soft px-2 py-0.5 text-2xs text-muted-foreground">
                               {product.quoteType === "print" && productConfiguratorPreset
                                 ? "Поліграфія"
                                 : printCount > 0
@@ -2138,7 +2138,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                           однаково.
                         */}
                         <div
-                          className="inline-flex rounded-full border border-line bg-background/40 p-1"
+                          className="inline-flex rounded-full border border-line bg-background-soft p-1"
                           role="radiogroup"
                           aria-label="Тип виробу"
                         >
@@ -2156,7 +2156,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                                   "inline-flex h-9 items-center gap-2 rounded-full px-4 text-sm font-medium transition-all",
                                   active
                                     ? "bg-primary/10 text-primary"
-                                    : "text-muted-foreground hover:bg-background/70 hover:text-foreground"
+                                    : "text-muted-foreground hover:bg-background-soft hover:text-foreground"
                                 )}
                               >
                                 <Icon className={cn("h-4 w-4", active ? "text-primary" : "text-muted-foreground")} />
@@ -2566,7 +2566,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                               "inline-flex h-9 items-center rounded-full border px-3.5 text-sm font-medium transition-all",
                               activeProduct.createDesignTask
                                 ? "border-primary/30 bg-primary/10 text-primary hover:bg-primary/15"
-                                : "border-line bg-background/55 text-muted-foreground hover:border-line-strong hover:bg-background/70"
+                                : "border-line bg-background-soft text-muted-foreground hover:border-line-strong hover:bg-background-glass"
                             )}
                           >
                             <Palette className={cn("mr-2 h-3.5 w-3.5", activeProduct.createDesignTask ? "text-primary" : "text-muted-foreground")} />
@@ -2685,7 +2685,7 @@ export const QuoteBatchBuilderDialog: React.FC<QuoteBatchBuilderDialogProps> = (
                       {activeProduct.runs.map((run, index) => (
                         <div key={run.id} className="space-y-1.5">
                           <div className="text-xs text-muted-foreground">Тираж {index + 1}</div>
-                          <div className="flex h-9 items-center gap-1.5 rounded-full border border-line bg-background/55 px-2">
+                          <div className="flex h-9 items-center gap-1.5 rounded-full border border-line bg-background-soft px-2">
                             <NumberInput
                               min={1}
                               emptyValue={null}

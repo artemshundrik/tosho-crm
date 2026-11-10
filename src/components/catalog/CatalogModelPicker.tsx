@@ -192,7 +192,7 @@ export const CatalogModelPicker: React.FC<CatalogModelPickerProps> = ({
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 focus-visible:ring-offset-1",
             active
               ? "border-primary/30 bg-primary/10 text-primary hover:bg-primary/15"
-              : "border-line bg-background/55 text-muted-foreground hover:border-line-strong hover:bg-background/70",
+              : "border-line bg-background-soft text-muted-foreground hover:border-line-strong hover:bg-background-glass",
             disabled && "pointer-events-none opacity-50"
           )}
         >

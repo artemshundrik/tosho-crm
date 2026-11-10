@@ -119,7 +119,7 @@ export const BADGE_CATALOG_TABS: BadgeCatalogTab[] = [
         label: "Workload And Capacity",
         description: "Окремий набір для оцінки навантаження і доступної ємності.",
         items: [
-          { label: "Спокійно", note: "Низьке поточне навантаження", className: "border-line bg-background/80 text-muted-foreground", variant: "outline", source: ["src/pages/DesignPage.tsx"] },
+          { label: "Спокійно", note: "Низьке поточне навантаження", className: "border-line bg-background-glass text-muted-foreground", variant: "outline", source: ["src/pages/DesignPage.tsx"] },
           { label: "Норма", note: "Збалансований workload", className: "border-info-soft-border bg-info-soft text-info-foreground", variant: "outline", source: ["src/pages/DesignPage.tsx"] },
           { label: "Щільно", note: "Навантаження вище норми", className: "border-warning-soft-border bg-warning-soft text-warning-foreground", variant: "outline", source: ["src/pages/DesignPage.tsx"] },
           { label: "Перевантаження", note: "Критичний рівень задач", className: "border-danger-soft-border bg-danger-soft text-danger-foreground", variant: "outline", source: ["src/pages/DesignPage.tsx"] },
@@ -216,7 +216,7 @@ export const BADGE_CATALOG_TABS: BadgeCatalogTab[] = [
           { label: "Лід", note: "Cross-manager duplicate warning", tone: "warning", source: ["src/pages/OrdersCustomersPage.tsx"] },
           { label: "Замовник", note: "Cross-manager duplicate warning", tone: "warning", source: ["src/pages/OrdersCustomersPage.tsx"] },
           { label: "Нове", note: "Unread notification", variant: "secondary", source: ["src/pages/NotificationsPage.tsx"] },
-          { label: "Тільки для перевірки", note: "Secondary helper badge", variant: "secondary", className: "bg-background/80", source: ["src/pages/NotificationsPage.tsx"] },
+          { label: "Тільки для перевірки", note: "Secondary helper badge", variant: "secondary", className: "bg-background-glass", source: ["src/pages/NotificationsPage.tsx"] },
         ],
       },
       {
@@ -255,7 +255,7 @@ export const BADGE_CATALOG_TABS: BadgeCatalogTab[] = [
         label: "Catalog Model Tags",
         description: "Локальні badges у карточках моделі та пошуку каталогу.",
         items: [
-          { label: "3 тиражів", note: "Tier count на зображенні моделі", variant: "secondary", className: "bg-background/90 backdrop-blur-sm text-xs font-semibold gap-1 px-2.5 py-1", source: ["src/features/catalog/ProductCatalogPage/components/SimpleModelCard.tsx"] },
+          { label: "3 тиражів", note: "Tier count на зображенні моделі", variant: "secondary", className: "bg-background-glass backdrop-blur-sm text-xs font-semibold gap-1 px-2.5 py-1", source: ["src/features/catalog/ProductCatalogPage/components/SimpleModelCard.tsx"] },
           { label: "Шовкодрук", note: "Method tag у карточці моделі", variant: "outline", className: "text-xs px-2 py-0 h-6", source: ["src/features/catalog/ProductCatalogPage/components/SimpleModelCard.tsx"] },
           { label: "+2", note: "Стиснений badge для extra methods", variant: "outline", className: "text-xs px-2 py-0 h-6", source: ["src/features/catalog/ProductCatalogPage/components/SimpleModelCard.tsx"] },
           { label: "Фільтр", note: "Outline badge у пошуковому рядку каталогу", variant: "outline", className: "text-xs px-2.5 py-1 h-9 flex items-center gap-1.5", source: ["src/features/catalog/ProductCatalogPage/components/SearchBar.tsx"] },

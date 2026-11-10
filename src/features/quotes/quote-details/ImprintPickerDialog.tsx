@@ -264,7 +264,7 @@ export function ImprintPickerDialog({
                 }}
               />
             {sheet.views.length > 1 ? (
-              <div className="absolute left-3 top-3 z-base flex gap-1 rounded-full border border-line bg-background/80 p-1 backdrop-blur-sm">
+              <div className="absolute left-3 top-3 z-base flex gap-1 rounded-full border border-line bg-background-glass p-1 backdrop-blur-sm">
                 {sheet.views.map((one) => (
                   <button
                     key={one.id}

@@ -35,7 +35,7 @@ export function CardsSkeleton({ count = 6, className }: { count?: number; classN
   return (
     <div className={cn("grid gap-4 sm:grid-cols-2 xl:grid-cols-3", className)}>
       {Array.from({ length: count }).map((_, index) => (
-        <div key={index} className={cn(ENTITY_CARD_FRAME, ENTITY_CARD_ROWS, "bg-card/70")}>
+        <div key={index} className={cn(ENTITY_CARD_FRAME, ENTITY_CARD_ROWS, "bg-card-soft")}>
           {/* 1. Лого, назва, стан. */}
           <div className="flex min-w-0 items-center gap-2.5">
             <Skeleton className="h-8 w-8 shrink-0 rounded-xl" />
