@@ -2,7 +2,7 @@ import * as React from "react";
 
 import { KidsBadge } from "@/components/catalog/SupplierPoolRow";
 import { SupplierVariantTiles } from "@/components/catalog/SupplierVariantTiles";
-import { ExternalLink, Trash2, AlertTriangle } from "@/components/icons/appIcons";
+import { ExternalLink, Trash2, AlertTriangle, Briefcase } from "@/components/icons/appIcons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -383,6 +383,9 @@ export function ManualOrderServiceRow({
   const issue = (id: string) => issueRing(issueId === id);
   return (
     <div className="flex flex-wrap items-start gap-2 rounded-xl border border-border/60 bg-card p-3">
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md border tone-icon-box-info" title="Послуга">
+        <Briefcase className="h-4 w-4" aria-hidden />
+      </span>
       <Input
         data-issue={`service:${service.key}`}
         value={service.name}

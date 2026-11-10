@@ -7,7 +7,7 @@ import {
   useCustomerLeadCreate,
   type CustomerLeadOption,
 } from "@/components/customers";
-import { Loader2, Plus } from "@/components/icons/appIcons";
+import { Loader2 } from "@/components/icons/appIcons";
 import {
   QuoteDeliveryFields,
   createEmptyQuoteDeliveryDetails,
@@ -69,6 +69,11 @@ import {
   type MemberOption,
 } from "./manual-order/ManualOrderDesignSection";
 import { ManualOrderItemRow, ManualOrderServiceRow, amountOf, issueRing } from "./manual-order/ManualOrderItemRow";
+import {
+  ManualOrderEmptyStart,
+  ManualOrderQuickServices,
+  ManualOrderServiceDocuments,
+} from "./manual-order/ManualOrderServiceEntry";
 import { useManualOrderProducts } from "./manual-order/useManualOrderProducts";
 
 type CurrencyCode = "UAH" | "USD" | "EUR";
@@ -119,7 +124,8 @@ function revealIssueField(root: HTMLElement | null, id: string) {
   target?.focus({ preventScroll: true });
 }
 
-function SideSection({ title, children }: { title: string; children: ReactNode }) {
+function SideSection({ title, hidden, children }: { title: string; hidden?: boolean; children: ReactNode }) {
+  if (hidden) return null;
   return (
     <section className="space-y-2.5 border-b border-border/60 px-4 py-3.5 last:border-b-0">
       <h3 className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</h3>
@@ -334,6 +340,10 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
   });
 
   const hasPrint = items.some((item) => item.imprints.length > 0);
+  /** Лише послуги (дизайн, фото): без виробництва, логістики й пакування. */
+  const serviceOnly = items.length === 0 && services.length > 0;
+  const shownDeliveryType = serviceOnly ? "" : deliveryType;
+  const addService = (name = "") => setServices((cur) => [...cur, { ...createManualOrderService(), name }]);
 
   // Готові дизайни Замовника — щойно обрано замовника (не чекаємо на друк, щоб не «зникали»).
   useEffect(() => {
@@ -413,7 +423,7 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
     hasPrint,
     designMode,
     selectedDesignTaskId,
-    deliveryIssue: deliveryType ? getQuoteDeliveryIssues(deliveryType, deliveryDetails) : null,
+    deliveryIssue: shownDeliveryType ? getQuoteDeliveryIssues(shownDeliveryType, deliveryDetails) : null,
     pricesConfirmed,
   });
   // Червоне лише після натиску й лише поки цей пропуск лишається першим.
@@ -508,11 +518,11 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
         paymentMethodId,
         paymentTerms,
         incotermsCode: "FCA",
-        deliveryType: deliveryType || null,
-        deliveryDetails: deliveryType
-          ? (sanitizeQuoteDeliveryDetails(deliveryType, deliveryDetails) as unknown as Json)
+        deliveryType: shownDeliveryType || null,
+        deliveryDetails: shownDeliveryType
+          ? (sanitizeQuoteDeliveryDetails(shownDeliveryType, deliveryDetails) as unknown as Json)
           : null,
-        packaging: packaging.trim() || null,
+        packaging: serviceOnly ? null : packaging.trim() || null,
         design,
         ourLegalEntityId: isCashless ? shownLegalEntityId || null : null,
         items: payloadItems,
@@ -539,7 +549,9 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
           <DialogDescription className="sr-only">
             Пряме замовлення: ліворуч замовник, оплата, дизайн і логістика, праворуч товари.
           </DialogDescription>
-          <p className="text-xs text-muted-foreground">{stageLine(hasPrint, designMode)}</p>
+          <p className="text-xs text-muted-foreground">
+            {serviceOnly ? "Замовлення на послуги · без виробництва й доставки" : stageLine(hasPrint, designMode)}
+          </p>
         </DialogHeader>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
@@ -662,7 +674,13 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
               </p>
             </SideSection>
 
-            <SideSection title="Дизайн">
+            {serviceOnly ? (
+              <p className="mx-4 my-3.5 rounded-lg border border-dashed border-border/70 p-3 text-xs text-muted-foreground">
+                Дизайн, логістика й пакування сховані: у замовленні лише послуги.
+              </p>
+            ) : null}
+
+            <SideSection title="Дизайн" hidden={serviceOnly}>
               <ManualOrderDesignSection
                 hasPrint={hasPrint}
                 mode={designMode}
@@ -690,7 +708,7 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
               />
             </SideSection>
 
-            <SideSection title="Логістика">
+            <SideSection title="Логістика" hidden={serviceOnly}>
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">Спосіб доставки</Label>
                 <Select
@@ -756,28 +774,19 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
                 onAddLinks={(urls) => void products.addLinks(urls)}
                 onAddName={products.addName}
                 onPickSupplier={products.pickSupplier}
+                onAddService={addService}
                 onInvalid={setFieldError}
               />
             </div>
             {fieldError ? <p className="text-xs text-destructive">{fieldError}</p> : null}
+            <ManualOrderQuickServices onAdd={addService} disabled={submitting} />
 
             {items.length === 0 && services.length === 0 ? (
-              <div className="flex flex-1 flex-col items-center justify-center gap-1 py-10 text-center">
-                <p className="text-sm font-medium">Поки жодного товару</p>
-                <p className="max-w-sm text-xs text-muted-foreground">
-                  Посилання дасть назву, фото, артикул і закупку. Назва знайде товар у каталозі й пулі.
-                </p>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="xs"
-                  className="mt-2"
-                  disabled={submitting}
-                  onClick={() => setServices([createManualOrderService()])}
-                >
-                  Лише послуга
-                </Button>
-              </div>
+              <ManualOrderEmptyStart
+                disabled={submitting}
+                onProduct={() => rootRef.current?.querySelector<HTMLInputElement>('[data-issue="items"] input')?.focus()}
+                onService={() => addService()}
+              />
             ) : (
               <>
                 {items.map((draft) => {
@@ -822,17 +831,6 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
                     onRemove={() => setServices((cur) => cur.filter((it) => it.key !== service.key))}
                   />
                 ))}
-                <div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="xs"
-                    disabled={submitting}
-                    onClick={() => setServices((cur) => [...cur, createManualOrderService()])}
-                  >
-                    <Plus className="h-3.5 w-3.5" /> Послуга
-                  </Button>
-                </div>
               </>
             )}
           </div>
@@ -858,6 +856,7 @@ export function CreateManualOrderDialog({ open, onOpenChange, onCreated }: Creat
                   : "Передоплати немає: уся сума після готовності"}
               </div>
             ) : null}
+            {serviceOnly ? <ManualOrderServiceDocuments cashless={isCashless} /> : null}
           </div>
 
           <div className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-2">

@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, ExternalLink, ImageOff, Link2, Loader2, Plus, Search } from "@/components/icons/appIcons";
+import { Briefcase, ChevronDown, ExternalLink, ImageOff, Link2, Loader2, Plus, Search } from "@/components/icons/appIcons";
 
 import { SEARCH_LEFT_ICON } from "@/components/ui/controlStyles";
 import { Input } from "@/components/ui/input";
@@ -92,6 +92,7 @@ export function QuoteItemCommandField({
   onAddName,
   onPickSupplier,
   onInvalid,
+  onAddService,
 }: {
   /** Для пошуку за артикулом варіанта — він іде запитом у базу (REQ-248). */
   teamId: string;
@@ -116,6 +117,12 @@ export function QuoteItemCommandField({
   onPickSupplier: (product: SupplierPoolProduct) => void;
   /** Що саме не схоже на посилання — вікно покаже це своєю смугою помилки. */
   onInvalid: (message: string) => void;
+  /**
+   * Замовлення без прорахунку приймає й послуги (дизайн, фото): тоді внизу
+   * списку є ще рядок «Додати як послугу». У прорахунку послуг немає — там
+   * проп не передають, і список той самий, що й був.
+   */
+  onAddService?: (name: string) => void;
 }) {
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   /**
@@ -215,8 +222,9 @@ export function QuoteItemCommandField({
   // беруть: інакше стрілки провалювалися б у невидимі рядки.
   const [catalogOpen, setCatalogOpen] = React.useState(false);
   const catalogRows = catalogOpen ? ranked.length : 0;
-  const rowCount = visiblePool.length + catalogRows + 1;
   const addRowIndex = visiblePool.length + catalogRows;
+  const serviceRowIndex = onAddService ? addRowIndex + 1 : -1;
+  const rowCount = addRowIndex + (onAddService ? 2 : 1);
   const open = focused && !dismissed && mode === "search" && trimmed.length > 0;
 
   // Новий текст — новий список: підсвітка повертається на перший рядок, а
@@ -294,6 +302,12 @@ export function QuoteItemCommandField({
   }, [visiblePool]);
 
   const commitRow = (index: number) => {
+    if (index === serviceRowIndex && onAddService) {
+      if (!trimmed) return;
+      onAddService(trimmed);
+      onValueChange("");
+      return;
+    }
     const suggestion = catalogOpen ? ranked[index - visiblePool.length] : undefined;
     if (suggestion) {
       onPickCatalog(suggestion);
@@ -820,7 +834,11 @@ export function QuoteItemCommandField({
               // `-bottom-1.5` — та сама щілина знизу: `bottom-0` тримає рядок
               // на шість пікселів вище краю прокрутки, і смуга під ним
               // світилась товаром, що проїжджає (Артем прислав знімок).
-              "sticky -bottom-1.5 z-10 -mx-1.5 -mb-1.5 flex cursor-pointer items-center gap-3 bg-popover px-3.5 py-2 text-sm",
+              // З рядком послуги липким лишається він, останній: два липкі
+              // рядки з одним `bottom` лягли б один на одного.
+              onAddService
+                ? "-mx-1.5 flex cursor-pointer items-center gap-3 bg-popover px-3.5 py-2 text-sm"
+                : "sticky -bottom-1.5 z-10 -mx-1.5 -mb-1.5 flex cursor-pointer items-center gap-3 bg-popover px-3.5 py-2 text-sm",
               addRowIndex > 0 && "mt-1 border-t border-border/60 pt-2",
               active === addRowIndex ? "bg-muted" : "hover:bg-muted/50"
             )}
@@ -839,6 +857,29 @@ export function QuoteItemCommandField({
               <span className="block text-2xs text-muted-foreground">Без каталогу — назва й тираж, решта в картці</span>
             </span>
           </li>
+          {onAddService ? (
+            <li
+              role="option"
+              aria-selected={active === serviceRowIndex}
+              className={cn(
+                "sticky -bottom-1.5 z-10 -mx-1.5 -mb-1.5 flex cursor-pointer items-center gap-3 bg-popover px-3.5 py-2 text-sm",
+                active === serviceRowIndex ? "bg-muted" : "hover:bg-muted/50"
+              )}
+              onMouseEnter={() => setActive(serviceRowIndex)}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => commitRow(serviceRowIndex)}
+            >
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border tone-icon-box-info">
+                <Briefcase className="h-4 w-4" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate">
+                  Додати «<span className="font-medium">{trimmed}</span>» як послугу
+                </span>
+                <span className="block text-2xs text-muted-foreground">Дизайн, фото, доставка — без товару, закривається актом</span>
+              </span>
+            </li>
+          ) : null}
         </ul>
         <SuggestListFooter shown={visiblePool.length + catalogRows} total={pool.length + ranked.length} />
       </PopoverContent>
