@@ -90,6 +90,8 @@ export type RegistryDocument = {
   alert: { tone: Tone; text: string } | null;
   events: DocumentEvent[];
   filePath: string | null;
+  /** Назва, з якою файл вносили: під нею він завантажується, коли браузер його не покаже. */
+  fileName: string | null;
 };
 
 const DAY_MS = 86_400_000;
@@ -175,6 +177,7 @@ const baseFromOrder = ({ record }: OrderContext) => ({
   legalEntityLabel: record.executor.shortName,
   currency: record.currency || "UAH",
   filePath: null,
+  fileName: null,
 });
 
 function signableDocument(
@@ -407,6 +410,7 @@ function externalContractDocument(
       : null,
     events: [{ at: contract.createdAt, precise: true, text: "внесено файл підписаного договору", userId: null }],
     filePath: contract.filePath,
+    fileName: contract.fileName,
   };
 }
 

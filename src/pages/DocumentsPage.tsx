@@ -297,8 +297,8 @@ export default function DocumentsPage() {
 
   const selected = visible.find((doc) => doc.id === selectedId) ?? visible[0] ?? null;
 
-  const openFile = useCallback((path: string) => {
-    void openCustomerContractFile(path).catch((fileError: unknown) =>
+  const openFile = useCallback((path: string, fileName: string | null) => {
+    void openCustomerContractFile(path, fileName).catch((fileError: unknown) =>
       toast.error(fileError instanceof Error ? fileError.message : "Не вдалося відкрити файл.")
     );
   }, []);

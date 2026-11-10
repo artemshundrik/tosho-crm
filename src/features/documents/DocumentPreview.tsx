@@ -36,7 +36,7 @@ type Props = {
   accountant: DocumentPerson | null;
   resolvePerson: (userId: string | null) => DocumentPerson | null;
   onOpenOrder: (orderId: string) => void;
-  onOpenFile: (path: string) => void;
+  onOpenFile: (path: string, fileName: string | null) => void;
 };
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -66,7 +66,7 @@ export function DocumentPreview({ doc, manager, accountant, resolvePerson, onOpe
         <DocumentStatusText doc={doc} />
         <div className="flex-1" />
         {doc.filePath ? (
-          <Button size="xs" variant="outline" className="gap-1.5" onClick={() => onOpenFile(doc.filePath!)}>
+          <Button size="xs" variant="outline" className="gap-1.5" onClick={() => onOpenFile(doc.filePath!, doc.fileName)}>
             <FileText className="h-3.5 w-3.5" />
             Файл
           </Button>

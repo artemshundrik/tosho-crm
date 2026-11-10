@@ -9,7 +9,7 @@
 import type { StackSnapshot } from "../lib/stack";
 
 export const STACK_SNAPSHOT: StackSnapshot = {
-  "generatedAt": "2026-11-09T12:15:23.870Z",
+  "generatedAt": "2026-11-10T15:02:27.362Z",
   "packages": [
     {
       "name": "@babel/core",
@@ -107,8 +107,11 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "version": "5.3.1",
       "layer": "screen",
       "dev": false,
-      "bumpedAt": null,
-      "bumpCommit": null,
+      "bumpedAt": "2026-11-09T14:18:47+02:00",
+      "bumpCommit": {
+        "sha": "792a85da",
+        "subject": "Сторінка файлів для замовника тепер фірмова: чіткі макети, PDF гортається, усе завантажується одним архівом"
+      },
       "description": "Шрифт сторінки файлів для замовника.",
       "homepage": "https://fontsource.org/fonts/onest",
       "usedIn": 0,
@@ -351,7 +354,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Через нього CRM говорить із базою: читає прорахунки, зберігає замовників, перевіряє права.",
       "homepage": null,
-      "usedIn": 112,
+      "usedIn": 121,
       "iconUrl": "https://github.com/supabase.png?size=64"
     },
     {
@@ -740,6 +743,30 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       "iconUrl": "https://www.google.com/s2/favicons?domain=react.dev&sz=128"
     },
     {
+      "name": "fflate",
+      "version": "0.8.3",
+      "layer": "screen",
+      "dev": false,
+      "bumpedAt": null,
+      "bumpCommit": null,
+      "description": "Розпаковує DOCX і ODT у браузері: з договору у Word дістаємо текст, щоб CRM розпізнала номер і дату.",
+      "homepage": "https://101arrowz.github.io/fflate",
+      "usedIn": 2,
+      "iconUrl": "https://www.google.com/s2/favicons?domain=101arrowz.github.io&sz=128"
+    },
+    {
+      "name": "heic-to",
+      "version": "1.6.6",
+      "layer": "screen",
+      "dev": false,
+      "bumpedAt": null,
+      "bumpCommit": null,
+      "description": "Перетворює фото з айфона (HEIC) на JPG, коли браузер сам не вміє; вантажиться лише в мить вибору такого файлу.",
+      "homepage": null,
+      "usedIn": 1,
+      "iconUrl": "https://github.com/hoppergee.png?size=64"
+    },
+    {
       "name": "jsdom",
       "version": "30.1.3",
       "layer": "build",
@@ -934,7 +961,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Обробка зображень на сервері: стискає й переганяє у webp картинки каталогу.",
       "homepage": "https://sharp.pixelplumbing.com",
-      "usedIn": 15,
+      "usedIn": 21,
       "iconUrl": "https://www.google.com/s2/favicons?domain=sharp.pixelplumbing.com&sz=128"
     },
     {
@@ -1041,7 +1068,7 @@ export const STACK_SNAPSHOT: StackSnapshot = {
       },
       "description": "Тести. Ті самі, що ганяються перед кожним пушем.",
       "homepage": "https://vitest.dev",
-      "usedIn": 307,
+      "usedIn": 312,
       "peerRequired": true,
       "iconUrl": "https://www.google.com/s2/favicons?domain=vitest.dev&sz=128"
     },
@@ -1102,12 +1129,12 @@ export const STACK_SNAPSHOT: StackSnapshot = {
     }
   ],
   "guards": [],
-  "tests": 3663,
-  "testFiles": 305,
+  "tests": 3732,
+  "testFiles": 310,
   "lintStubs": 28,
   "node": "24",
   "netlifyFunctions": 53,
-  "sourceLines": 351076,
+  "sourceLines": 355999,
   "automation": {
     "workflows": [
       {

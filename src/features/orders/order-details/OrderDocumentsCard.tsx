@@ -392,9 +392,10 @@ function DocumentRow({
 }) {
   // Договір поза CRM (p39) — це файл, а не документ, який CRM друкує: «Відкрити» показує скан.
   const externalFile = document.kind === "contract" ? (record.externalContract?.filePath ?? null) : null;
+  const externalFileName = record.externalContract?.fileName ?? null;
   const openDocument = (kind: OrderDocumentKind) =>
     externalFile
-      ? void openCustomerContractFile(externalFile).catch((error: unknown) =>
+      ? void openCustomerContractFile(externalFile, externalFileName).catch((error: unknown) =>
           toast.error(error instanceof Error ? error.message : "Не вдалося відкрити файл договору.")
         )
       : onAction(kind);

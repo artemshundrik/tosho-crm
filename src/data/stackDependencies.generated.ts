@@ -246,7 +246,6 @@ export const STACK_DEPENDENCIES: StackDependency[] = [
   {"name":"fast-deep-equal","version":"3.1.3","via":["@react-pdf/renderer"]},
   {"name":"fast-equals","version":"5.4.5","via":["@tiptap/react"]},
   {"name":"fdir","version":"6.5.0","via":["vite"]},
-  {"name":"fflate","version":"0.8.3","via":["@react-pdf/renderer"]},
   {"name":"fontkit","version":"2.0.4","via":["@react-pdf/renderer"]},
   {"name":"fsevents","version":"2.3.3","via":["vite"]},
   {"name":"get-nonce","version":"1.0.1","via":["@radix-ui/react-dialog","@radix-ui/react-dropdown-menu","@radix-ui/react-popover","@radix-ui/react-select"]},

@@ -19,7 +19,10 @@ import { Label } from "@/components/ui/label";
 import { DateInput } from "@/components/ui/picker-input";
 import {
   CUSTOMER_CONTRACT_ACCEPT,
-  CUSTOMER_CONTRACT_MAX_BYTES,
+  CUSTOMER_CONTRACT_FORMATS_HINT,
+  prepareContractFile,
+} from "@/features/orders/customerContractFile";
+import {
   recognizeCustomerContract,
   saveCustomerContract,
   type RecognizedContract,
@@ -58,7 +61,10 @@ export function CustomerContractEntry({
   const { accessRole, jobRole } = useAuth();
   const [open, setOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const [preparing, setPreparing] = useState(false);
   const [recognizing, setRecognizing] = useState(false);
+  /** Чому поля не підставлено: .doc/.rtf, завеликий PDF, нечитаний HEIC. */
+  const [fileNote, setFileNote] = useState<string | null>(null);
   const [recognized, setRecognized] = useState<RecognizedContract | null>(null);
   const [form, setForm] = useState<Form>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
@@ -68,22 +74,35 @@ export function CustomerContractEntry({
 
   const reset = () => {
     setFile(null);
+    setFileNote(null);
     setRecognized(null);
     setForm(EMPTY_FORM);
   };
 
   const pickFile = async (files: File[]) => {
-    const next = files[0];
-    if (!next) return;
-    if (next.size > CUSTOMER_CONTRACT_MAX_BYTES) {
-      toast.error("Файл більший за 4 МБ — стисніть PDF або зробіть фото менше.");
+    const picked = files[0];
+    if (!picked) return;
+    setPreparing(true);
+    let prepared: Awaited<ReturnType<typeof prepareContractFile>>;
+    try {
+      prepared = await prepareContractFile(picked);
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Не вдалося прочитати файл.");
       return;
+    } finally {
+      setPreparing(false);
     }
-    setFile(next);
+    setFile(prepared.file);
+    setFileNote(prepared.skipNote);
     setRecognized(null);
+    if (!prepared.recognition) return;
     setRecognizing(true);
     try {
-      const result = await recognizeCustomerContract(next);
+      const result = await recognizeCustomerContract(prepared.file.name, prepared.recognition);
+      // З Word-файлу видно лише текст: чи підписано, звіряють за примірником.
+      if (prepared.recognition.kind === "text") {
+        result.warnings = [...result.warnings, "Це файл Word: підписів і печаток у ньому не видно — звірте з підписаним примірником."];
+      }
       setRecognized(result);
       setForm((current) => ({
         ...current,
@@ -158,12 +177,21 @@ export function CustomerContractEntry({
             size="row"
             label="Файл договору"
             title={file ? file.name : "Перетягніть або клікніть для вибору"}
-            hint="PDF або фото, до 4 МБ"
+            hint={CUSTOMER_CONTRACT_FORMATS_HINT}
             accept={CUSTOMER_CONTRACT_ACCEPT}
-            busy={recognizing}
+            busy={preparing || recognizing}
             disabled={saving}
             onFiles={(files) => void pickFile(files)}
           />
+
+          {preparing ? (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Готую файл…
+            </div>
+          ) : null}
+
+          {fileNote ? <div className="text-xs text-muted-foreground">{fileNote}</div> : null}
 
           {recognizing ? (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -255,7 +283,7 @@ export function CustomerContractEntry({
             </Button>
             <Button
               type="button"
-              disabled={!file || !form.number.trim() || !form.date || recognizing || saving}
+              disabled={!file || !form.number.trim() || !form.date || preparing || recognizing || saving}
               onClick={() => void save()}
             >
               {saving ? "Збереження..." : "Зберегти договір"}
