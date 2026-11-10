@@ -8,7 +8,6 @@ import {
 } from "@/features/orders/specificationQueries";
 import {
   effectiveSpecTemplate,
-  hasMixedSpecItems,
   suggestSpecTemplate,
   type SpecTemplate,
 } from "@/features/orders/specTemplate";
@@ -99,7 +98,7 @@ export function useSpecificationItemTexts(teamId: string | null, record: Derived
     setDirty(false);
   }, [dirty, teamId, texts]);
 
-  return { texts, loading, setText, resetText, save, template, setTemplate, mixed: hasMixedSpecItems(texts) };
+  return { texts, loading, setText, resetText, save, template, setTemplate };
 }
 
 export type SpecificationItemTextsState = ReturnType<typeof useSpecificationItemTexts>;

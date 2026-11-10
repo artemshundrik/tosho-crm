@@ -440,8 +440,13 @@ export function buildSpecificationHtml(params: SpecificationDocumentParams) {
         }
     `,
     bodyHtml: `
-        <div class="center doc-title">Додаток (Специфікація) № ${escapeHtml(numberLabel)} до</div>
-        <div class="center doc-title">${escapeHtml(contractTitle)}</div>
+        ${
+          isDesign
+            ? `<div class="center doc-title">Додаток (Специфікація) № ${escapeHtml(numberLabel)}</div>
+        <div class="center doc-title">до Договору</div>`
+            : `<div class="center doc-title">Додаток (Специфікація) № ${escapeHtml(numberLabel)} до</div>
+        <div class="center doc-title">${escapeHtml(contractTitle)}</div>`
+        }
         <div class="center doc-title">№ ${escapeHtml(contractNumber)} від ${escapeHtml(contractDate)} р.</div>
 
         <div class="topline">

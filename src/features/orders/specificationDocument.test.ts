@@ -9,7 +9,7 @@ import {
   buildSpecPaymentClause,
   signatoryActsPhrase,
 } from "./specificationDocument";
-import { hasMixedSpecItems, suggestSpecTemplate } from "./specTemplate";
+import { hasMixedSpecItems, specTemplateWarning, suggestSpecTemplate } from "./specTemplate";
 
 /** Intl ставить нерозривний пробіл між тисячами; у тексті тесту — звичайний. */
 const plain = (value: string) => value.replace(/[\u00a0\u202f]/g, " ");
@@ -166,7 +166,7 @@ describe("СП на поліграфію й дизайн-послуги (REQ-358
     expect(html).toContain("Акта наданих послуг");
     expect(html).not.toContain("Incoterms");
     expect(html).not.toContain("рекламно-сувенірної");
-    expect(html).toContain("Додаток (Специфікація) № 5 до");
+    expect(html).toContain("до Договору");
   });
 });
 
@@ -178,5 +178,8 @@ describe("вид СП за позиціями", () => {
     expect(hasMixedSpecItems([{ isPrint: false, isService: true }, { isPrint: false }])).toBe(true);
     expect(hasMixedSpecItems([{ isPrint: false, isService: true }, { isPrint: false, isService: true }])).toBe(false);
     expect(hasMixedSpecItems([{ isPrint: true }, { isPrint: false }])).toBe(true);
+    expect(specTemplateWarning([{ isPrint: false }], "design")).toContain("не послуги");
+    expect(specTemplateWarning([{ isPrint: false, isService: true }], "merch")).toContain("дизайн-послуги");
+    expect(specTemplateWarning([{ isPrint: false, isService: true }], "design")).toBeNull();
   });
 });

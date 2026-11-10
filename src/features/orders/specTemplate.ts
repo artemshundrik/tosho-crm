@@ -35,6 +35,21 @@ export const suggestSpecTemplate = (items: SpecItemKind[]): SpecTemplate => {
 };
 
 /** Позиції іншого виду в одній СП: Влад просить різні СП, тож замовлення варто розділити. */
+/** Що сказати менеджеру під полем виду: змішані позиції або вид, що не пасує до позицій. */
+export const specTemplateWarning = (items: SpecItemKind[], template: SpecTemplate): string | null => {
+  if (items.length === 0) return null;
+  const services = items.filter((item) => item.isService).length;
+  if (services > 0 && services < items.length) {
+    return "У замовленні і послуги, і товари. СП на них краще окремі — розділіть позиції на два замовлення.";
+  }
+  if (template === "design" && services === 0) return "Позиції замовлення — товари, а не послуги: СП на дизайн-послуги для них не пасує.";
+  if (template !== "design" && services === items.length) return "Усі позиції — послуги: для них є СП на дизайн-послуги.";
+  if (hasMixedSpecItems(items)) {
+    return "У замовленні і поліграфія, і товари. СП на них краще окремі — розділіть позиції на два замовлення.";
+  }
+  return null;
+};
+
 export const hasMixedSpecItems = (items: SpecItemKind[]) => {
   const services = items.filter((item) => item.isService).length;
   if (services > 0 && services < items.length) return true;
