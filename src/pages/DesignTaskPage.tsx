@@ -3728,7 +3728,12 @@ export default function DesignTaskPage() {
         variant: kind === "video" ? "original" : "preview",
       });
       if (!url) {
-        toast.error("Не вдалося відкрити превʼю файлу");
+        // Прев'ю немає (TIFF, який сервер не розібрав, або PDF без мініатюри),
+        // а сам браузер такий файл не покаже — тоді віддаємо оригінал. Раніше
+        // тут був лише тост після ~20 с тиші: людина вирішувала, що клік не
+        // спрацював, і файла так і не отримувала.
+        toast.message("Переглянути в CRM не вийшло — завантажую файл");
+        await downloadStorageBackedFile(file);
         return;
       }
       setFilePreview({
@@ -3744,7 +3749,7 @@ export default function DesignTaskPage() {
         setPreviewPreparingKey((current) => (current === previewKey ? null : current));
       }
     }
-  }, [ensureFileAccessUrl, openStorageFileInNewTab, getStorageFileKey]);
+  }, [downloadStorageBackedFile, ensureFileAccessUrl, openStorageFileInNewTab, getStorageFileKey]);
 
   useEffect(() => {
     const objectUrls = objectUrlRegistryRef.current;
@@ -10255,6 +10260,8 @@ export default function DesignTaskPage() {
                               canPreviewVideo(extension) && Boolean(attachment.storage_bucket && attachment.storage_path);
                             const previewable =
                               canRenderStoragePreview(extension) && Boolean(attachment.storage_bucket && attachment.storage_path) && !isVideo;
+                            const previewKey = getStorageFileKey(attachment, "preview");
+                            const isPreviewPreparing = Boolean(previewKey && previewPreparingKey === previewKey);
                             return (
                               <div
                                 key={attachment.id}
@@ -10263,14 +10270,16 @@ export default function DesignTaskPage() {
                                 <button
                                   type="button"
                                   className="block h-full w-full text-left"
-                                  onClick={() =>
+                                  onClick={() => {
+                                    if (isPreviewPreparing) return;
                                     void openStorageFilePreview({
                                       storage_bucket: attachment.storage_bucket,
                                       storage_path: attachment.storage_path,
                                       file_name: attachment.file_name,
                                       mime_type: attachment.mime_type,
-                                    })
-                                  }
+                                    });
+                                  }}
+                                  aria-busy={isPreviewPreparing || undefined}
                                   aria-label={`Переглянути ${attachment.file_name}`}
                                 >
                                   {isVideo ? (
@@ -10294,6 +10303,11 @@ export default function DesignTaskPage() {
                                       <span className="text-3xs uppercase">{extension}</span>
                                     </div>
                                   )}
+                                  {isPreviewPreparing ? (
+                                    <div className="pointer-events-none absolute inset-0 grid place-items-center bg-background-glass">
+                                      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                                    </div>
+                                  ) : null}
                                 </button>
                                 <div className="pointer-events-none absolute bottom-0 left-0 right-0 truncate bg-background-glass px-1.5 py-0.5 text-3xs text-foreground">
                                   {attachment.file_name}
@@ -10511,19 +10525,23 @@ export default function DesignTaskPage() {
                                     canRenderStoragePreview(extension) &&
                                     Boolean(attachment.storage_bucket && attachment.storage_path) &&
                                     !isVideo;
+                                  const previewKey = getStorageFileKey(attachment, "preview");
+                                  const isPreviewPreparing = Boolean(previewKey && previewPreparingKey === previewKey);
                                   return (
                                     <button
                                       key={attachment.id}
                                       type="button"
                                       className="group relative h-24 overflow-hidden rounded-md border border-line-strong bg-tint-subtle transition-colors hover:border-primary/40"
-                                      onClick={() =>
+                                      onClick={() => {
+                                        if (isPreviewPreparing) return;
                                         void openStorageFilePreview({
                                           storage_bucket: attachment.storage_bucket,
                                           storage_path: attachment.storage_path,
                                           file_name: attachment.file_name,
                                           mime_type: attachment.mime_type,
-                                        })
-                                      }
+                                        });
+                                      }}
+                                      aria-busy={isPreviewPreparing || undefined}
                                       aria-label={`Переглянути ${attachment.file_name}`}
                                     >
                                       {isVideo ? (
@@ -10547,6 +10565,11 @@ export default function DesignTaskPage() {
                                           <span className="text-3xs uppercase">{extension}</span>
                                         </div>
                                       )}
+                                      {isPreviewPreparing ? (
+                                        <div className="pointer-events-none absolute inset-0 grid place-items-center bg-background-glass">
+                                          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                                        </div>
+                                      ) : null}
                                       <div className="pointer-events-none absolute bottom-0 left-0 right-0 truncate bg-background-glass px-1.5 py-0.5 text-3xs text-foreground">
                                         {attachment.file_name}
                                       </div>

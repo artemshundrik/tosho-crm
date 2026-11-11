@@ -129,6 +129,9 @@ export function StorageObjectImage({
           : await getSignedAttachmentUrl(bucket, path, variant);
       if (!active) return;
       setSrc(nextUrl ?? null);
+      // Адреси немає — чекати нічого. Без цього каркас пульсував вічно, і
+      // плитка файла без мініатюри виглядала як така, що ще вантажиться.
+      if (!nextUrl) setFailedVariant(true);
     };
 
     void load();

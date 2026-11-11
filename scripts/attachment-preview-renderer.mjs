@@ -165,7 +165,41 @@ export async function renderRasterPreviewFiles(inputPath) {
   }
 }
 
+/**
+ * TIFF читає sharp (libvips) — без жодної зовнішньої утиліти.
+ *
+ * На Netlify немає ні ImageMagick, ні sips, ні QuickLook, тож ланцюжок нижче там
+ * завжди падав: з квітня 2026 жоден TIFF не отримав ні прев'ю, ні мініатюри.
+ * Плитка в правці лишалась сірою, а клік чекав прев'ю ~20 с і нічого не робив.
+ * На Маку все працювало через sips — тому в розробці цього не було видно.
+ *
+ * Перша сторінка (`page: 0`), орієнтація з EXIF, прозорість зберігається:
+ * білий логотип на прозорому тлі — звичайна справа для такого файла.
+ */
+async function renderTiffWithSharp(inputPath) {
+  const source = sharp(inputPath, { page: 0, failOn: "none" }).rotate();
+  const render = (maxSize) =>
+    source
+      .clone()
+      .resize(maxSize, maxSize, { fit: "inside", withoutEnlargement: true })
+      .webp({ quality: 84 })
+      .toBuffer();
+  const [previewBuffer, thumbBuffer] = await Promise.all([render(PREVIEW_MAX_SIZE), render(THUMB_MAX_SIZE)]);
+  return { previewBuffer, thumbBuffer, contentType: "image/webp", extension: "webp" };
+}
+
 export async function renderFirstPagePreviewFiles(inputPath) {
+  let sharpTiffError = null;
+  if (/\.(tif|tiff)$/i.test(inputPath)) {
+    try {
+      return await renderTiffWithSharp(inputPath);
+    } catch (error) {
+      // Рідкісний TIFF, якого libvips не розбирає, — пробуємо утиліти нижче,
+      // а причину sharp не губимо, якщо й вони не допоможуть.
+      sharpTiffError = error;
+    }
+  }
+
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "attachment-preview-"));
   const previewPath = path.join(tempDir, "preview.png");
   const thumbPath = path.join(tempDir, "thumb.png");
@@ -204,7 +238,8 @@ export async function renderFirstPagePreviewFiles(inputPath) {
       } else if (qlmanage) {
         await renderWithQuickLook(qlmanage, inputPath, previewPath, tempDir);
       } else {
-        throw new Error("No supported TIFF preview renderer found in environment");
+        const sharpReason = sharpTiffError instanceof Error ? ` (sharp: ${sharpTiffError.message})` : "";
+        throw new Error(`No supported TIFF preview renderer found in environment${sharpReason}`);
       }
     } else {
       throw new Error("Unsupported source file extension");

@@ -488,13 +488,17 @@ export async function getSignedAttachmentDownloadUrl(
   return null;
 }
 
-async function requestServerAttachmentPreview(bucket: string, storagePath: string) {
-  if (typeof window === "undefined") return;
+/**
+ * `true` — функція відповіла успіхом (варіанти вже лежать у сховищі),
+ * `false` — відповіла помилкою (їх не буде), `null` — відповіді немає зовсім.
+ */
+async function requestServerAttachmentPreview(bucket: string, storagePath: string): Promise<boolean | null> {
+  if (typeof window === "undefined") return null;
   try {
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
-    if (!token) return;
-    await fetch("/.netlify/functions/attachment-preview-generate", {
+    if (!token) return null;
+    const response = await fetch("/.netlify/functions/attachment-preview-generate", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -502,14 +506,16 @@ async function requestServerAttachmentPreview(bucket: string, storagePath: strin
       },
       body: JSON.stringify({ bucket, storagePath }),
     });
+    return response.ok;
   } catch (error) {
     console.warn("Failed to queue server attachment preview generation", error);
+    return null;
   }
 }
 
 export async function ensureServerAttachmentPreviewQueued(bucket: string, storagePath: string) {
-  if (!isServerPreviewableStoragePath(storagePath)) return;
-  await requestServerAttachmentPreview(bucket, storagePath);
+  if (!isServerPreviewableStoragePath(storagePath)) return null;
+  return await requestServerAttachmentPreview(bucket, storagePath);
 }
 
 export async function waitForSignedAttachmentUrl(
@@ -529,7 +535,12 @@ export async function waitForSignedAttachmentUrl(
     // storage each time — that was the main driver of storage egress.
     const existingUrl = await getSignedAttachmentUrl(bucket, storagePath, variant, ttlSeconds);
     if (existingUrl) return existingUrl;
-    await ensureServerAttachmentPreviewQueued(bucket, storagePath);
+    const generated = await ensureServerAttachmentPreviewQueued(bucket, storagePath);
+    // Функція працює синхронно: відповіла помилкою — варіантів не з'явиться, і
+    // ще вісім спроб по півтори секунди лише тримали б людину перед кнопкою,
+    // яка «нічого не робить». Одна перевірка — на випадок, якщо паралельний
+    // виклик таки встиг їх покласти.
+    if (generated === false) return await getSignedAttachmentUrl(bucket, storagePath, variant, ttlSeconds);
   }
 
   for (let attempt = 0; attempt < attempts; attempt += 1) {
