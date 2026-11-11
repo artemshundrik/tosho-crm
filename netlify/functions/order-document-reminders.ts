@@ -98,14 +98,14 @@ async function docsWidget(
   assets: { avatars?: Map<string, Buffer | null>; logos: Map<string, Buffer | null>; managerName?: (id: string | null) => string }
 ) {
   try {
-    const html = await buildDocsWidget({
+    const widget = await buildDocsWidget({
       mode,
       items,
       date: DOCS_CAPTION_DATE(new Date()),
       orderUrlPrefix: buildAppUrl("/orders/production/"),
       ...assets,
     });
-    return html ? { html, chatData: "{}", caption: `<b>${title.replace(/[<>&]/g, "")}</b>` } : null;
+    return widget ? { ...widget, caption: `<b>${title.replace(/[<>&]/g, "")}</b>` } : null;
   } catch (error) {
     console.warn("[order-document-reminders] widget skipped", error instanceof Error ? error.message : error);
     return null;

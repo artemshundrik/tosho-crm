@@ -38,15 +38,18 @@ const DOC={c:'договір',s:'СП',i:'рахунок',b:'доплата'},DP
 // Тому список ділиться на сторінки. Висоти заміряні на стенді (scripts/telegram-widgets-harness.mts):
 // рядок 49, менеджер 43, заголовок розділу 38, гортання 37, «ще N» 27. H — місце під список —
 // рахується в init з числа рядків плашок угорі (28 px кожен): що їх більше, то менше лишається.
-let D,H,op=0,pg=0;
+let D,H,AV,LG,op=0,pg=0;
 const ini=s=>s.split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase();
 const tot=g=>g[3]||g[1].length;
 const row=(r,showSec)=>{const[id,num,cust,doc,sec,det,late,logo]=r;
-  return '<div class=r data-u="'+esc(D.u+id)+'"><span class=lg'+(logo>=0?' style="background:var(--lg) '+(-logo*30)+'px 0/'+D.n*30+'px 30px;color:transparent;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)"':'')+'>'+esc(ini(cust))+'</span><div class=m><b>'+esc(cust)+'</b><span>'+esc(num)+(showSec&&sec!='u'?' · '+SEC[sec]:'')+'</span></div><span class=d>'+DOC[doc]+'</span><span class="p'+(late?' e':'')+'">'+esc(det)+'</span></div>'};
+  return '<div class=r data-u="'+esc(D.u+id)+'"><span class=lg'+(logo>=0?' style="background:'+LG+' '+(-logo*30)+'px 0/'+D.n*30+'px 30px;color:transparent;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)"':'')+'>'+esc(ini(cust))+'</span><div class=m><b>'+esc(cust)+'</b><span>'+esc(num)+(showSec&&sec!='u'?' · '+SEC[sec]:'')+'</span></div><span class=d>'+DOC[doc]+'</span><span class="p'+(late?' e':'')+'">'+esc(det)+'</span></div>'};
 const pager=n=>'<div class=q><button data-v=-1'+(pg?'':' disabled')+'></button><span>'+(pg+1)+' з '+n+'</span><button data-v=1'+(pg<n-1?'':' disabled')+'></button></div>';
 const more=n=>n>0?'<div class=z>ще '+n+' — у CRM</div>':'';
 function init(){
-  D=window.DN;if(!D)try{D=JSON.parse(W.chatData)}catch(e){return}
+  D=Object.assign({},window.DN);try{Object.assign(D,JSON.parse(W.chatData))}catch(e){}
+  if(!D.g)return;
+  // Аватарки й лого — один base64-потік: початок v у chat_data, хвіст w у коді; перші c знаків — аватарки.
+  const I=(D.v||'')+(D.w||''),u=b=>'url(data:image/webp;base64,'+b+')';AV=u(I.slice(0,D.c));LG=u(I.slice(D.c));
   $('T').textContent=D.t;$('D').textContent=D.d;
   const[late,sc,cnt]=D.s;
   $('S').innerHTML=(late?'<span class=e><b>'+late+'</b> довше 5 р.д.</span>':'')+(D.m?Object.entries(sc).map(([k,v])=>'<span><b>'+v+'</b> '+SEC[k]+'</span>').join(''):'')+Object.entries(cnt).map(([k,v])=>'<span><b>'+v+'</b> '+pl(v,DP[k])+'</span>').join('');
@@ -65,7 +68,7 @@ function draw(){
         n=Math.ceil(R.length/per);pg=Math.min(pg,n-1);
         b=R.slice(pg*per,pg*per+per).map(r=>row(r,1)).join('')+(pg===n-1?more(tot(g)-R.length):'')+(n>1?pager(n):'');
       }
-      return '<div class="g'+(i===op?' on':'')+'"><div class=gh data-g='+i+'><span class=av'+(g[2]>=0?' style="background:var(--av) '+(-g[2]*26)+'px 0/'+D.k*26+'px 26px;color:transparent"':'')+'>'+esc(ini(g[0]))+'</span><b>'+esc(g[0])+'</b><span class=bar><s style=width:'+tot(g)/max*100+'%></s></span><span class=n>'+tot(g)+'</span></div>'+b+'</div>'}).join('');
+      return '<div class="g'+(i===op?' on':'')+'"><div class=gh data-g='+i+'><span class=av'+(g[2]>=0?' style="background:'+AV+' '+(-g[2]*26)+'px 0/'+D.k*26+'px 26px;color:transparent"':'')+'>'+esc(ini(g[0]))+'</span><b>'+esc(g[0])+'</b><span class=bar><s style=width:'+tot(g)/max*100+'%></s></span><span class=n>'+tot(g)+'</span></div>'+b+'</div>'}).join('');
   }else{ // менеджеру: за розділами, сторінка набирається за висотою
     const E=[],P=[[]];let y=0,rest=0,hs=0;
     D.g.forEach((g,i)=>{rest+=tot(g)-g[1].length;hs+=g[1].length>0;g[1].forEach((r,j)=>E.push([i,row(r,0),!j]))});

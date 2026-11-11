@@ -14,6 +14,7 @@ import { DOCS_WIDGET_HTML } from "./telegramWidgetTemplates.generated";
  */
 
 const HTML_LIMIT = 3950;
+const DATA_LIMIT = 1024;
 const AVATAR_PX = 26;
 const LOGO_PX = 30;
 const MAX_GROUPS = 6;
@@ -53,7 +54,8 @@ export type DocsWidgetInput = {
 const inlineJson = (value: unknown) => JSON.stringify(value).replace(/</g, "\\u003c");
 const compressedSize = (html: string) => deflateSync(Buffer.from(html), { level: 9 }).length;
 
-async function sprite(images: Buffer[], px: number, variable: string, fit: "cover" | "contain"): Promise<string | null> {
+/** Спрайт у base64 (порожній рядок — нема картинок, null — sharp не впорався). */
+async function sprite(images: Buffer[], px: number, fit: "cover" | "contain"): Promise<string | null> {
   if (images.length === 0) return "";
   try {
     const tiles = await Promise.all(
@@ -65,7 +67,7 @@ async function sprite(images: Buffer[], px: number, variable: string, fit: "cove
       .composite(tiles.map((input, index) => ({ input, left: index * px, top: 0 })))
       .webp({ quality: 22, effort: 6 })
       .toBuffer();
-    return `<style>:root{--${variable}:url(data:image/webp;base64,${out.toString("base64")})}</style>`;
+    return out.toString("base64");
   } catch {
     return null;
   }
@@ -107,7 +109,9 @@ const countBy = <K extends string>(keys: K[]) => {
   return counts;
 };
 
-export async function buildDocsWidget(input: DocsWidgetInput): Promise<string | null> {
+export type DocsWidget = { html: string; chatData: string };
+
+export async function buildDocsWidget(input: DocsWidgetInput): Promise<DocsWidget | null> {
   if (groupDocsItems(input).length === 0) return null;
   const head = input.mode === "head";
   // Плашки вгорі рахуються з УСІХ документів, а не лише з тих, що влізли у віджет.
@@ -146,21 +150,38 @@ export async function buildDocsWidget(input: DocsWidgetInput): Promise<string | 
     };
   };
 
+  /**
+   * Картинки не стискаються, тож їхній base64 їде в chat_data (1024 Б, які
+   * інакше стояли б порожні), а хвіст, що не вліз, — у код. Аватарки й лого —
+   * один потік: спершу аватарки (вони важливіші), за ними лого; шаблон ділить
+   * його назад за довжиною аватарок `c`. Так код лишається під рядки.
+   */
+  const pack = (groups: Group[], avatarIds: string[], avatarB64: string, logoOrders: string[], logoB64: string) => {
+    const images = avatarB64 + logoB64;
+    const room = DATA_LIMIT - '{"v":""}'.length;
+    const cut = Math.min(images.length, room);
+    const rest = images.slice(cut);
+    const chatData = JSON.stringify(cut ? { v: images.slice(0, cut) } : {});
+    const dn = { ...build(groups, avatarIds, logoOrders), c: avatarB64.length, ...(rest ? { w: rest } : {}) };
+    const html = `<script>DN=${inlineJson(dn)}</script>${DOCS_WIDGET_HTML}`;
+    return compressedSize(html) <= HTML_LIMIT ? { html, chatData } : null;
+  };
+
   /** Чим жертвуємо: спершу лого, далі рядки до AVATAR_FLOOR, далі аватарки, і лише потім решта рядків. */
-  const attempt = async (cap: number, withAvatars: boolean, withLogos: boolean): Promise<string | null> => {
+  const attempt = async (cap: number, withAvatars: boolean, withLogos: boolean): Promise<DocsWidget | null> => {
     const groups = groupDocsItems(input, cap);
     const avatarIds = withAvatars ? groups.map((g) => g.managerId).filter((id): id is string => !!id && !!input.avatars?.get(id)) : [];
-    const avatarStyle = await sprite(avatarIds.map((id) => input.avatars!.get(id) as Buffer), AVATAR_PX, "av", "cover");
-    if (avatarStyle === null) return null;
+    const avatarB64 = await sprite(avatarIds.map((id) => input.avatars!.get(id) as Buffer), AVATAR_PX, "cover");
+    if (avatarB64 === null) return null;
     const allLogos = withLogos
       ? Array.from(new Set(groups.flatMap((g) => g.items).map((item) => item.orderId).filter((id) => !!input.logos?.get(id))))
       : [];
     for (let logoCount = allLogos.length; logoCount >= 0; logoCount -= logoCount > 4 ? 2 : 1) {
       const logoOrders = allLogos.slice(0, logoCount);
-      const logoStyle = await sprite(logoOrders.map((id) => input.logos!.get(id) as Buffer), LOGO_PX, "lg", "contain");
-      if (logoStyle === null) continue;
-      const html = `${avatarStyle}${logoStyle}<script>DN=${inlineJson(build(groups, avatarIds, logoOrders))}</script>${DOCS_WIDGET_HTML}`;
-      if (compressedSize(html) <= HTML_LIMIT) return html;
+      const logoB64 = await sprite(logoOrders.map((id) => input.logos!.get(id) as Buffer), LOGO_PX, "contain");
+      if (logoB64 === null) continue;
+      const done = pack(groups, avatarIds, avatarB64, logoOrders, logoB64);
+      if (done) return done;
     }
     return null;
   };
@@ -173,8 +194,8 @@ export async function buildDocsWidget(input: DocsWidgetInput): Promise<string | 
     ...caps.slice(hasAvatars ? 0 : 1).map((cap): [number, boolean, boolean] => [cap, false, false]),
   ];
   for (const [cap, withAvatars, withLogos] of steps) {
-    const html = await attempt(cap, withAvatars, withLogos);
-    if (html) return html;
+    const done = await attempt(cap, withAvatars, withLogos);
+    if (done) return done;
   }
   return null;
 }
