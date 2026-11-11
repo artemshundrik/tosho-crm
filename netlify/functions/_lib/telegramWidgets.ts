@@ -191,8 +191,19 @@ const SLOT_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz01234
 const SHORT_VISIT = 5;
 /** Перерва, яку ще вважаємо тим самим заходом: відрізки ріжуться по хвилині простою. */
 const SAME_RUN_GAP = 3;
-const AVATAR_PX = 26;
-const AVATAR_QUALITY = 22;
+/**
+ * Спроби спрайта від найкращої: [сторона плитки в px, якість webp]. Коли всі фото
+ * в повній якості не влазять, краще всі трохи м'якші й дрібніші, ніж частина з
+ * ініціалами: на екрані кружок 22 px, і різницю між 26 і 18 px у плитці видно
+ * хіба впритул. Лише коли не влазить і найдрібніша — фото відкидаються з кінця.
+ */
+const AVATAR_STEPS: Array<[number, number]> = [
+  [26, 22],
+  [26, 8],
+  [22, 8],
+  [20, 6],
+  [18, 5],
+];
 /** Так звіт позначає людину без відпустки й лікарняного, яка просто не заходила. */
 export const NOT_IN_CRM = "не було в CRM";
 
@@ -202,19 +213,39 @@ function shortName(name: string): string {
   return short.length > 10 ? first : short;
 }
 
-/** Кожен слот — рівень 0-3 (скільки з десяти хвилин людина була); три слоти на символ. */
+/**
+ * Де людина була, по десятихвилинних слотах — серіями: довжина «не було», «було»,
+ * «не було»… по символу на серію. Рівні всередині слота шаблон не малює, а серії
+ * дають ~8 символів замість 24 і стискаються краще — це рядок на кожну людину.
+ * Серія довша за 63 слоти ріжеться нульовою серією протилежного стану.
+ */
 function encodeSlots(spans: TeamWidgetPerson["spans"], windowStart: number): string {
-  const minutes = new Array<number>(SLOTS).fill(0);
+  const busy = new Array<boolean>(SLOTS).fill(false);
   for (const span of spans) {
     for (let minute = span.from; minute < span.to; minute += 1) {
       const slot = Math.floor((minute - windowStart) / SLOT_MINUTES);
-      if (slot >= 0 && slot < SLOTS) minutes[slot] += 1;
+      if (slot >= 0 && slot < SLOTS) busy[slot] = true;
     }
   }
-  const levels = minutes.map((value) => (value ? Math.min(3, Math.ceil((value / SLOT_MINUTES) * 3)) : 0));
+  const last = busy.lastIndexOf(true);
   let encoded = "";
-  for (let i = 0; i < SLOTS; i += 3) encoded += SLOT_ALPHABET[(levels[i] << 4) | (levels[i + 1] << 2) | levels[i + 2]];
-  return encoded;
+  let state = false;
+  let run = 0;
+  for (let i = 0; i <= last; i += 1) {
+    if (busy[i] === state) run += 1;
+    else {
+      encoded += runChars(run);
+      state = busy[i];
+      run = 1;
+    }
+  }
+  return last < 0 ? "" : encoded + runChars(run);
+}
+
+function runChars(run: number): string {
+  let out = "";
+  for (; run > 63; run -= 63) out += SLOT_ALPHABET[63] + SLOT_ALPHABET[0];
+  return out + SLOT_ALPHABET[run];
 }
 
 function longestRun(spans: TeamWidgetPerson["spans"]): number {
@@ -232,17 +263,16 @@ function longestRun(spans: TeamWidgetPerson["spans"]): number {
   return Math.max(best, end - start);
 }
 
-async function avatarSprite(avatars: Buffer[]): Promise<string> {
-  const tiles = await Promise.all(
-    avatars.map((avatar) => sharp(avatar).resize(AVATAR_PX, AVATAR_PX, { fit: "cover" }).png().toBuffer())
-  );
+/** Спрайт аватарок у base64: одна смуга webp, плитки за порядком рядків. */
+async function avatarSprite(avatars: Buffer[], px: number, quality: number): Promise<string> {
+  const tiles = await Promise.all(avatars.map((avatar) => sharp(avatar).resize(px, px, { fit: "cover" }).png().toBuffer()));
   const sprite = await sharp({
-    create: { width: AVATAR_PX * tiles.length, height: AVATAR_PX, channels: 3, background: "#888888" },
+    create: { width: px * tiles.length, height: px, channels: 3, background: "#888888" },
   })
-    .composite(tiles.map((input, index) => ({ input, left: index * AVATAR_PX, top: 0 })))
-    .webp({ quality: AVATAR_QUALITY, effort: 6 })
+    .composite(tiles.map((input, index) => ({ input, left: index * px, top: 0 })))
+    .webp({ quality, effort: 6 })
     .toBuffer();
-  return `<style>:root{--av:url(data:image/webp;base64,${sprite.toString("base64")})}</style>`;
+  return sprite.toString("base64");
 }
 
 /** `</script>` у чужому тексті не має закрити наш скрипт. */
@@ -290,31 +320,42 @@ export async function buildTeamWidget(data: {
       longestRun(p.spans),
     ]);
   };
-  const chatDataFor = (rows: TeamRow[]) => JSON.stringify({ d: data.date, a: startHour, p: rows });
-
-  // Показуємо ВСІХ: скільки рядків влізе в 1024 байти chat_data — їдуть там,
-  // решта разом із підсумковими рядками — у самому HTML, де текст ще й стискається.
-  // Міряємо без аватарок: «-1» не коротше за жоден номер у спрайті.
-  let inChat = long.length;
-  while (inChat > 1 && bytes(chatDataFor(rowsFor(long.slice(0, inChat), 0))) > DATA_LIMIT) inChat -= 1;
-  if (bytes(chatDataFor(rowsFor(long.slice(0, inChat), 0))) > DATA_LIMIT) return null;
-
-  // Не влізло — спершу з кінця зникають аватарки, і лише потім останні рядки.
-  for (let shown = long.length; shown >= inChat; shown -= 1) {
-    const rows = long.slice(0, shown);
-    const hidden = long.length - shown;
-    const lines = hidden > 0 ? [...footer, ["Ще:", `${hidden} ${plural(hidden, ["людина", "людини", "людей"])} — у «Пульсі команди»`]] : footer;
-    const photos = rows.filter((p) => p.avatar).map((p) => p.avatar as Buffer);
-    for (let count = shown === long.length ? photos.length : 0; count >= 0; count -= 1) {
-      const sprite = count > 0 ? await avatarSprite(photos.slice(0, count)).catch(() => null) : "";
-      if (sprite === null) continue;
-      const all = rowsFor(rows, count);
-      const extra = { p: all.slice(inChat), o: lines };
-      const html = `${sprite}<script>DN=${inlineJson(extra)}</script>${TEAM_WIDGET_HTML}`;
-      if (compressedSize(html) <= HTML_LIMIT) {
-        return { html, chatData: chatDataFor(all.slice(0, inChat)), caption: data.caption, keyboard: data.keyboard };
-      }
+  // Показуємо ВСІХ. Рядки й підсумок — у коді віджета: текст там стискається вдвічі.
+  // Спрайт аватарок (webp у base64) не стискається взагалі, тож він їде в chat_data
+  // (1024 Б), а хвіст, що не вліз, — у код; шаблон склеює обидві частини в одну
+  // data:-адресу. Рядки, яким забракло місця в коді, переїжджають у chat_data
+  // ПЕРЕД спрайтом: людина важливіша за її фото.
+  const fit = (rows: TeamRow[], sprite: string, lines: Array<[string, string]>) => {
+    for (let moved = 0; moved <= rows.length; moved += 1) {
+      const tail = rows.slice(rows.length - moved);
+      const room = DATA_LIMIT - bytes(JSON.stringify({ ...(moved ? { r: tail } : {}), v: "" }));
+      if (room < 0) return null;
+      const cut = Math.min(sprite.length, room - (room % 4));
+      const chatData = JSON.stringify({ ...(moved ? { r: tail } : {}), ...(sprite ? { v: sprite.slice(0, cut) } : {}) });
+      const rest = sprite.slice(cut);
+      const dn = { d: data.date, a: startHour, p: rows.slice(0, rows.length - moved), o: lines, ...(rest ? { w: rest } : {}) };
+      const html = `<script>DN=${inlineJson(dn)}</script>${TEAM_WIDGET_HTML}`;
+      if (compressedSize(html) <= HTML_LIMIT) return { html, chatData, caption: data.caption, keyboard: data.keyboard };
     }
+    return null;
+  };
+
+  // Чим жертвуємо: спершу якістю й розміром фото, потім фото з кінця списку, і лише потім рядками.
+  const photos = long.filter((p) => p.avatar).map((p) => p.avatar as Buffer);
+  const smallest = AVATAR_STEPS[AVATAR_STEPS.length - 1];
+  const attempts: Array<[number, number, number]> = photos.length ? AVATAR_STEPS.map(([px, q]) => [photos.length, px, q]) : [];
+  for (let count = photos.length - 1; count > 0; count -= 1) attempts.push([count, ...smallest]);
+  for (const [count, px, quality] of attempts) {
+    const sprite = await avatarSprite(photos.slice(0, count), px, quality).catch(() => null);
+    if (sprite === null) break;
+    const done = fit(rowsFor(long, count), sprite, footer);
+    if (done) return done;
+  }
+  for (let shown = long.length; shown >= 1; shown -= 1) {
+    const hidden = long.length - shown;
+    const lines: Array<[string, string]> = hidden > 0 ? [...footer, ["Ще:", `${hidden} ${plural(hidden, ["людина", "людини", "людей"])} — у «Пульсі команди»`]] : footer;
+    const done = fit(rowsFor(long.slice(0, shown), 0), "", lines);
+    if (done) return done;
   }
   return null;
 }

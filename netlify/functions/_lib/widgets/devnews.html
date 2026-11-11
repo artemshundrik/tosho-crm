@@ -21,6 +21,7 @@ body{margin:0;padding:12px 14px;font:13px/1.4 system-ui,sans-serif;color:var(--x
 .n{display:flex;justify-content:space-between;align-items:center;color:var(--h);font-size:12px}
 .n button{border:0;background:var(--s);color:var(--x);width:30px;height:26px;border-radius:8px;font:600 15px system-ui,sans-serif}
 .n button:disabled{color:var(--m)}
+.n button{display:inline-grid;place-items:center;vertical-align:middle}.n button:before{content:'';width:6px;height:6px;border:solid currentColor;border-width:0 0 2px 2px;margin-left:3px;transform:rotate(45deg)}.n button[data-v="1"]:before{margin:0 3px 0 0;transform:rotate(-135deg)}
 .a h3{margin:8px 0 2px;font-size:15px;line-height:1.3}.a .d{color:var(--h);font-size:12px}
 .a p{margin:8px 0 0}
 .a .o{display:block;width:100%;margin-top:12px;border:0;border-radius:10px;padding:9px 0;background:var(--a);color:#fff;font:600 13px system-ui,sans-serif}
@@ -37,7 +38,7 @@ const go=u=>{W.HapticFeedback&&W.HapticFeedback.impactOccurred&&W.HapticFeedback
 const BUMP=['','мінор','мажор'];
 function article(){
   const a=D.a[art];if(!a)return'';
-  return '<div class="n y"><button data-v=-1'+(art?'':' disabled')+'>‹</button><span>'+(art+1)+' з '+D.a.length+'</span><button data-v=1'+(art<D.a.length-1?'':' disabled')+'>›</button></div>'
+  return '<div class="n y"><button data-v=-1'+(art?'':' disabled')+'></button><span>'+(art+1)+' з '+D.a.length+'</span><button data-v=1'+(art<D.a.length-1?'':' disabled')+'></button></div>'
     +'<div class="a y" style=animation-delay:60ms><h3>'+esc(a[0])+'</h3><div class=d>'+esc(host(a[1]))+'</div>'
     +a[2].split('\n').filter(Boolean).map(l=>'<p>'+esc(l)+'</p>').join('')
     +'<button class=o data-u="'+esc(a[1])+'">Читати статтю</button></div>';

@@ -1,5 +1,6 @@
 import { deflateSync } from "node:zlib";
 
+import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 
 import { mondayOf, windowLength } from "./absenceWidget";
@@ -69,16 +70,40 @@ describe("buildEveningWidget", () => {
 });
 
 describe("buildTeamWidget", () => {
-  /** Рядки, що не влізли в chat_data, і підсумок під списком лежать у самому коді віджета. */
-  const embedded = (html: string): { p: unknown[]; o: Array<[string, string]> } =>
+  type Row = [string, number, string, number, number, number, number];
+  /** Рядки й підсумок лежать у коді віджета (DN); хвіст рядків і спрайт — у chat_data. */
+  const embedded = (html: string): { a: number; p: Row[]; o: Array<[string, string]>; w?: string } =>
     JSON.parse(/<script>DN=(.*?)<\/script>/.exec(html)![1]);
+  const unpack = (widget: { html: string; chatData: string }) => {
+    const dn = embedded(widget.html);
+    const data = JSON.parse(widget.chatData) as { r?: Row[]; v?: string };
+    return { ...dn, rows: [...dn.p, ...(data.r ?? [])], sprite: (data.v ?? "") + (dn.w ?? "") };
+  };
+  /** Той самий розбір, що в team.html: серії «не було / було» по символу. */
+  const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+  const slots = (encoded: string) => {
+    const out: number[] = [];
+    let state = 0;
+    for (const ch of encoded) {
+      for (let k = ALPHABET.indexOf(ch); k > 0; k -= 1) out.push(state);
+      state ^= 1;
+    }
+    while (out.length < 72) out.push(0);
+    return out;
+  };
 
-  const person = (name: string, from: number, minutes: number) => ({
+  const person = (name: string, from: number, minutes: number, avatar: Buffer | null = null) => ({
     name,
     minutes,
     spans: [{ from, to: from + minutes }],
-    avatar: null,
+    avatar,
   });
+  /** Плавний градієнт свого кольору — стискається, як справжнє фото, а не як шум. */
+  const avatar = (i: number) =>
+    sharp({ create: { width: 64, height: 64, channels: 3, background: { r: (i * 53) % 256, g: (i * 97) % 256, b: (i * 31) % 256 } } })
+      .composite([{ input: Buffer.from(`<svg width="64" height="64"><circle cx="32" cy="24" r="14" fill="#fff"/></svg>`) }])
+      .jpeg()
+      .toBuffer();
 
   it("короткі заходи й відсутні — у підсумкові рядки, а не окремими рядками", async () => {
     const widget = await buildTeamWidget({
@@ -91,44 +116,56 @@ describe("buildTeamWidget", () => {
       ],
       caption: "c",
     });
-    const data = JSON.parse(widget!.chatData);
-    expect(data.p).toHaveLength(1);
-    expect(data.p[0][0]).toBe("Іван С.");
+    const { rows, o } = unpack(widget!);
+    expect(rows).toHaveLength(1);
+    expect(rows[0][0]).toBe("Іван С.");
     // Хто просто не заходив — одним рядком імен, без причини біля кожного.
-    expect(embedded(widget!.html).o).toEqual([
+    expect(o).toEqual([
       ["Ненадовго:", "Юлія К."],
       ["Відсутні:", "Олена К. (відпустка до 14.11)"],
       ["Не заходили:", "Петро Г., Ганна Ю."],
     ]);
   });
 
-  it("шкала: 72 слоти по три на символ, година вікна — від першого заходу", async () => {
+  it("шкала: серії по десять хвилин, година вікна — від першого заходу", async () => {
     const widget = await buildTeamWidget({
       date: "d",
-      people: [person("А Б", 9 * 60, 10)],
+      people: [person("А Б", 9 * 60 + 20, 30), person("В Г", 9 * 60, 700)],
       absent: [],
       caption: "c",
     });
-    const [, , slots] = JSON.parse(widget!.chatData).p[0];
-    expect(JSON.parse(widget!.chatData).a).toBe(9);
-    expect(slots).toHaveLength(24);
-    // перший слот повний (рівень 3), решта порожні: 3<<4 = 48 → «w»
-    expect(slots[0]).toBe("w");
-    expect(slots.slice(1)).toBe("A".repeat(23));
+    const { a, rows } = unpack(widget!);
+    expect(a).toBe(9);
+    // 700 хвилин — найдовший, тож перший: 70 слотів поспіль, серія ріжеться на 63 + 7.
+    expect(slots(rows[0][2]).join("")).toBe("1".repeat(70) + "00");
+    // 9:20–9:50: два порожні слоти, три зайняті.
+    expect(rows[1][2]).toBe("CD");
+    expect(slots(rows[1][2]).join("")).toBe("00111" + "0".repeat(67));
   });
 
-  it("тридцять людей — показуємо всіх: що не влізло в 1024 байти, їде в коді", async () => {
-    const people = Array.from({ length: 30 }, (_, i) =>
-      person(`Довгеімʼя${i} Прізвище`, 540 + i * 7, 30 + i)
+  it("тринадцять людей з фото — фото в усіх, спрайт цілий", async () => {
+    const people = await Promise.all(
+      Array.from({ length: 13 }, async (_, i) => person(`Імʼя${i} Прізвище`, 540 + i * 9, 420 - i * 20, await avatar(i)))
     );
     const widget = await buildTeamWidget({ date: "d", people, absent: [], caption: "c" });
     expect(Buffer.byteLength(widget!.chatData)).toBeLessThanOrEqual(1024);
     expect(zipped(widget!.html)).toBeLessThan(4096);
-    const inChat = JSON.parse(widget!.chatData).p.length;
-    const extra = embedded(widget!.html);
-    expect(inChat).toBeLessThan(30);
-    expect(inChat + extra.p.length).toBe(30);
-    expect(extra.o).toEqual([]);
+    const { rows, sprite } = unpack(widget!);
+    expect(rows.map((r) => r[3])).toEqual(Array.from({ length: 13 }, (_, i) => i));
+    // RIFF….WEBP: дві половини base64 склеюються в один справжній файл.
+    const file = Buffer.from(sprite, "base64");
+    expect(file.subarray(0, 4).toString()).toBe("RIFF");
+    expect(file.subarray(8, 12).toString()).toBe("WEBP");
+  });
+
+  it("тридцять людей — показуємо всіх: що не влізло в код, їде в chat_data", async () => {
+    const people = Array.from({ length: 30 }, (_, i) => person(`Довгеімʼя${i} Прізвище`, 540 + i * 7, 30 + i));
+    const widget = await buildTeamWidget({ date: "d", people, absent: [], caption: "c" });
+    expect(Buffer.byteLength(widget!.chatData)).toBeLessThanOrEqual(1024);
+    expect(zipped(widget!.html)).toBeLessThan(4096);
+    const { rows, o } = unpack(widget!);
+    expect(rows).toHaveLength(30);
+    expect(o).toEqual([]);
   });
 
   it("нікого довше п'яти хвилин — віджета немає, лишається запасний звіт", async () => {

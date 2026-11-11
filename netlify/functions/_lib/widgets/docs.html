@@ -25,6 +25,7 @@ body{margin:0;padding:12px 14px;font:13px/1.35 system-ui,sans-serif;color:var(--
 .q{display:flex;justify-content:center;align-items:center;gap:12px;padding:6px 0 4px;border-top:1px solid var(--l);font-size:12px;color:var(--h);font-variant-numeric:tabular-nums}
 .q button{border:0;background:var(--s);color:var(--x);width:36px;height:26px;border-radius:8px;font:600 15px system-ui,sans-serif}
 .q button:disabled{color:var(--m)}
+.q button{display:inline-grid;place-items:center;vertical-align:middle}.q button:before{content:'';width:6px;height:6px;border:solid currentColor;border-width:0 0 2px 2px;margin-left:3px;transform:rotate(45deg)}.q button[data-v="1"]:before{margin:0 3px 0 0;transform:rotate(-135deg)}
 </style>
 <div class=t><span><i></i><span id=T></span></span><em id=D></em></div>
 <div class=sum id=S></div>
@@ -42,7 +43,7 @@ const ini=s=>s.split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase();
 const tot=g=>g[3]||g[1].length;
 const row=(r,showSec)=>{const[id,num,cust,doc,sec,det,late,logo]=r;
   return '<div class=r data-u="'+esc(D.u+id)+'"><span class=lg'+(logo>=0?' style="background:var(--lg) '+(-logo*30)+'px 0/'+D.n*30+'px 30px;color:transparent;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)"':'')+'>'+esc(ini(cust))+'</span><div class=m><b>'+esc(cust)+'</b><span>'+esc(num)+(showSec&&sec!='u'?' · '+SEC[sec]:'')+'</span></div><span class=d>'+DOC[doc]+'</span><span class="p'+(late?' e':'')+'">'+esc(det)+'</span></div>'};
-const pager=n=>'<div class=q><button data-v=-1'+(pg?'':' disabled')+'>‹</button><span>'+(pg+1)+' з '+n+'</span><button data-v=1'+(pg<n-1?'':' disabled')+'>›</button></div>';
+const pager=n=>'<div class=q><button data-v=-1'+(pg?'':' disabled')+'></button><span>'+(pg+1)+' з '+n+'</span><button data-v=1'+(pg<n-1?'':' disabled')+'></button></div>';
 const more=n=>n>0?'<div class=z>ще '+n+' — у CRM</div>':'';
 function init(){
   D=window.DN;if(!D)try{D=JSON.parse(W.chatData)}catch(e){return}
