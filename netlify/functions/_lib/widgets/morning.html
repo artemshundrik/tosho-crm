@@ -1,5 +1,4 @@
 <style>
-:root{--a:#E6007E;--e:#e5484d;--h:var(--tg-theme-hint-color,#8a8a8e);--s:var(--tg-theme-secondary-bg-color,#f1f1f4);--x:var(--tg-theme-text-color,#000);--b:var(--tg-theme-bg-color,#fff)}
 body{margin:0;padding:12px 14px;font:13px/1.35 system-ui,sans-serif;color:var(--x);-webkit-user-select:none;user-select:none}
 .t{display:flex;justify-content:space-between;align-items:center;font:600 15px system-ui,sans-serif}
 .t i{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--a);margin-right:8px;vertical-align:1px}
@@ -9,11 +8,11 @@ body{margin:0;padding:12px 14px;font:13px/1.35 system-ui,sans-serif;color:var(--
 .n small{font-size:15px;font-weight:500;letter-spacing:0;color:var(--h);margin-left:6px}
 .c{color:var(--h)}.c b{color:var(--e);font-weight:600}
 #T{position:relative;height:48px;margin:12px 8px 0}
-#T:before{content:'';position:absolute;left:0;right:0;top:19px;height:2px;border-radius:1px;background:var(--s)}
+#T:before{content:'';position:absolute;left:0;right:0;top:19px;height:2px;border-radius:1px;background:var(--l)}
 .d{position:absolute;top:10px;width:20px;height:20px;margin-left:-10px;border-radius:50%;background:var(--a);color:#fff;font:600 11px/20px system-ui,sans-serif;text-align:center;transform:scale(0);transition:transform .45s cubic-bezier(.3,1.6,.5,1),background .3s}
-.go .d{transform:none}.d.p{background:var(--h)}
+.go .d{transform:none}.d.p{background:var(--m)}
 .x{position:absolute;top:33px;font-size:10px;color:var(--h);transform:translateX(-50%)}
-#M{position:absolute;top:4px;height:30px;width:2px;margin-left:-1px;border-radius:1px;background:var(--x);opacity:.75;transition:left .6s}
+#M{position:absolute;top:4px;height:30px;width:2px;margin-left:-1px;border-radius:1px;background:var(--x);transition:left .6s}
 #M:after{content:'';position:absolute;top:-3px;left:-3px;width:8px;height:8px;border-radius:50%;background:var(--x);animation:q 1.6s ease-out infinite}
 @keyframes q{from{box-shadow:0 0 0 0 rgba(140,140,140,.6)}to{box-shadow:0 0 0 9px rgba(140,140,140,0)}}
 .ch{display:inline-block;margin-top:10px;padding:2px 9px;border-radius:9px;background:var(--s);font-size:12px;color:var(--h)}
@@ -22,8 +21,9 @@ body{margin:0;padding:12px 14px;font:13px/1.35 system-ui,sans-serif;color:var(--
 .g button.on{color:var(--x)}
 .g u{position:absolute;top:3px;bottom:3px;left:3px;width:calc((100% - 6px)/3);border-radius:8px;background:var(--b);box-shadow:0 1px 3px rgba(0,0,0,.15);transition:transform .35s cubic-bezier(.2,.8,.2,1)}
 .P{display:grid}.P>div{grid-area:1/1;opacity:0;visibility:hidden;transition:opacity .25s}.P>div.on{opacity:1;visibility:visible}
-.r{display:grid;grid-template-columns:1fr 88px 34px;gap:8px;align-items:center;min-height:26px}
-.k{height:6px;border-radius:3px;background:var(--s);overflow:hidden}
+.r{display:grid;grid-template-columns:1fr 88px 34px;gap:8px;align-items:center;min-height:26px;margin:0 -6px 2px;padding:0 6px;border-radius:8px}
+.r.e{background:var(--et);color:var(--e)}
+.k{height:6px;border-radius:3px;background:var(--l);overflow:hidden}
 .k s{position:relative;display:block;height:100%;width:calc(var(--w)*100%);border-radius:3px;background:var(--a);overflow:hidden;transform:scaleX(0);transform-origin:left;transition:transform .7s cubic-bezier(.2,.8,.2,1)}
 .k s.e{background:var(--e)}.k b{position:absolute;top:0;right:0;bottom:0;background:rgba(0,0,0,.28)}
 .on .k s{transform:none}
@@ -31,7 +31,7 @@ body{margin:0;padding:12px 14px;font:13px/1.35 system-ui,sans-serif;color:var(--
 .u{font-size:12px;color:var(--h);margin:-4px 0 4px}
 .w{display:flex;align-items:center;gap:8px;height:28px;white-space:nowrap;overflow:hidden}
 .w span{color:var(--h);overflow:hidden;text-overflow:ellipsis}
-.v{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font:600 9px system-ui,sans-serif;color:#fff}
+.v{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font:600 9px system-ui,sans-serif;background:var(--l)}
 .l{padding:3px 0}
 .f{margin-top:8px;font-size:12px;color:var(--h);white-space:pre-line}
 </style>
@@ -45,10 +45,10 @@ body{margin:0;padding:12px 14px;font:13px/1.35 system-ui,sans-serif;color:var(--
 <div class=P id=P><div class=on id=P0></div><div id=P1></div><div id=P2></div></div>
 <div class=f id=F></div>
 <script>
-const W=window.TelegramWidget||{onEvent(){}},$=i=>document.getElementById(i),C=['#e17076','#7bc862','#e5ca77','#65aadd','#a695e7','#ee7aae','#6ec9cb','#faa774'];
+const W=window.TelegramWidget||{onEvent(){}},$=i=>document.getElementById(i);
 let D,k=0;
 const pl=(n,a,b,c)=>{const t=n%100,u=n%10;return t>10&&t<15?c:u==1?a:u>1&&u<5?b:c};
-const row=(l,v,w,e,o)=>'<div class=r><span>'+l+'</span><div class=k><s'+(e?' class=e':'')+' style=--w:'+Math.max(w,.03)+'>'+(o?'<b style=width:'+o*100+'%></b>':'')+'</s></div><span class=m>'+v+'</span></div>';
+const row=(l,v,w,e,o)=>'<div class="r'+(e?' e':'')+'"><span>'+l+'</span><div class=k><s'+(e?' class=e':'')+' style=--w:'+Math.max(w,.03)+'>'+(o?'<b style=width:'+o*100+'%></b>':'')+'</s></div><span class=m>'+v+'</span></div>';
 const sub=t=>'<div class=u>'+t+'</div>';
 const kyiv=o=>new Intl.DateTimeFormat('en-CA',Object.assign({timeZone:'Europe/Kyiv'},o)).format(new Date());
 const L=m=>(m-480)/720*100+'%';
@@ -72,7 +72,7 @@ function init(){
   $('P1').innerHTML=row('На погодженні',f[0],f[0]/fm,0,f[0]?f[1]/f[0]:0)+(f[1]?sub('старші за '+D.S[0]+' днів: '+f[1]+(f[2]?' · найстарішому '+f[2]+' дн':'')):'')
     +row('Чекає відправки',f[3],f[3]/fm)+row('Нових за місяць',f[4],f[4]/fm)+(D.fm?sub('на '+D.fm):'')
     +(f[6]?row('Ліди без руху',f[5],f[5]/f[6],1)+sub(D.S[1]+'+ днів, з '+f[6]+' за квартал'):'');
-  $('P2').innerHTML=D.o.map((o,i)=>{const n=o[0].split(' ');return '<div class=w><span class=v style=background:'+C[i%8]+'>'+n[0][0]+(n[1]||'')[0]+'</span>'+o[0]+'<span>'+o[1]+'</span></div>'}).join('')
+  $('P2').innerHTML=D.o.map(o=>{const n=o[0].split(' ');return '<div class=w><span class=v>'+n[0][0]+(n[1]||'')[0]+'</span>'+o[0]+'<span>'+o[1]+'</span></div>'}).join('')
     +D.t.map(l=>'<div class=l>'+l+'</div>').join('')||'<div class=l>Уся команда на місці</div>';
   $('F').textContent=D.x;
   const n0=performance.now(),go=n=>{const p=Math.min(1,Math.max(0,(n-n0)/700));$('N').innerHTML=Math.round(due*(1-Math.pow(1-p,3)))+'<small>'+pl(due,'дедлайн','дедлайни','дедлайнів')+' сьогодні</small>';if(p<1)requestAnimationFrame(go)};

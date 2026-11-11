@@ -187,14 +187,14 @@ export type TeamWidgetPerson = {
 const SLOT_MINUTES = 10;
 const SLOTS = 72; // 12 годин
 const SLOT_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-/** Більше рядків не влізе у 600 px висоти, які Telegram дає віджету. */
-const MAX_ROWS = 12;
 /** Хто пробув менше — не рядок, а ім'я в підсумковому рядку. */
 const SHORT_VISIT = 5;
 /** Перерва, яку ще вважаємо тим самим заходом: відрізки ріжуться по хвилині простою. */
 const SAME_RUN_GAP = 3;
 const AVATAR_PX = 26;
 const AVATAR_QUALITY = 22;
+/** Так звіт позначає людину без відпустки й лікарняного, яка просто не заходила. */
+export const NOT_IN_CRM = "не було в CRM";
 
 function shortName(name: string): string {
   const [first, second] = plain(name).split(/\s+/);
@@ -245,16 +245,16 @@ async function avatarSprite(avatars: Buffer[]): Promise<string> {
   return `<style>:root{--av:url(data:image/webp;base64,${sprite.toString("base64")})}</style>`;
 }
 
-function formatShort(minutes: number): string {
-  const hours = Math.floor(minutes / 60);
-  return hours ? `${hours} г${minutes % 60 ? ` ${minutes % 60} хв` : ""}` : `${minutes} хв`;
-}
+/** `</script>` у чужому тексті не має закрити наш скрипт. */
+const inlineJson = (value: unknown) => JSON.stringify(value).replace(/</g, "\\u003c");
+
+type TeamRow = [string, number, string, number, number, number, number];
 
 export async function buildTeamWidget(data: {
   date: string;
   people: TeamWidgetPerson[];
-  /** «Олена Б. — відпустка до 14.11». */
-  absent: string[];
+  /** Кого не було: причина — «відпустка до 14.11» або «не було в CRM». */
+  absent: Array<{ name: string; reason: string }>;
   caption: string;
   keyboard?: InlineKeyboard;
 }): Promise<WidgetContent | null> {
@@ -267,55 +267,53 @@ export async function buildTeamWidget(data: {
   // Вікно — 12 годин від першого заходу; пізніше 12:00 не починається, щоб влізти в добу.
   const startHour = Math.min(Math.floor(firstMinute / 60), 12);
 
-  let rows = long.slice(0, MAX_ROWS);
-  const footer = (overflow: TeamWidgetPerson[]) =>
-    [
-      overflow.length ? `Ще: ${overflow.map((p) => `${shortName(p.name)} ${formatShort(p.minutes)}`).join(", ")}` : "",
-      short.length ? `Заходили ненадовго: ${short.map((p) => shortName(p.name)).join(", ")}` : "",
-      data.absent.length ? `Не було: ${data.absent.map(plain).join(", ")}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n");
+  // Підсумкові рядки під списком: [підпис, імена]. Хто просто не заходив —
+  // одним рядком імен, без «(не було в CRM)» біля кожного.
+  const away = data.absent.filter((a) => a.reason !== NOT_IN_CRM);
+  const silent = data.absent.filter((a) => a.reason === NOT_IN_CRM);
+  const footer: Array<[string, string]> = [
+    ["Ненадовго:", short.map((p) => shortName(p.name)).join(", ")],
+    ["Відсутні:", away.map((a) => `${plain(a.name)} (${plain(a.reason)})`).join(", ")],
+    ["Не заходили:", silent.map((a) => plain(a.name)).join(", ")],
+  ].filter((line): line is [string, string] => line[1].length > 0);
 
   // Аватарки — у спрайті за порядком рядків; без фото — ініціали (-1).
-  const withAvatar = (count: number) => {
+  const rowsFor = (shown: TeamWidgetPerson[], avatars: number): TeamRow[] => {
     let index = 0;
-    return rows.map((p) => (p.avatar && index < count ? index++ : -1));
+    return shown.map((p) => [
+      shortName(p.name),
+      p.minutes,
+      encodeSlots(p.spans, startHour * 60),
+      p.avatar && index < avatars ? index++ : -1,
+      p.spans[0].from,
+      p.spans[p.spans.length - 1].to,
+      longestRun(p.spans),
+    ]);
   };
-  const chatDataFor = (avatarIndex: number[]) => {
-    const overflow = long.slice(rows.length);
-    return JSON.stringify({
-      d: data.date,
-      a: startHour,
-      p: rows.map((p, i) => [
-        shortName(p.name),
-        p.minutes,
-        encodeSlots(p.spans, startHour * 60),
-        avatarIndex[i],
-        p.spans[0].from,
-        p.spans[p.spans.length - 1].to,
-        longestRun(p.spans),
-      ]),
-      o: footer(overflow),
-    });
-  };
+  const chatDataFor = (rows: TeamRow[]) => JSON.stringify({ d: data.date, a: startHour, p: rows });
 
-  // Дані не влізли — останній рядок переїжджає в підсумковий рядок.
-  let chatData = chatDataFor(withAvatar(0));
-  while (bytes(chatData) > DATA_LIMIT && rows.length > 1) {
-    rows = rows.slice(0, -1);
-    chatData = chatDataFor(withAvatar(0));
-  }
-  if (bytes(chatData) > DATA_LIMIT) return null;
+  // Показуємо ВСІХ: скільки рядків влізе в 1024 байти chat_data — їдуть там,
+  // решта разом із підсумковими рядками — у самому HTML, де текст ще й стискається.
+  // Міряємо без аватарок: «-1» не коротше за жоден номер у спрайті.
+  let inChat = long.length;
+  while (inChat > 1 && bytes(chatDataFor(rowsFor(long.slice(0, inChat), 0))) > DATA_LIMIT) inChat -= 1;
+  if (bytes(chatDataFor(rowsFor(long.slice(0, inChat), 0))) > DATA_LIMIT) return null;
 
-  // Аватарки — найдорожче: забираємо з кінця списку, доки не влізе.
-  const photos = rows.filter((p) => p.avatar).map((p) => p.avatar as Buffer);
-  for (let count = photos.length; count >= 0; count -= 1) {
-    const sprite = count > 0 ? await avatarSprite(photos.slice(0, count)).catch(() => null) : "";
-    if (sprite === null) continue;
-    const html = sprite + TEAM_WIDGET_HTML;
-    if (compressedSize(html) <= HTML_LIMIT) {
-      return { html, chatData: chatDataFor(withAvatar(count)), caption: data.caption, keyboard: data.keyboard };
+  // Не влізло — спершу з кінця зникають аватарки, і лише потім останні рядки.
+  for (let shown = long.length; shown >= inChat; shown -= 1) {
+    const rows = long.slice(0, shown);
+    const hidden = long.length - shown;
+    const lines = hidden > 0 ? [...footer, ["Ще:", `${hidden} ${plural(hidden, ["людина", "людини", "людей"])} — у «Пульсі команди»`]] : footer;
+    const photos = rows.filter((p) => p.avatar).map((p) => p.avatar as Buffer);
+    for (let count = shown === long.length ? photos.length : 0; count >= 0; count -= 1) {
+      const sprite = count > 0 ? await avatarSprite(photos.slice(0, count)).catch(() => null) : "";
+      if (sprite === null) continue;
+      const all = rowsFor(rows, count);
+      const extra = { p: all.slice(inChat), o: lines };
+      const html = `${sprite}<script>DN=${inlineJson(extra)}</script>${TEAM_WIDGET_HTML}`;
+      if (compressedSize(html) <= HTML_LIMIT) {
+        return { html, chatData: chatDataFor(all.slice(0, inChat)), caption: data.caption, keyboard: data.keyboard };
+      }
     }
   }
   return null;

@@ -56,6 +56,15 @@
         "--strictPort"
       ],
       "port": 5200
+    },
+    {
+      "name": "widgets",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "tsx",
+        "scripts/telegram-widgets-harness.mts"
+      ],
+      "port": 5210
     }
   ]
 }

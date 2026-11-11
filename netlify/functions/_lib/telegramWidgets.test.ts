@@ -10,6 +10,7 @@ import {
   buildMorningWidget,
   buildTeamWidget,
   fitCaption,
+  NOT_IN_CRM,
   plural,
 } from "./telegramWidgets";
 
@@ -68,6 +69,10 @@ describe("buildEveningWidget", () => {
 });
 
 describe("buildTeamWidget", () => {
+  /** Рядки, що не влізли в chat_data, і підсумок під списком лежать у самому коді віджета. */
+  const embedded = (html: string): { p: unknown[]; o: Array<[string, string]> } =>
+    JSON.parse(/<script>DN=(.*?)<\/script>/.exec(html)![1]);
+
   const person = (name: string, from: number, minutes: number) => ({
     name,
     minutes,
@@ -75,17 +80,26 @@ describe("buildTeamWidget", () => {
     avatar: null,
   });
 
-  it("короткі заходи — у підсумковий рядок, а не окремим рядком", async () => {
+  it("короткі заходи й відсутні — у підсумкові рядки, а не окремими рядками", async () => {
     const widget = await buildTeamWidget({
       date: "9 листопада",
       people: [person("Іван Сидоренко", 600, 99), person("Юлія Коваль", 700, 3)],
-      absent: ["Олена К. (відпустка до 14.11)"],
+      absent: [
+        { name: "Олена К.", reason: "відпустка до 14.11" },
+        { name: "Петро Г.", reason: NOT_IN_CRM },
+        { name: "Ганна Ю.", reason: NOT_IN_CRM },
+      ],
       caption: "c",
     });
     const data = JSON.parse(widget!.chatData);
     expect(data.p).toHaveLength(1);
     expect(data.p[0][0]).toBe("Іван С.");
-    expect(data.o).toBe("Заходили ненадовго: Юлія К.\nНе було: Олена К. (відпустка до 14.11)");
+    // Хто просто не заходив — одним рядком імен, без причини біля кожного.
+    expect(embedded(widget!.html).o).toEqual([
+      ["Ненадовго:", "Юлія К."],
+      ["Відсутні:", "Олена К. (відпустка до 14.11)"],
+      ["Не заходили:", "Петро Г., Ганна Ю."],
+    ]);
   });
 
   it("шкала: 72 слоти по три на символ, година вікна — від першого заходу", async () => {
@@ -103,13 +117,18 @@ describe("buildTeamWidget", () => {
     expect(slots.slice(1)).toBe("A".repeat(23));
   });
 
-  it("забагато людей — дані все одно в межах 1024 байтів", async () => {
+  it("тридцять людей — показуємо всіх: що не влізло в 1024 байти, їде в коді", async () => {
     const people = Array.from({ length: 30 }, (_, i) =>
       person(`Довгеімʼя${i} Прізвище`, 540 + i * 7, 30 + i)
     );
     const widget = await buildTeamWidget({ date: "d", people, absent: [], caption: "c" });
     expect(Buffer.byteLength(widget!.chatData)).toBeLessThanOrEqual(1024);
-    expect(JSON.parse(widget!.chatData).o).toMatch(/^Ще: /);
+    expect(zipped(widget!.html)).toBeLessThan(4096);
+    const inChat = JSON.parse(widget!.chatData).p.length;
+    const extra = embedded(widget!.html);
+    expect(inChat).toBeLessThan(30);
+    expect(inChat + extra.p.length).toBe(30);
+    expect(extra.o).toEqual([]);
   });
 
   it("нікого довше п'яти хвилин — віджета немає, лишається запасний звіт", async () => {

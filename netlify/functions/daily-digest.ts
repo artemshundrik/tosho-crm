@@ -23,6 +23,7 @@ import {
   buildEveningWidget,
   buildMorningWidget,
   buildTeamWidget,
+  NOT_IN_CRM,
   fitCaption,
   plural,
   type EveningPeriod,
@@ -1408,7 +1409,7 @@ async function buildTeamRich(
 
   const reasonOf = (m: MemberRow) => {
     const kind = input.absenceByUser.get(m.userId);
-    if (!kind) return "не було в CRM";
+    if (!kind) return NOT_IN_CRM;
     const label = (ABSENCE_KIND_LABELS[kind] ?? "Відсутність").toLowerCase();
     const end = input.endByUser.get(m.userId);
     return end && end > input.dayKey ? `${label} до ${end.slice(8, 10)}.${end.slice(5, 7)}` : label;
@@ -1444,7 +1445,7 @@ async function buildTeamRich(
       spans: input.minutesByUser.get(m.userId)?.spans ?? [],
       avatar: avatars.get(m.userId) ?? null,
     })),
-    absent: absentMembers.map((m) => `${cardName(nameOf(m))} (${reasonOf(m)})`),
+    absent: absentMembers.map((m) => ({ name: cardName(nameOf(m)), reason: reasonOf(m) })),
     caption:
       `👥 ${working.length} ${plural(working.length, ["людина була", "людини були", "людей були"])} в CRM, ` +
       `разом ${formatMinutes(totalMinutes)}\n<i>📵 Дзвінки, Telegram і робота поза CRM сюди не входять</i>`,

@@ -77,6 +77,7 @@
     "_lib/orderApprovalWidget.ts",
     "_lib/designTaskTelegram.ts",
     "_lib/designTaskDecision.ts",
+    "_lib/docsWidget.test.ts",
     "_lib/docsWidget.ts",
     "_lib/teamCelebrationWidget.ts",
     "_lib/absenceResultWidget.ts",
