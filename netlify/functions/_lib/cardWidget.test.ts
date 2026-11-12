@@ -7,6 +7,7 @@ import { decidedAbsenceKeyboard } from "./absenceDecisionButtons";
 import { absenceResultCard, bigRange } from "./absenceResultWidget";
 import { buildCardWidget, initials } from "./cardWidget";
 import { buildAbsenceWidget } from "./telegramWidgets";
+import { avatarStorageKey } from "./telegramCards";
 import { celebrationCard } from "./teamCelebrationWidget";
 
 const zipped = (html: string) => deflateSync(Buffer.from(html), { level: 9 }).length;
@@ -93,5 +94,24 @@ describe("ліміти Telegram", () => {
     const huge = buildAbsenceWidget({ ...base, avatarStyle: `<style>:root{--av:url(${"A".repeat(9000).replace(/A/g, () => String.fromCharCode(65 + Math.floor(Math.random() * 26)))})}</style>` })!;
     expect(JSON.parse(huge.chatData).a).toBeUndefined();
     expect(huge.html).not.toContain("--av:url");
+  });
+});
+
+describe("avatarStorageKey", () => {
+  it("avatar_path — головне; без нього — ключ зі старого avatar_url", () => {
+    expect(avatarStorageKey({ avatar_path: "avatars/u1/a.png", avatar_url: "avatars/u1/old.png" })).toBe("avatars/u1/a.png");
+    // Профіль після міграції: шлях лишився тільки в avatar_url.
+    expect(avatarStorageKey({ avatar_path: null, avatar_url: "avatars/u2/migrated-current/hero.png" })).toBe(
+      "avatars/u2/migrated-current/hero.png"
+    );
+    expect(
+      avatarStorageKey({ avatar_url: "https://x.supabase.co/storage/v1/object/public/avatars/avatars/u3/a%20b.png?t=1" })
+    ).toBe("avatars/u3/a b.png");
+  });
+
+  it("чужі адреси бот не качає", () => {
+    expect(avatarStorageKey({ avatar_url: "https://lh3.googleusercontent.com/a/photo.jpg" })).toBeNull();
+    expect(avatarStorageKey({ avatar_url: "/local/path.png" })).toBeNull();
+    expect(avatarStorageKey({ avatar_path: "  ", avatar_url: "" })).toBeNull();
   });
 });

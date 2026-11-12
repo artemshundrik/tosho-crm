@@ -4,6 +4,7 @@ import { deliverNotifications } from "./_notificationDelivery";
 import { buildAppUrl } from "./_lib/appUrl";
 import { buildDocsWidget } from "./_lib/docsWidget";
 import { fetchLogo, isOwnPublicStorageUrl } from "./_lib/orderApprovalWidget";
+import { avatarStorageKey } from "./_lib/telegramCards";
 import {
   isDeliverable,
   mergeTeamMembers,
@@ -65,11 +66,13 @@ const DOCS_CAPTION_DATE = (now: Date) =>
 /** Аватарки менеджерів для зведення керівнику — як у «Команда вчора». */
 async function loadManagerAvatars(admin: SupabaseClient, userIds: string[]): Promise<Map<string, Buffer | null>> {
   if (userIds.length === 0) return new Map();
-  const { data } = await admin.schema("tosho").from("team_member_profiles").select("user_id,avatar_path").in("user_id", userIds);
-  const rows = ((data ?? []) as Array<{ user_id: string; avatar_path?: string | null }>).filter((row) => row.avatar_path);
+  const { data } = await admin.schema("tosho").from("team_member_profiles").select("user_id,avatar_path,avatar_url").in("user_id", userIds);
+  const rows = ((data ?? []) as Array<{ user_id: string; avatar_path?: string | null; avatar_url?: string | null }>)
+    .map((row) => ({ user_id: row.user_id, key: avatarStorageKey(row) }))
+    .filter((row) => row.key);
   const entries = await Promise.all(
     rows.map(async (row) => {
-      const { data: file } = await admin.storage.from("avatars").download(row.avatar_path as string);
+      const { data: file } = await admin.storage.from("avatars").download(row.key as string);
       return [row.user_id, file ? Buffer.from(await file.arrayBuffer()) : null] as const;
     })
   );

@@ -29,7 +29,7 @@ import {
   type EveningPeriod,
   type WidgetContent,
 } from "./_lib/telegramWidgets";
-import { prepareAvatar, renderPlanCard, renderTeamCard } from "./_lib/telegramCards";
+import { avatarStorageKey, prepareAvatar, renderPlanCard, renderTeamCard } from "./_lib/telegramCards";
 import {
   addRange,
   formatMoneyRange,
@@ -1366,12 +1366,14 @@ async function loadAvatars(admin: AdminClient, userIds: string[]): Promise<Map<s
   const { data } = await admin
     .schema("tosho")
     .from("team_member_profiles")
-    .select("user_id,avatar_path")
+    .select("user_id,avatar_path,avatar_url")
     .in("user_id", userIds);
-  const rows = ((data ?? []) as Array<{ user_id: string; avatar_path?: string | null }>).filter((r) => r.avatar_path);
+  const rows = ((data ?? []) as Array<{ user_id: string; avatar_path?: string | null; avatar_url?: string | null }>)
+    .map((r) => ({ user_id: r.user_id, key: avatarStorageKey(r) }))
+    .filter((r) => r.key);
   const entries = await Promise.all(
     rows.map(async (row) => {
-      const { data: file } = await admin.storage.from("avatars").download(row.avatar_path as string);
+      const { data: file } = await admin.storage.from("avatars").download(row.key as string);
       const avatar = file ? await prepareAvatar(Buffer.from(await file.arrayBuffer())) : null;
       return [row.user_id, avatar] as const;
     })

@@ -243,6 +243,21 @@ export async function renderTeamCard(data: {
   return toPng(body, y + 20);
 }
 
+/**
+ * Ключ аватарки в бакеті avatars. Звичайно це avatar_path; у профілів, що
+ * пережили міграцію, буває лише avatar_url — там той самий ключ
+ * («avatars/<uuid>/…») або повна адреса нашого сховища. Чужі адреси
+ * (https://… не з нашого сховища) не беремо: бот ходить лише у своє сховище.
+ */
+export function avatarStorageKey(profile: { avatar_path?: string | null; avatar_url?: string | null }): string | null {
+  const path = profile.avatar_path?.trim();
+  if (path) return path;
+  const url = profile.avatar_url?.trim() ?? "";
+  const stored = /\/storage\/v1\/object\/(?:public|sign|authenticated)\/avatars\/([^?#]+)/.exec(url);
+  if (stored) return decodeURIComponent(stored[1]);
+  return url && !url.includes("://") && !url.startsWith("/") ? url : null;
+}
+
 /** Аватарка зі сховища → маленький PNG для картки. Будь-який збій = ініціали. */
 export async function prepareAvatar(source: Buffer | null): Promise<Buffer | null> {
   if (!source) return null;

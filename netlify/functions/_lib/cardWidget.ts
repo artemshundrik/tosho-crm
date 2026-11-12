@@ -3,6 +3,7 @@ import { deflateSync } from "node:zlib";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import sharp from "sharp";
 
+import { avatarStorageKey } from "./telegramCards";
 import { CARD_WIDGET_HTML } from "./telegramWidgetTemplates.generated";
 import type { WidgetContent } from "./telegramWidgets";
 
@@ -78,11 +79,11 @@ export async function loadMemberAvatar(admin: SupabaseClient, userId: string): P
     const { data } = await admin
       .schema("tosho")
       .from("team_member_profiles")
-      .select("avatar_path")
+      .select("avatar_path,avatar_url")
       .eq("user_id", userId)
       .limit(1)
       .maybeSingle();
-    const path = (data as { avatar_path?: string | null } | null)?.avatar_path?.trim();
+    const path = data ? avatarStorageKey(data as { avatar_path?: string | null; avatar_url?: string | null }) : null;
     if (!path) return null;
     const { data: file } = await admin.storage.from("avatars").download(path);
     return file ? Buffer.from(await file.arrayBuffer()) : null;
