@@ -12589,7 +12589,7 @@ export default function DesignTaskPage() {
               <img
                 src={filePreview.url}
                 alt={filePreview.name}
-                className="block max-h-[80vh] w-auto max-w-[calc(100vw-3rem)] rounded-lg object-contain sm:max-w-[calc(100vw-6rem)]"
+                className="bg-transparency-grid block max-h-[80vh] w-auto max-w-[calc(100vw-3rem)] rounded-lg object-contain sm:max-w-[calc(100vw-6rem)]"
               />
             ) : filePreview?.kind === "pdf" ? (
               <img

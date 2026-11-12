@@ -2935,3 +2935,24 @@ html[data-theme-switching]::view-transition-new(root) {
     }
   }
 }
+
+/*
+ * ШАХІВНИЦЯ ПІД ПРОЗОРОЮ КАРТИНКОЮ — як у графічних редакторах.
+ *
+ * Логотипи часто приходять білими на прозорому тлі («weiss», «white»): на
+ * світлій підкладці вікна перегляду такий файл виглядав порожнім (REQ-312#p7).
+ * Клітинки з токенів теми, тож у темній темі шахівниця теж темна. Ставиться на
+ * саму картинку: непрозоре фото повністю її закриває й виглядає як раніше.
+ */
+@layer utilities {
+  .bg-transparency-grid {
+    background-color: hsl(var(--card));
+    background-image: conic-gradient(
+      hsl(var(--skeleton-bg)) 25%,
+      transparent 0 50%,
+      hsl(var(--skeleton-bg)) 0 75%,
+      transparent 0
+    );
+    background-size: 16px 16px;
+  }
+}
