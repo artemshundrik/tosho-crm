@@ -10296,6 +10296,7 @@ export default function DesignTaskPage() {
                                       alt={attachment.file_name}
                                       variant="thumb"
                                       className="h-full w-full"
+                                      imageClassName="bg-transparency-grid"
                                     />
                                   ) : (
                                     <div className="flex h-full w-full flex-col items-center justify-center gap-1 p-2 text-muted-foreground">
@@ -10558,6 +10559,7 @@ export default function DesignTaskPage() {
                                           alt={attachment.file_name}
                                           variant="thumb"
                                           className="h-full w-full"
+                                          imageClassName="bg-transparency-grid"
                                         />
                                       ) : (
                                         <div className="flex h-full w-full flex-col items-center justify-center gap-1 p-2 text-muted-foreground">
