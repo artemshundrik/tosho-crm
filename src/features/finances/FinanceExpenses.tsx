@@ -1,4 +1,5 @@
 import * as React from "react";
+import { pluralUk } from "@/lib/lastSeen";
 import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -1220,6 +1221,7 @@ export function FinanceExpenses({ teamId, userId, canSeeSensitive }: FinanceExpe
           ordersLoading={ordersLoading}
           objectSuggestions={objectSuggestions}
           eventTypeOptions={eventTypeOptions}
+          journalEntriesCount={editing ? entriesByExpense.get(editing.id)?.length ?? 0 : 0}
           onSaved={reload}
         />
       ) : null}
@@ -1345,6 +1347,7 @@ function ExpenseDialog({
   ordersLoading,
   objectSuggestions,
   eventTypeOptions,
+  journalEntriesCount,
   onSaved,
 }: {
   open: boolean;
@@ -1360,6 +1363,8 @@ function ExpenseDialog({
   objectSuggestions: string[];
   /** Типи подій: стартові + ті, що вже створювали (список сам поповнюється). */
   eventTypeOptions: string[];
+  /** Скільки записів у журналі редагованої витрати — щоб попередити, що вони перестануть рахуватися. */
+  journalEntriesCount: number;
   onSaved: () => Promise<void> | void;
 }) {
   const rates = useFxRates();
@@ -1482,6 +1487,11 @@ function ExpenseDialog({
   // Змінна сума (комуналка) при створенні — сума в формі необовʼязкова (орієнтир),
   // факт вводиться по місяцях у списку.
   const varyingRecurring = isEvent || (isRecurring && amountVaries);
+  // Журнальна витрата з записами, яку перемкнули в разову чи сталу: записи лишаються в
+  // базі, але перестають рахуватися, а разова переїжджає в місяць своєї дати. 12.11.2026
+  // так «пропало» прибирання: нову оплату вписали через «Редагувати» → «Разова».
+  const journalWillStopCounting =
+    Boolean(editing?.amountVaries) && journalEntriesCount > 0 && !varyingRecurring;
 
   const submit = async () => {
     if (!teamId) return;
@@ -1775,6 +1785,23 @@ function ExpenseDialog({
               );
             })}
           </div>
+          {journalWillStopCounting ? (
+            <div
+              role="alert"
+              className="mt-3 rounded-xl border border-warning/40 bg-warning/10 px-3 py-2.5 text-sm text-warning-foreground"
+            >
+              <div className="font-semibold">
+                {pluralUk(journalEntriesCount, "запис", "записи", "записів")} журналу{" "}
+                {journalEntriesCount % 10 === 1 && journalEntriesCount % 100 !== 11 ? "перестане" : "перестануть"} рахуватися
+              </div>
+              <div className="mt-0.5">
+                {expenseKind === "one_off"
+                  ? "Разова витрата стоїть лише в місяці своєї дати, тож з поточного місяця вона зникне. "
+                  : "Без галочки «Сума змінна» витрата рахуватиметься за сталою сумою. "}
+                Щоб додати нову оплату, закрийте вікно й впишіть її в журнал у рядку витрати.
+              </div>
+            </div>
+          ) : null}
 
           {batchMode ? (
             /* ── Батч регулярних платежів: список рядків + спільні поля ── */
