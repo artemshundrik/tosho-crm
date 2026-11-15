@@ -289,9 +289,12 @@ export async function buildTeamWidget(data: {
   keyboard?: InlineKeyboard;
 }): Promise<WidgetContent | null> {
   const people = [...data.people].filter((p) => p.spans.length > 0).sort((a, b) => b.minutes - a.minutes);
-  const long = people.filter((p) => p.minutes >= SHORT_VISIT);
-  const short = people.filter((p) => p.minutes < SHORT_VISIT);
-  if (long.length === 0) return null;
+  if (people.length === 0) return null;
+  // Короткі заходи йдуть підсумком «Ненадовго:». Але якщо інших не було
+  // (вихідний, хтось зайшов на 2 хв), вони й є рядками — інакше день без віджета.
+  const lasting = people.filter((p) => p.minutes >= SHORT_VISIT);
+  const long = lasting.length > 0 ? lasting : people;
+  const short = lasting.length > 0 ? people.filter((p) => p.minutes < SHORT_VISIT) : [];
 
   const firstMinute = Math.min(...long.map((p) => p.spans[0].from));
   // Вікно — 12 годин від першого заходу; пізніше 12:00 не починається, щоб влізти в добу.

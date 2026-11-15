@@ -90,6 +90,14 @@ async function samples(): Promise<Sample[]> {
   await add("team-small", "Команда вчора · 6 людей", () =>
     widgets.buildTeamWidget({ date: "10 листопада, вт", people: team.slice(0, 6), absent: absent.slice(0, 1), caption: "c" })
   );
+  await add("team-weekend", "Команда вчора · вихідний, один короткий захід", async () =>
+    widgets.buildTeamWidget({
+      date: "14 листопада, сб",
+      people: [{ name: "Юлія Коваль", minutes: 2, spans: [{ from: 640, to: 642 }], avatar: await photo(1) }],
+      absent: absent.slice(2),
+      caption: "c",
+    })
+  );
 
   const month = {
     total: { min: 1_180_000, max: 1_420_000 },

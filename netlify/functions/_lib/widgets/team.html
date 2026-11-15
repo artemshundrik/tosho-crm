@@ -77,7 +77,7 @@ function head(){
   for(let i=0;i<B;i++)cnt[i]=P.reduce((a,q)=>a+(z(q,i)>0),0);
   const mx=Math.max(...cnt),pk=cnt.indexOf(mx),tot=P.reduce((a,q)=>a+q.m,0),n=P.length,t=n%100,d=n%10;
   for(let i=0;i<B;i++)u[i].style.height=Math.max(cnt[i]/mx,.04)*100+'%';
-  $('H').innerHTML='<div class=n>'+Math.round(tot/60)+' г<small>у CRM разом · '+n+' '+(t>10&&t<15?'людей':d==1?'людина':d>1&&d<5?'людини':'людей')+'</small></div><div class=c>найбільше людей одночасно о '+clk(D.a*60+pk*30)+' — '+mx+'</div>';
+  $('H').innerHTML='<div class=n>'+(tot<60?hm(tot):Math.round(tot/60)+' г')+'<small>у CRM разом · '+n+' '+(t>10&&t<15?'людей':d==1?'людина':d>1&&d<5?'людини':'людей')+'</small></div><div class=c>найбільше людей одночасно о '+clk(D.a*60+pk*30)+' — '+mx+'</div>';
 }
 function show(){
   document.querySelectorAll('.r[data-j]').forEach(r=>r.classList.toggle('on',+r.dataset.j===sel));

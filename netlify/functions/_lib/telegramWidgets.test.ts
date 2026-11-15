@@ -127,6 +127,18 @@ describe("buildTeamWidget", () => {
     ]);
   });
 
+  it("день лише з короткими заходами — вони й стають рядками, віджет не зникає", async () => {
+    const widget = await buildTeamWidget({
+      date: "14 листопада",
+      people: [person("Юлія Коваль", 700, 2), person("Іван Сидоренко", 600, 4)],
+      absent: [{ name: "Петро Г.", reason: NOT_IN_CRM }],
+      caption: "c",
+    });
+    const { rows, o } = unpack(widget!);
+    expect(rows.map((row) => row[0])).toEqual(["Іван С.", "Юлія К."]);
+    expect(o).toEqual([["Не заходили:", "Петро Г."]]);
+  });
+
   it("шкала: серії по десять хвилин, година вікна — від першого заходу", async () => {
     const widget = await buildTeamWidget({
       date: "d",
@@ -168,8 +180,8 @@ describe("buildTeamWidget", () => {
     expect(o).toEqual([]);
   });
 
-  it("нікого довше п'яти хвилин — віджета немає, лишається запасний звіт", async () => {
-    const widget = await buildTeamWidget({ date: "d", people: [person("А", 600, 2)], absent: [], caption: "c" });
+  it("нікого не було в CRM — віджета немає, лишається запасний звіт", async () => {
+    const widget = await buildTeamWidget({ date: "d", people: [], absent: [{ name: "А", reason: NOT_IN_CRM }], caption: "c" });
     expect(widget).toBeNull();
   });
 });
