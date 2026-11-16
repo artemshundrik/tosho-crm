@@ -13,6 +13,7 @@ import {
   serializeCustomerLegalEntities,
 } from "@/lib/customerLegalEntities";
 import { serializeCustomerDeliveryPoints } from "@/lib/customerDeliveryPoints";
+import { pluralUk } from "@/lib/lastSeen";
 import { buildReminderAtIso } from "@/lib/reminderDateTime";
 import { normalizeTelegramUsername } from "@/lib/telegramContact";
 import { notifyCustomerLeadManagerAssigned } from "@/lib/workflowNotifications";
@@ -543,6 +544,25 @@ export async function saveLeadCard(input: {
     if (quotesLinkError) {
       console.warn("Failed to link lead quotes to converted customer", quotesLinkError);
       toast.error("Замовника створено, але прорахунки ліда не привʼязались — напишіть розробнику.");
+    }
+  }
+
+  // Дизайн-задачі тримають сторону власним id (metadata.customer_id), а не
+  // назвою, тож без цього кроку лишались на видаленому ліді й зникали з «Обрати
+  // готовий дизайн» у новому замовленні (REQ-364). Перед видаленням ліда — щоб
+  // тригер-запобіжник бачив, звідки й куди переїзд.
+  if (convertedCustomerId) {
+    const { data: relinked, error: tasksLinkError } = await supabase
+      .schema("tosho")
+      .rpc("relink_lead_design_tasks", { p_lead_id: leadId, p_customer_id: convertedCustomerId });
+    const lockedCount = Number((relinked as { locked?: unknown } | null)?.locked ?? 0);
+    if (tasksLinkError) {
+      console.warn("Failed to link lead design tasks to converted customer", tasksLinkError);
+      toast.error("Замовника створено, але дизайн-задачі ліда не привʼязались — напишіть розробнику.");
+    } else if (lockedCount > 0) {
+      toast.warning(
+        `${pluralUk(lockedCount, "дизайн-задачу", "дизайн-задачі", "дизайн-задач")} зараз редагує інша людина — лишились на ліді. Напишіть розробнику.`
+      );
     }
   }
 

@@ -6372,6 +6372,10 @@ export type Database = {
         }
         Returns: Json
       }
+      relink_lead_design_tasks: {
+        Args: { p_customer_id: string; p_lead_id: string }
+        Returns: Json
+      }
       save_order_purchase: {
         Args: {
           p_amount: number
