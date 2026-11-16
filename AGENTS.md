@@ -69,7 +69,7 @@ Two required flows. They map onto the installed `superpowers` skills — invoke 
 1. **Docs first.** Read the canonical docs before touching code — the `Required Read Order` above (`docs/CODEX_PROJECT_GUIDE.md` → domain files → `docs/DB_MAP.md` → `docs/CODEX_WORKFLOWS.md`; `docs/SECURITY.md` if the bug is on a security surface). Do not open with a broad repo-wide search. For the giant pages use `docs/LARGE_FILES_MAP.md` offsets.
 2. **Root cause before fix.** Invoke `superpowers:systematic-debugging`. For any bug that defies static analysis or resists a first fix, instrument and get runtime evidence before claiming a cause — don't ship theories. This repo has psql role-simulation + row read-back for exactly this (`docs/SECURITY.md` §"Verify by simulating the role").
 3. **Fix** — reuse canonical helpers; stay conservative in the flagged zones above.
-4. **Verify immediately.** `npm run check:fast` — 11 s, no excuse to skip. Lint (`oxlint`) must be CLEAN (0 errors + 1 known TanStack Virtual warning; the "baseline is red" era ended, so red lint means YOU broke it), then exercise the actual flow. Invoke `superpowers:verification-before-completion` — evidence before "done", never a bare success claim.
+4. **Verify immediately.** `npm run check:fast` — 11 s, no excuse to skip. Lint (`oxlint`) must be CLEAN (0 errors + 2 known warnings as of 09.11.2026 — TanStack Virtual, `no-explicit-any` in `quoteImportResearch.test.ts`; the "baseline is red" era ended, so red lint means YOU broke it), then exercise the actual flow. Invoke `superpowers:verification-before-completion` — evidence before "done", never a bare success claim.
 
 ### New feature  (document → build → verify)
 

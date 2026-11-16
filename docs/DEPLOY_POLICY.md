@@ -274,8 +274,9 @@ npx netlify api listSiteDeploys --data '{"site_id":"7f7dfcfc-ffcc-4702-a0e6-3a8e
 ## 8. Чек-лист перед тим, як сказати «пушимо»
 
 - [ ] `npm run typecheck` чистий
-- [ ] `npm run lint` ЧИСТИЙ — станом на 24.08.2026 це 0 помилок і 1 відоме попередження
-      (TanStack Virtual). Червоний лінт тепер означає, що зламали ви, а не «так було завжди»
+- [ ] `npm run lint` ЧИСТИЙ — станом на 09.11.2026 це 0 помилок і 2 відомих попередження
+      (TanStack Virtual; `no-explicit-any` у `quoteImportResearch.test.ts`). Червоний лінт
+      тепер означає, що зламали ви, а не «так було завжди»
 - [ ] Зміни переглянуті локально на `npm run dev`
 - [ ] Пачка логічно завершена — не «половина фічі»
 - [ ] Якщо є SQL у `scripts/*.sql` — застосований через `npm run db:apply scripts/файл.sql`
