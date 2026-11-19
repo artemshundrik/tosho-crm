@@ -55,13 +55,13 @@ grep -nE '^  const handle' src/pages/<file>.tsx
 | 5419 / 5425 | вкладка «Стрічка» — `<QuoteFeed>`; збирач подій — `quoteFeedEvents.ts`, розмітка — `QuoteFeed.tsx` |
 | 7319 | діалог «Створити замовлення» |
 
-## src/pages/DesignTaskPage.tsx (~12 868 lines, 593 KB, as of 2026-11-19)
+## src/pages/DesignTaskPage.tsx (~12 872 lines, 593 KB, as of 2026-11-19)
 
 | Range | Content |
 |---|---|
 | 1–222 | imports |
 | 223–1325 | types + Dropbox export helpers (`collectDesignTaskStorageFiles`, `buildDropboxClientFolderPath`, `buildDropboxBrandFolderPath`, `formatDropboxDate`, `buildDropboxExportFileName`, brief-format helpers) |
-| **1353** | `export default function DesignTaskPage()` — main component starts |
+| **1354** | `export default function DesignTaskPage()` — main component starts |
 | 5730 | `applyTaskType` — зміна типу задачі (виклик із меню — ~9792) |
 
 ## src/pages/QuotesPage.tsx (~6 645 lines, 290 KB, as of 2026-11-19)
