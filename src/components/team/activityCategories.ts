@@ -56,6 +56,7 @@ const ACTION_LABELS: Record<string, string> = {
   design_task_estimate: "Оцінка дизайну",
   design_task_assignment: "Виконавець",
   design_task_collaborators: "Співвиконавці",
+  design_task_designer_ready: "Версія дизайнера",
   design_task_manager: "Менеджер задачі",
   design_task_title: "Назва задачі",
   design_task_deadline: "Дедлайн",

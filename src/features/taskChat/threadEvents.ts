@@ -11,6 +11,8 @@ import type { ThreadEntry } from "@/lib/taskThread";
  */
 export const THREAD_EVENT_ACTIONS = [
   "design_task_status",
+  // Дизайнер здав або забрав свою версію у спільній задачі (REQ-365).
+  "design_task_designer_ready",
   "design_task_deadline",
   "design_task_assignment",
   "design_task_estimate",
@@ -31,7 +33,9 @@ export const THREAD_EVENT_ACTIONS = [
 
 /** Тон крапки поруч із подією: зелена — просування, бурштинова — правки/дедлайн. */
 export function eventTone(action: string | null): "ok" | "warn" | "neutral" {
-  if (action === "design_task_status" || action === "design_output_upload") return "ok";
+  if (action === "design_task_status" || action === "design_output_upload" || action === "design_task_designer_ready") {
+    return "ok";
+  }
   if (action === "design_task_brief_change_request" || action === "design_task_deadline") return "warn";
   return "neutral";
 }

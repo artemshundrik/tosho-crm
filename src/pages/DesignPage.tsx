@@ -63,6 +63,7 @@ import {
   resolveDesignTaskCollaborators,
   withDesignTaskCollaboratorMetadata,
 } from "@/lib/designTaskCollaborators";
+import { getDesignTaskDesignerIds } from "@/lib/designTaskReadiness";
 import { useWorkspacePresence } from "@/components/app/workspace-presence-context";
 import { usePageHeaderActions } from "@/components/app/usePageHeaderActions";
 import { useDeferredHeavySurface } from "@/hooks/useDeferredHeavySurface";
@@ -1313,6 +1314,7 @@ export default function DesignPage() {
         canManageAssignments: canManageDesignStatuses,
         isAssignedToCurrentUser:
           !!userId && (task.assigneeUserId === userId || isUserCollaboratorOnTask(task, userId)),
+        designerCount: getDesignTaskDesignerIds(task.metadata, task.assigneeUserId).length,
       })
     );
   const canMarkTaskReady = (task: DesignTask) =>
@@ -1322,6 +1324,7 @@ export default function DesignPage() {
       canManageAssignments: canManageDesignStatuses,
       isAssignedToCurrentUser:
         !!userId && (task.assigneeUserId === userId || isUserCollaboratorOnTask(task, userId)),
+      designerCount: getDesignTaskDesignerIds(task.metadata, task.assigneeUserId).length,
     });
 
 
@@ -3103,7 +3106,21 @@ export default function DesignPage() {
       canManageAssignments: canManageDesignStatuses,
       isAssignedToCurrentUser:
         !!userId && (draggedTask.assigneeUserId === userId || isUserCollaboratorOnTask(draggedTask, userId)),
+      designerCount: getDesignTaskDesignerIds(draggedTask.metadata, draggedTask.assigneeUserId).length,
     })) {
+      // REQ-365: у спільній задачі статус міняється, коли версії здали всі, — і
+      // людині треба сказати, де здати свою, а не просто «не можна».
+      if (
+        nextStatus === "pm_review" &&
+        draggedTask.status === "in_progress" &&
+        !canManageDesignStatuses &&
+        getDesignTaskDesignerIds(draggedTask.metadata, draggedTask.assigneeUserId).length > 1
+      ) {
+        toast.error("У задачі кілька дизайнерів", {
+          description: "Відкрийте задачу й натисніть «Моя версія готова» — статус зміниться, коли здадуть усі.",
+        });
+        return;
+      }
       toast.error("Ви не можете перевести задачу в цей статус");
       return;
     }
@@ -3136,6 +3153,7 @@ export default function DesignPage() {
         canManageAssignments: canManageDesignStatuses,
         isAssignedToCurrentUser:
           !!userId && (task.assigneeUserId === userId || isUserCollaboratorOnTask(task, userId)),
+        designerCount: getDesignTaskDesignerIds(task.metadata, task.assigneeUserId).length,
       })
     ) {
       toast.error("Ви не можете перевести задачу в цей статус");

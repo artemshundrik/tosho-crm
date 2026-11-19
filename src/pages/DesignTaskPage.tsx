@@ -225,6 +225,10 @@ import {
   resolveDesignTaskCollaborators,
   withDesignTaskCollaboratorMetadata,
 } from "@/lib/designTaskCollaborators";
+import { resolveDesignerReadiness } from "@/lib/designTaskReadiness";
+import { describeAcceptedWithout, runDesignerReadyAction } from "@/features/designTask/designerReadyAction";
+import { groupDesignOutputsByKind } from "@/features/designTask/groupDesignOutputs";
+import { DesignerReadinessProp } from "@/components/design/DesignerReadinessProp";
 import {
   buildMentionAlias,
   extractMentionKeys,
@@ -413,13 +417,6 @@ type FilePreviewState = {
   mimeType?: string | null;
   storageBucket?: string | null;
   storagePath?: string | null;
-};
-
-type GroupedDesignOutputs = {
-  key: string;
-  label: string;
-  files: DesignOutputFile[];
-  links: DesignOutputLink[];
 };
 
 type DesignOutputKind = "visualization" | "layout";
@@ -1422,6 +1419,7 @@ export default function DesignTaskPage() {
   const [collaboratorSaving, setCollaboratorSaving] = useState(false);
   const [managerSaving, setManagerSaving] = useState(false);
   const [statusSaving, setStatusSaving] = useState<DesignStatus | null>(null);
+  const [designerReadySaving, setDesignerReadySaving] = useState(false);
   const [outputUploading, setOutputUploading] = useState(false);
   const [outputSaving, setOutputSaving] = useState(false);
   const [dropboxClientPath, setDropboxClientPath] = useState<string | null>(null);
@@ -1749,6 +1747,16 @@ export default function DesignTaskPage() {
   const isCollaboratorOnTask = !!userId && taskCollaborators.some((entry) => entry.userId === userId);
   const isAssignedToMe =
     !!userId && ((!!task?.assigneeUserId && task.assigneeUserId === userId) || isCollaboratorOnTask);
+  // REQ-365: у задачі з кількома дизайнерами кожен здає свою версію окремо.
+  const designerReadiness = useMemo(
+    () =>
+      resolveDesignerReadiness({
+        status: task?.status,
+        metadata: task?.metadata,
+        assigneeUserId: task?.assigneeUserId,
+      }),
+    [task?.status, task?.metadata, task?.assigneeUserId]
+  );
 
   const canDeleteTaskBriefAttachment = useCallback(
     (attachment: AttachmentRow) => {
@@ -3417,10 +3425,11 @@ export default function DesignTaskPage() {
               nextStatus,
               canManageAssignments: canManageDesignStatuses,
               isAssignedToCurrentUser: isAssignedToMe,
+              designerCount: designerReadiness.designerIds.length,
             })
           )
         : [],
-    [canManageDesignStatuses, isAssignedToMe, task]
+    [canManageDesignStatuses, designerReadiness.designerIds.length, isAssignedToMe, task]
   );
   function getTaskEstimateMinutes(sourceTask: DesignTask | null) {
     return getDesignTaskEstimateMinutes(sourceTask);
@@ -5363,7 +5372,12 @@ export default function DesignTaskPage() {
 
   const updateTaskStatus = async (
     nextStatus: DesignStatus,
-    options?: { estimateMinutes?: number; skipUnsentChangeRequestGuard?: boolean }
+    options?: {
+      estimateMinutes?: number;
+      skipUnsentChangeRequestGuard?: boolean;
+      /** Останній дизайнер здав версію — перехід робить правило готовності, а не людина. */
+      viaReadiness?: boolean;
+    }
   ) => {
     if (!task || !effectiveTeamId || task.status === nextStatus) return;
     if (!ensureCanEdit()) return;
@@ -5376,6 +5390,7 @@ export default function DesignTaskPage() {
         // Меню статусів окремо обмежене isAssignedToMe (allowedStatusTransitions), тож зайвих
         // переходів у UI це помічнику не відкриває.
         isAssignedToCurrentUser: isAssignedToMe || isCollaboratorOnTask,
+        designerCount: options?.viaReadiness ? 1 : designerReadiness.designerIds.length,
       })
     ) {
       toast.error("Ви не можете перевести задачу в цей статус");
@@ -5433,6 +5448,9 @@ export default function DesignTaskPage() {
     const previousStatus = task.status;
     const previousTask = task;
     const estimateMinutes = options?.estimateMinutes ?? existingEstimateMinutes;
+    const acceptedWithout = describeAcceptedWithout({
+      nextStatus, viaReadiness: !!options?.viaReadiness, readiness: designerReadiness, getMemberLabel,
+    });
 
     // Optimistic status flip only — defer metadata replacement until after we
     // re-read the live metadata from DB. The local task.metadata may be the
@@ -5534,13 +5552,14 @@ export default function DesignTaskPage() {
           userId,
           actorName: actorLabel,
           action: "design_task_status",
-          title: `Статус: ${statusLabels[previousStatus] ?? previousStatus} → ${statusLabels[nextStatus] ?? nextStatus}`,
+          title: `Статус: ${statusLabels[previousStatus] ?? previousStatus} → ${statusLabels[nextStatus] ?? nextStatus}${acceptedWithout.titleSuffix}`,
           metadata: {
             source: "design_task_status",
             from_status: previousStatus,
             to_status: nextStatus,
             assignee_user_id: task.assigneeUserId ?? null,
             design_task_type: task.designTaskType ?? null,
+            ...acceptedWithout.metadata,
           },
         });
         await loadHistory();
@@ -5574,6 +5593,25 @@ export default function DesignTaskPage() {
       toast.error(message);
     } finally {
       setStatusSaving(null);
+    }
+  };
+
+  // «Моя версія готова» / «Ще не готово» (REQ-365) — див. designerReadyAction.ts.
+  const setMyDesignerReady = async (ready: boolean) => {
+    if (!task || !effectiveTeamId || !userId || !ensureCanEdit()) return;
+    if (!designerReadiness.required || !designerReadiness.designerIds.includes(userId)) return;
+    setDesignerReadySaving(true);
+    try {
+      await runDesignerReadyAction({
+        task, teamId: effectiveTeamId, userId, ready, getMemberLabel, loadHistory,
+        onMetadata: (metadata) => setTask((prev) => (prev ? { ...prev, metadata } : prev)),
+        pauseOwnTimer: async () => { if (isOwnTimerRunning) await handlePauseTimer({ silent: true }); },
+        moveToReady: () => updateTaskStatus("pm_review", { viaReadiness: true }),
+      });
+    } catch (e: unknown) {
+      toast.error(getErrorMessage(e, "Не вдалося зберегти"));
+    } finally {
+      setDesignerReadySaving(false);
     }
   };
 
@@ -7481,70 +7519,17 @@ export default function DesignTaskPage() {
     selectedVisualizationOutputFileIds,
     selectedVisualizationOutputLabels,
   ]);
-  const groupedDesignOutputs = useMemo(() => {
-    const map = new Map<string, GroupedDesignOutputs>();
-    for (const label of designOutputGroups) {
-      const normalized = normalizeOutputGroupLabel(label);
-      if (!normalized) continue;
-      map.set(normalized, { key: normalized, label: normalized, files: [], links: [] });
-    }
-
-    for (const file of designOutputFiles) {
-      const groupLabel = normalizeOutputGroupLabel(file.group_label) ?? "__ungrouped__";
-      const group =
-        map.get(groupLabel) ??
-        {
-          key: groupLabel,
-          label: groupLabel === "__ungrouped__" ? "Без групи" : groupLabel,
-          files: [],
-          links: [],
-        };
-      group.files.push(file);
-      map.set(groupLabel, group);
-    }
-
-    for (const link of designOutputLinks) {
-      const groupLabel = normalizeOutputGroupLabel(link.group_label) ?? "__ungrouped__";
-      const group =
-        map.get(groupLabel) ??
-        {
-          key: groupLabel,
-          label: groupLabel === "__ungrouped__" ? "Без групи" : groupLabel,
-          files: [],
-          links: [],
-        };
-      group.links.push(link);
-      map.set(groupLabel, group);
-    }
-
-    const groups = Array.from(map.values()).filter((group) => group.files.length > 0 || group.links.length > 0);
-    return groups.sort((a, b) => {
-      if (a.key === "__ungrouped__") return 1;
-      if (b.key === "__ungrouped__") return -1;
-      const aIndex = designOutputGroups.findIndex((entry) => entry === a.label);
-      const bIndex = designOutputGroups.findIndex((entry) => entry === b.label);
-      if (aIndex >= 0 && bIndex >= 0) return aIndex - bIndex;
-      if (aIndex >= 0) return -1;
-      if (bIndex >= 0) return 1;
-      return a.label.localeCompare(b.label, "uk");
-    });
-  }, [designOutputFiles, designOutputGroups, designOutputLinks]);
   const groupedDesignOutputsByKind = useMemo(
     () =>
-      (["visualization", "layout"] as DesignOutputKind[]).reduce(
-        (acc, kind) => {
-          acc[kind] = groupedDesignOutputs
-            .map((group) => ({
-              ...group,
-              files: group.files.filter((file) => file.output_kind === kind),
-              links: group.links.filter((link) => link.output_kind === kind),
-            }))
-            .filter((group) => group.files.length > 0 || group.links.length > 0);
-          return acc;
-        },
-        {} as Record<DesignOutputKind, GroupedDesignOutputs[]>
-      ),
-    [groupedDesignOutputs]
+      groupDesignOutputsByKind({
+        files: designOutputFiles,
+        links: designOutputLinks,
+        groupOrder: designOutputGroups,
+        normalizeLabel: normalizeOutputGroupLabel,
+        // У спільній задачі «Без групи» ділиться на версії дизайнерів (REQ-365).
+        authorLabel: designerReadiness.designerIds.length > 1 ? getMemberLabel : null,
+      }),
+    [designOutputFiles, designOutputGroups, designOutputLinks, designerReadiness.designerIds.length, getMemberLabel]
   );
   const selectedOutputItems = useMemo(() => {
     const selectedKeys = new Set(outputSelectionIds);
@@ -7718,6 +7703,13 @@ export default function DesignTaskPage() {
     locked: designTaskLockedByOther,
     approvedAtLabel:
       task?.status === "approved" && statusChangedAtRaw ? formatDate(statusChangedAtRaw) : null,
+    readiness: designerReadiness.required
+      ? {
+          meReady: !!userId && designerReadiness.readyIds.includes(userId),
+          readyNames: designerReadiness.readyIds.map((id) => getMemberLabel(id)),
+          waitingNames: designerReadiness.waitingIds.map((id) => getMemberLabel(id)),
+        }
+      : null,
   });
 
   const runTaskAction = (action: DesignTaskAction | null) => {
@@ -7743,6 +7735,9 @@ export default function DesignTaskPage() {
         setActiveDesignTab("brief");
         openChangeRequestComposer();
         break;
+      case "designer_ready":
+        void setMyDesignerReady(action.id.ready);
+        break;
     }
   };
 
@@ -7751,6 +7746,7 @@ export default function DesignTaskPage() {
     if (action.id.kind === "self_assign") return assigningSelf;
     if (action.id.kind === "status") return statusSaving === action.id.next;
     if (action.id.kind === "timer") return timerBusy !== null;
+    if (action.id.kind === "designer_ready") return designerReadySaving || statusSaving !== null;
     return false;
   };
 
@@ -9208,7 +9204,7 @@ export default function DesignTaskPage() {
                 hasSelection && selectedCountInGroup === selectedRowKeysInKind.length;
               const canUngroup = group.key !== "__ungrouped__" && selectedCountInGroup > 0;
               return (
-                <div key={`${kind}:${group.key}`} className="space-y-2">
+                <div key={`${kind}:${group.renderKey}`} className="space-y-2">
                   <div className="flex items-center gap-2.5">
                     <div className="text-2xs font-semibold uppercase tracking-caps text-muted-foreground">
                       {group.label}
@@ -9780,6 +9776,11 @@ export default function DesignTaskPage() {
               <span className={cn("h-2 w-2 shrink-0 rounded-full", designStatusDotClass[task.status])} />
               {statusLabels[task.status]}
             </EntityProp>
+            {designerReadiness.required ? (
+              <DesignerReadinessProp readiness={designerReadiness} metadata={task.metadata} getLabel={getMemberLabel}
+                getAvatar={getMemberAvatar} isInactive={(id) => memberInactiveById[id] ?? false} formatAt={(iso) => formatDate(iso, true)} />
+            ) : (
+              <>
             <EntityProp>
               <AvatarBase
                 src={getMemberAvatar(task.assigneeUserId)}
@@ -9811,6 +9812,8 @@ export default function DesignTaskPage() {
                 </span>
               </EntityProp>
             ) : null}
+              </>
+            )}
             <Popover open={headerTypePopoverOpen} onOpenChange={setHeaderTypePopoverOpen}>
               <PopoverTrigger asChild>
                 <EntityPropButton disabled={typeSaving || designTaskLockedByOther}>

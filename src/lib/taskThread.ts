@@ -227,6 +227,9 @@ export function buildDayDigests(events: ThreadEntry[], now: Date): ThreadDayDige
     const visuals = count("design_output_upload");
     const timers = count("design_task_timer");
     const estimates = count("design_task_estimate");
+    const handedIn = sorted.filter(
+      (item) => item.eventType === "design_task_designer_ready" && item.body.startsWith("Версію здано")
+    ).length;
 
     const parts: string[] = [];
     if (revisions > 0) parts.push(`${revisions} ${plural(revisions, "правка", "правки", "правок")}`);
@@ -234,6 +237,7 @@ export function buildDayDigests(events: ThreadEntry[], now: Date): ThreadDayDige
     if (visuals > 0) parts.push(`${visuals} ${plural(visuals, "візуал", "візуали", "візуалів")}`);
     if (timers > 0) parts.push(`${timers} ${plural(timers, "сесія", "сесії", "сесій")}`);
     if (estimates > 0) parts.push("оцінено");
+    if (handedIn > 0) parts.push(`${handedIn} ${plural(handedIn, "версію здано", "версії здано", "версій здано")}`);
 
     // Якщо за день були самі лише зміни статусу — показуємо останню, інакше
     // рядок був би порожній і день виглядав би поламаним.

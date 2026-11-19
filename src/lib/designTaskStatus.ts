@@ -1,5 +1,6 @@
 import { onBoardColumns } from "./kanbanBoards";
 import type { DesignTaskType } from "./designTaskType";
+import { formatReadinessLine } from "./designTaskReadiness";
 
 export type DesignStatus =
   | "new"
@@ -75,19 +76,27 @@ type DesignStatusPermissionInput = {
   currentStatus: DesignStatus;
   canManageAssignments: boolean;
   isAssignedToCurrentUser: boolean;
+  /**
+   * Скільки дизайнерів у задачі (виконавець + співвиконавці). Коли їх більше
+   * одного, дизайнер не переводить задачу в «Дизайн готовий» сам — він здає свою
+   * версію, а статус міняється, коли здали всі (REQ-365, designTaskReadiness.ts).
+   * Не передано — вважаємо одного: старі входи поводяться як раніше.
+   */
+  designerCount?: number;
 };
 
 export const getAllowedDesignStatusTransitions = ({
   currentStatus,
   canManageAssignments,
   isAssignedToCurrentUser,
+  designerCount,
 }: DesignStatusPermissionInput): DesignStatus[] => {
   if (canManageAssignments) {
     return DESIGN_ALL_STATUSES.filter((status) => status !== currentStatus);
   }
   if (!isAssignedToCurrentUser) return [];
   if (currentStatus === "new" || currentStatus === "changes") return ["in_progress"];
-  if (currentStatus === "in_progress") return ["pm_review"];
+  if (currentStatus === "in_progress") return (designerCount ?? 1) > 1 ? [] : ["pm_review"];
   return [];
 };
 
@@ -275,7 +284,9 @@ export type DesignTaskActionId =
   | { kind: "self_assign"; alsoStart: boolean }
   | { kind: "status"; next: DesignStatus }
   | { kind: "timer" }
-  | { kind: "change_request" };
+  | { kind: "change_request" }
+  /** REQ-365: дизайнер у задачі з кількома дизайнерами здає (або забирає) свою версію. */
+  | { kind: "designer_ready"; ready: boolean };
 
 export type DesignTaskAction = {
   id: DesignTaskActionId;
@@ -305,6 +316,15 @@ export type DesignTaskActionContext = {
   locked: boolean;
   /** Дата затвердження для тексту «Затверджено 3 серп.». */
   approvedAtLabel?: string | null;
+  /**
+   * REQ-365: готовність кожного дизайнера (designTaskReadiness.ts). Лише коли
+   * правило діє — задача «В роботі» і дизайнерів більше одного.
+   */
+  readiness?: {
+    meReady: boolean;
+    readyNames: string[];
+    waitingNames: string[];
+  } | null;
 };
 
 const EMPTY_PLAN: DesignTaskActionPlan = { primary: null, secondary: null, stateText: null };
@@ -383,6 +403,41 @@ export const resolveDesignTaskActions = (ctx: DesignTaskActionContext): DesignTa
     }
 
     case "in_progress": {
+      const readiness = ctx.readiness ?? null;
+      if (readiness && ctx.isAssignee) {
+        if (readiness.meReady) {
+          return {
+            primary: null,
+            secondary: { id: { kind: "designer_ready", ready: false }, label: "Ще не готово" },
+            stateText:
+              readiness.waitingNames.length > 0
+                ? `Вашу версію здано · чекаємо: ${readiness.waitingNames.join(", ")}`
+                : "Вашу версію здано",
+          };
+        }
+        return {
+          primary: { id: { kind: "designer_ready", ready: true }, label: "Моя версія готова" },
+          secondary: { id: { kind: "timer" }, label: "Таймер" },
+          stateText: formatReadinessLine(readiness.readyNames, readiness.waitingNames),
+        };
+      }
+      if (readiness && ctx.canManageStatuses) {
+        const someReady = readiness.readyNames.length > 0;
+        return {
+          // Хтось уже здав — менеджер може не чекати решту. Що прийнято без
+          // когось, пише історія (updateTaskStatus).
+          primary: someReady
+            ? { id: { kind: "status", next: "pm_review" }, label: "Прийняти зараз" }
+            : statusAction(ctx.status, "pm_review"),
+          secondary: statusAction(ctx.status, "changes"),
+          stateText: someReady
+            ? formatReadinessLine(readiness.readyNames, readiness.waitingNames)
+            : `Чекаємо версії: ${readiness.waitingNames.join(", ")}`,
+        };
+      }
+      if (readiness && readiness.readyNames.length > 0) {
+        return { ...EMPTY_PLAN, stateText: formatReadinessLine(readiness.readyNames, readiness.waitingNames) };
+      }
       if (ctx.isAssignee) {
         return {
           primary: { id: { kind: "status", next: "pm_review" }, label: "Дизайн готовий" },
