@@ -279,13 +279,17 @@ export const storedLegalEntityId = (
 /**
  * Юрособу не міняють, коли документ від неї вже пішов: рахунок має номер з її
  * бази в BAS, а підписана СП — її реквізити. Інакше той самий номер
- * передрукувався б від іншої юрособи.
+ * передрукувався б від іншої юрособи. І поки запит рахунку чекає на
+ * бухгалтера (Влад 19.11.2026): сповіщення вже назвало юрособу, і бухгалтер
+ * виписав би від старої. Треба іншу — бухгалтер повертає запит.
  */
 export const legalEntityLockReason = (record: {
   invoiceNumber: string | null;
+  invoiceRequestedAt: string | null;
   specificationSignedAt: string | null;
 }): string | null => {
   if (record.invoiceNumber?.trim()) return "Рахунок уже виписано від цієї юрособи — змінити її не можна.";
+  if (record.invoiceRequestedAt) return "Рахунок уже запрошено від цієї юрособи. Щоб змінити її, бухгалтер має повернути запит.";
   if (record.specificationSignedAt) return "СП уже підписана від цієї юрособи — змінити її не можна.";
   return null;
 };

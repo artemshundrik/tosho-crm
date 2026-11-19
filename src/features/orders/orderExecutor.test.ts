@@ -131,9 +131,16 @@ describe("storedLegalEntityId", () => {
 describe("legalEntityLockReason", () => {
   it("після рахунку з номером або підписаної СП юрособу не міняють", async () => {
     const { legalEntityLockReason } = await import("./orderExecutor");
-    expect(legalEntityLockReason({ invoiceNumber: null, specificationSignedAt: null })).toBeNull();
-    expect(legalEntityLockReason({ invoiceNumber: "118", specificationSignedAt: null })).toMatch(/рахунок/i);
-    expect(legalEntityLockReason({ invoiceNumber: null, specificationSignedAt: "2026-10-01" })).toMatch(/СП/);
+    const none = { invoiceNumber: null, invoiceRequestedAt: null, specificationSignedAt: null };
+    expect(legalEntityLockReason(none)).toBeNull();
+    expect(legalEntityLockReason({ ...none, invoiceNumber: "118" })).toMatch(/рахунок/i);
+    expect(legalEntityLockReason({ ...none, specificationSignedAt: "2026-10-01" })).toMatch(/СП/);
+  });
+
+  it("поки запит рахунку чекає на бухгалтера, юрособу не міняють", async () => {
+    const { legalEntityLockReason } = await import("./orderExecutor");
+    const reason = legalEntityLockReason({ invoiceNumber: null, invoiceRequestedAt: "2026-11-19T08:00:00Z", specificationSignedAt: null });
+    expect(reason).toMatch(/повернути запит/);
   });
 });
 

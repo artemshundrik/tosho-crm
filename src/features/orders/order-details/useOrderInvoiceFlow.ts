@@ -130,6 +130,7 @@ export function useOrderInvoiceFlow({
             orderNumber: record!.quoteNumber,
             customerName: record!.customerName,
             total: formatOrderMoney(record!.total, record!.currency),
+            issuer: record!.executor,
             requesterName: actorName,
             actorUserId: userId,
           })

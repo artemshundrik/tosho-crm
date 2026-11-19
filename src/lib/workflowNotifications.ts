@@ -736,6 +736,8 @@ export async function notifyOrderInvoiceRequested(params: {
   customerName: string;
   /** Готовий рядок суми: «12 400 грн». */
   total: string;
+  /** Від кого виписувати: юрособа замовлення (ТОВ з ПДВ чи ФОП без) — від цього залежить база в BAS. */
+  issuer: { shortName: string; vatPayer: boolean };
   requesterName?: string | null;
   actorUserId?: string | null;
 }) {
@@ -744,10 +746,12 @@ export async function notifyOrderInvoiceRequested(params: {
   if (params.actorUserId) recipients.delete(params.actorUserId);
   if (recipients.size === 0) return;
   const who = params.requesterName?.trim() || "Менеджер";
+  const issuer = `${params.issuer.shortName} (${params.issuer.vatPayer ? "з ПДВ" : "без ПДВ"})`;
   await notifyUsers({
     userIds: Array.from(recipients),
+    // Заголовок не чіпати: за ним сповіщення автозакривається (scripts/notifications-auto-close.sql).
     title: `Рахунок на ${params.orderNumber} — внести номер з BAS`,
-    body: `${who} просить рахунок для ${params.customerName} на ${params.total}. Внесіть номер і дату з BAS або поверніть менеджеру.`,
+    body: `${who} просить рахунок для ${params.customerName} на ${params.total} від ${issuer}. Внесіть номер і дату з BAS або поверніть менеджеру.`,
     href: `/orders/production/${params.orderId}`,
     type: "warning",
     category: "order_invoice_request",
