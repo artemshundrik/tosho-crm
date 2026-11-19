@@ -229,6 +229,7 @@ import { resolveDesignerReadiness } from "@/lib/designTaskReadiness";
 import { describeAcceptedWithout, runDesignerReadyAction } from "@/features/designTask/designerReadyAction";
 import { groupDesignOutputsByKind } from "@/features/designTask/groupDesignOutputs";
 import { DesignerReadinessProp } from "@/components/design/DesignerReadinessProp";
+import { DesignTaskHandoverMenuItems, DesignTaskHandoverNote } from "@/features/designTask/DesignTaskHandover";
 import {
   buildMentionAlias,
   extractMentionKeys,
@@ -9953,6 +9954,8 @@ export default function DesignTaskPage() {
                     Призначити себе
                   </DropdownMenuItem>
                 ) : null}
+                <DesignTaskHandoverMenuItems task={task} teamId={effectiveTeamId} userId={userId} members={sortedDesignerMembers} canManageAssignments={canManageAssignments} getLabel={getMemberLabel} getAvatar={getMemberAvatar} ensureCanEdit={ensureCanEdit} pauseTimer={handlePauseTimer} loadHistory={loadHistory}
+                  onApplied={(patch) => { setTask((prev) => (prev ? { ...prev, ...patch } : prev)); setDesignQueueTasks((prev) => prev.map((entry) => (entry.id === task.id ? { ...entry, ...patch } : entry))); }} />
                 {canManageAssignments ? (
                   <>
                     <DropdownMenuSeparator />
@@ -11942,6 +11945,7 @@ export default function DesignTaskPage() {
                   </DropdownMenu>
                 ) : null}
               </div>
+              <DesignTaskHandoverNote metadata={task.metadata} getLabel={getMemberLabel} />
 
               {isLinkedQuote ? (
                 <div className="design-task-detail-row">
