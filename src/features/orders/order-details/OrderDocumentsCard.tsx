@@ -519,7 +519,7 @@ function DocumentRow({
                     >
                       <Pencil className="mr-2 mt-0.5 h-4 w-4" />
                       <span className="grid">
-                        Виправити ціну, кількість чи номер
+                        Змінити позиції, ціни чи номер
                         {correctionBlocker ? (
                           <span className="text-2xs text-muted-foreground">{correctionBlocker}</span>
                         ) : null}

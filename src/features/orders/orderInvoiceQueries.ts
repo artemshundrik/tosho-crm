@@ -86,7 +86,24 @@ export type InvoiceCorrectionResult = {
   totalAfter: number;
   numberBefore: string | null;
   numberAfter: string;
+  /** Прибрані позиції (REQ-366) — для журналу й сповіщення менеджеру. */
+  removed: Array<{ name: string; lineTotal: number }>;
 };
+
+/**
+ * Позиції замовлення, по яких уже є закупівля: їх прибрати з рахунку не можна
+ * (закупівля повисла б без рядка). Ту саму межу тримає correct_order_invoice.
+ */
+export async function loadPurchasedOrderItemIds(orderId: string): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .schema("tosho")
+    .from("order_purchases")
+    .select("order_item_id")
+    .eq("order_id", orderId)
+    .not("order_item_id", "is", null);
+  if (error) throw error;
+  return new Set(((data ?? []) as Array<{ order_item_id: string }>).map((row) => row.order_item_id));
+}
 
 /**
  * Виправлення виписаного рахунку (REQ-335): ціна й кількість позицій, номер і
@@ -96,6 +113,7 @@ export type InvoiceCorrectionResult = {
 export async function correctOrderInvoice(params: {
   orderId: string;
   items: Array<{ id: string; qty: number; unitPrice: number }>;
+  removedItemIds?: string[];
   number: string;
   date: string;
 }): Promise<InvoiceCorrectionResult> {
@@ -105,6 +123,7 @@ export async function correctOrderInvoice(params: {
     p_items: params.items.map((item) => ({ id: item.id, qty: item.qty, unit_price: item.unitPrice })),
     p_invoice_number: number,
     p_invoice_date: params.date,
+    p_removed_item_ids: params.removedItemIds ?? [],
   });
   if (error) throw toInvoiceError(error, number);
   const row = (data ?? {}) as Record<string, unknown>;
@@ -113,5 +132,9 @@ export async function correctOrderInvoice(params: {
     totalAfter: Number(row.total_after) || 0,
     numberBefore: typeof row.number_before === "string" ? row.number_before : null,
     numberAfter: typeof row.number_after === "string" ? row.number_after : number,
+    removed: (Array.isArray(row.removed) ? (row.removed as Array<Record<string, unknown>>) : []).map((entry) => ({
+      name: typeof entry.name === "string" ? entry.name : "Позиція",
+      lineTotal: Number(entry.line_total) || 0,
+    })),
   };
 }
